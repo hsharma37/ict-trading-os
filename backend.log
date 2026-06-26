@@ -1,0 +1,16 @@
+INFO:     Will watch for changes in these directories: ['/Users/hsharma5/Projects/ict-trading-os-vercel']
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [94310] using StatReload
+INFO:     Started server process [94364]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     127.0.0.1:51577 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51597 - "GET /orders?status=OPEN HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51599 - "GET /plans?symbol=NQ1!&status=OPEN HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51596 - "GET /kb/sources HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51597 - "GET /plans/?symbol=NQ1!&status=OPEN HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51601 - "GET /orders/?status=OPEN HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51596 - "GET /plans?symbol=NQ1!&status=OPEN HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51597 - "GET /plans/?symbol=NQ1!&status=OPEN HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51611 - "GET /plans?symbol=XAUUSD&status=OPEN HTTP/1.1" 307 Temporary Redirect
+INFO:     127.0.0.1:51613 - "GET /plans/?symbol=XAUUSD&status=OPEN HTTP/1.1" 200 OK

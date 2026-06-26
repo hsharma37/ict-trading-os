@@ -1019,45 +1019,16 @@
           <div class="form-row"><div class="toggle-wrap" onclick="toggleSourcePromote()"><div class="toggle" id="promote-toggle"></div><label style="cursor:pointer;margin:0;">Also add as a Library concept card</label></div></div>
           <div class="flex gap-8"><button class="btn btn-primary" onclick="addKnowledgeSource()">Add to Knowledge Base</button><button class="btn btn-secondary" onclick="autoTranscribeSource()">Auto-transcribe</button><button class="btn btn-ghost" onclick="clearIngestionForm()">Clear</button></div>
         </div>
-        <div class="panel">
-          <div class="panel-header"><span class="panel-title">Sources</span><span class="dim-text" style="font-size:11px;" id="kb-count">0 sources</span></div>
-          <div id="kb-sources-list"><div class="dim-text text-center" style="padding:18px;font-size:13px;">No sources added yet</div></div>
-        </div>
       </div>
       <div class="panel">
-        <div class="panel-header"><span class="panel-title">Log</span><button class="btn btn-ghost btn-sm" onclick="clearLog()">Clear</button></div>
+        <div class="panel-header"><span class="panel-title">KB Activity Log</span><button class="btn btn-ghost btn-sm" onclick="clearLog()">Clear</button></div>
         <div class="ingestion-log" id="ing-log"></div>
+        <div class="sep"></div>
+        <div class="dim-text" style="font-size:12px;margin-top:12px;line-height:1.65;">This log keeps only KB ingestion, auto-transcribe and transcript indexing activity. More transcript chunks improve answer grounding; the UI is kept minimal so you can focus on content.</div>
         <div class="sep"></div>
         <div class="panel-title" style="margin-bottom:12px;">Optional: LLM Layer</div>
         <div class="dim-text" style="font-size:12px;margin-bottom:12px;line-height:1.65;">When enabled, Mentor/Sentiment AI call the Anthropic API for richer phrasing, grounded in rule-engine output + your knowledge base.</div>
         <div class="toggle-wrap" onclick="toggleLLMLayer()"><div class="toggle on" id="llm-layer-toggle"></div><label style="cursor:pointer;margin:0;">Enable LLM phrasing layer</label></div>
-      </div>
-    </div>
-    <div class="panel mt-16" style="border-color:rgba(10,132,255,0.25);">
-      <div class="panel-header"><span class="panel-title">Ask the Knowledge Base</span><span class="ai-mode-badge ai-mode-llm" id="kb-mode-badge">RULE + LLM</span></div>
-      <div class="grid-2">
-        <div class="sentiment-query-panel">
-          <div class="sq-header"><span style="font-size:13px;font-weight:700;">Knowledge Search</span><button class="btn btn-ghost btn-sm" onclick="clearSQChat()">Clear</button></div>
-          <div class="sq-messages" id="sq-messages"><div class="sq-msg-bot"><div class="sq-bubble">Ask about ICT concepts or your added sources.</div></div></div>
-          <div class="sq-input-row"><input class="sq-input" id="sq-input" type="text" placeholder="Ask about FVG, liquidity, your notes..." onkeydown="if(event.key==='Enter')sendSQMsg()"><button class="btn btn-primary btn-sm" onclick="sendSQMsg()">Ask</button></div>
-        </div>
-        <div>
-          <div class="panel" style="margin-bottom:12px;">
-            <div class="panel-title" style="margin-bottom:10px;">Stats</div>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-              <div class="flex-between"><span class="dim-text">Sources Added</span><span class="accent-text" id="kb-sources-count">0</span></div>
-              <div class="flex-between"><span class="dim-text">Library Concepts</span><span class="gold-text" id="kb-concepts-count">12</span></div>
-              <div class="flex-between"><span class="dim-text">Text Chunks Indexed</span><span class="purple-text" id="kb-chunks-count">0</span></div>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-title" style="margin-bottom:10px;">Quick Queries</div>
-            <button class="mentor-quick-btn" onclick="sqQuick('What is a Fair Value Gap?')">What is FVG?</button>
-            <button class="mentor-quick-btn" onclick="sqQuick('Explain Power of 3')">Power of 3</button>
-            <button class="mentor-quick-btn" onclick="sqQuick('What are kill zones?')">Kill Zones</button>
-            <button class="mentor-quick-btn" onclick="sqQuick('Summarize my added sources')">My Sources</button>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -1092,37 +1063,6 @@
       <div class="panel-header"><span class="panel-title">Correlation Matrix — open/closed positions by symbol</span></div>
       <div id="corr-matrix"><div class="dim-text" style="font-size:13px;padding:12px 0;">Trade at least 2 different symbols to compute correlation.</div></div>
     </div>
-
-    <div class="panel mt-16" style="border-color:rgba(191,90,242,0.25);">
-      <div class="panel-header"><span class="panel-title">Ask the Quant</span><span class="ai-mode-badge ai-mode-llm" id="quant-mode-badge">RULE + LLM</span></div>
-      <div class="chat-layout" style="height:480px;">
-        <div class="chat-window">
-          <div class="chat-header"><div style="font-weight:700;font-size:14px;">Personal Quant</div></div>
-          <div class="chat-messages" id="quant-chat-messages"><div class="msg msg-bot"><div class="msg-bubble">I compute real risk-adjusted metrics from your trade history — Sharpe, Sortino, Calmar, max drawdown, VaR, Kelly sizing — using standard financial engineering formulas. Ask me to explain a metric, interpret your numbers, or discuss portfolio/quant concepts. I'm not a trained model and I don't have access to real market data for backtesting.</div></div></div>
-          <div class="chat-input-row"><input type="text" class="chat-input" id="quant-chat-input" placeholder="Ask about Sharpe ratio, drawdown, Kelly sizing..." onkeydown="if(event.key==='Enter')sendQuantMessage()"><button class="btn btn-primary" onclick="sendQuantMessage()">Send</button></div>
-        </div>
-        <div>
-          <div class="panel" style="margin-bottom:14px;">
-            <div class="panel-title" style="margin-bottom:10px;">Quick Questions</div>
-            <button class="mentor-quick-btn" onclick="quantQuick('Explain my Sharpe ratio')">Explain my Sharpe ratio</button>
-            <button class="mentor-quick-btn" onclick="quantQuick('What is my max drawdown and why does it matter?')">Max drawdown</button>
-            <button class="mentor-quick-btn" onclick="quantQuick('How much should I size my next trade using Kelly?')">Kelly sizing</button>
-            <button class="mentor-quick-btn" onclick="quantQuick('Explain Value at Risk for my portfolio')">Explain VaR</button>
-            <button class="mentor-quick-btn" onclick="quantQuick('What is the difference between Sharpe and Sortino?')">Sharpe vs Sortino</button>
-          </div>
-          <div class="panel">
-            <div class="panel-title" style="margin-bottom:10px;">Quant Concept Reference</div>
-            <div id="quant-concept-list" style="display:flex;flex-direction:column;gap:6px;"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="section" id="sec-quant-lifecycle">
-    <div class="section-title">Research Lifecycle <span>Hypothesis to deployment</span></div>
-    <div class="lifecycle-stepper" id="quant-lifecycle-stepper"></div>
-    <div id="quant-lifecycle-content"></div>
   </div>
 
 </div>
@@ -2833,29 +2773,99 @@ const TG_DEMO_MESSAGES = [
   { sender:'ICT', text:'London kill zone live — FVG reaction confirmed on the 5 minute.' },
   { sender:'SignalChannel', text:'SELL NQ1! Entry 18450 SL 18480 TP 18380 RR 2.3' },
 ];
-async function connectTelegram() { const token = document.getElementById('tg-token').value.trim(); if (!token) { showToast('Enter your Bot Token first','bear'); return; } setTgStatus('connecting','Connecting...'); try { const res = await fetch(`https://api.telegram.org/bot${token}/getMe`, { signal: AbortSignal.timeout(5000) }); const data = await res.json(); if (data.ok) { TG_STATE.connected=true; setTgStatus('connected','Connected — @'+data.result.username); showToast('Telegram connected','bull'); } else throw new Error(); } catch { showToast('Bot token invalid — try Demo Mode','bear'); setTgStatus('disconnected','Failed'); } }
+async function connectTelegram() {
+  const token = document.getElementById('tg-token').value.trim();
+  const channel = document.getElementById('tg-channel').value.trim();
+  const interval = Math.max(10, +document.getElementById('tg-interval').value || 30);
+  const bridgeUrl = document.getElementById('mt5-bridge-url').value.trim();
+  if (!token) { showToast('Enter your Bot Token first', 'bear'); return; }
+  if (!channel) { showToast('Enter your channel/chat ID first', 'bear'); return; }
+  setTgStatus('connecting', 'Connecting...');
+  try {
+    const res = await fetch(`${bridgeUrl}/telegram/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, channel, interval })
+    });
+    const data = await res.json();
+    if (res.ok && data.connected) {
+      TG_STATE.connected = true;
+      TG_STATE.demoMode = false;
+      setTgStatus('connected', `Connected — ${data.channel || channel}`);
+      showToast('Telegram channel connected', 'bull');
+      startTelegramUIPoll();
+      return;
+    }
+    throw new Error(data.error || 'Connection failed');
+  } catch (e) {
+    console.warn('Telegram connect failed', e);
+    showToast('Telegram connect failed. Check token/channel id.', 'bear');
+    setTgStatus('disconnected', 'Failed');
+  }
+}
+function startTelegramUIPoll() {
+  if (TG_STATE.pollIntervalId) clearInterval(TG_STATE.pollIntervalId);
+  TG_STATE.pollIntervalId = setInterval(refreshTgState, 8000);
+  refreshTgState();
+}
+function stopTelegramUIPoll() {
+  if (TG_STATE.pollIntervalId) clearInterval(TG_STATE.pollIntervalId);
+  TG_STATE.pollIntervalId = null;
+}
+async function refreshTgState() {
+  const bridgeUrl = document.getElementById('mt5-bridge-url').value.trim();
+  try {
+    const res = await fetch(`${bridgeUrl}/telegram/status`);
+    const data = await res.json();
+    if (res.ok) {
+      TG_STATE.connected = data.connected;
+      TG_STATE.messages = data.messages || [];
+      TG_STATE.parsedSignals = data.signals || [];
+      document.getElementById('tg-msg-count').textContent = `${TG_STATE.messages.length} messages`;
+      renderTg();
+      renderTgSignals();
+      if (!TG_STATE.connected) {
+        setTgStatus('disconnected', 'Disconnected');
+        stopTelegramUIPoll();
+      }
+      return;
+    }
+  } catch (e) {
+    console.warn('Telegram status refresh failed', e);
+  }
+}
 function startTgDemo() { TG_STATE.demoMode=true; setTgStatus('demo','Demo Mode'); let idx=0; processTg(TG_DEMO_MESSAGES[0]); TG_STATE.demoInterval = setInterval(()=>{ idx=(idx+1)%TG_DEMO_MESSAGES.length; processTg(TG_DEMO_MESSAGES[idx]); }, 12000); }
 function parseSignalFromText(text) { const m = text.match(/\b(BUY|SELL)\s+([A-Z0-9!]+)\s+Entry\s+([\d.]+)\s+SL\s+([\d.]+)\s+TP\s+([\d.]+)(?:\s+RR\s+([\d.]+))?/i); if (!m) return null; return { side: m[1].toUpperCase(), symbol: m[2].toUpperCase(), entry: parseFloat(m[3]), sl: parseFloat(m[4]), tp: parseFloat(m[5]), rr: m[6] ? parseFloat(m[6]) : null }; }
 function processTg(msg) {
   TG_STATE.messages.unshift({ ...msg, time:new Date().toLocaleTimeString() });
   const parsed = parseSignalFromText(msg.text);
-  if (parsed) { const st = getSymState(parsed.symbol); const conflict = st && st.bias !== 'NEUTRAL' && ((parsed.side==='BUY' && st.bias==='BEARISH') || (parsed.side==='SELL' && st.bias==='BULLISH')); TG_STATE.parsedSignals.unshift({ ...parsed, channel: msg.sender, time: new Date().toLocaleTimeString(), conflict }); renderTgSignals(); }
-  renderTg(); document.getElementById('tg-msg-count').textContent = TG_STATE.messages.length + ' messages';
+  if (parsed) {
+    const st = getSymState(parsed.symbol);
+    const conflict = st && st.bias !== 'NEUTRAL' && ((parsed.side === 'BUY' && st.bias === 'BEARISH') || (parsed.side === 'SELL' && st.bias === 'BULLISH'));
+    TG_STATE.parsedSignals.unshift({ ...parsed, channel: msg.sender, time: new Date().toLocaleTimeString(), conflict });
+    renderTgSignals();
+  }
+  renderTg();
+  document.getElementById('tg-msg-count').textContent = TG_STATE.messages.length + ' messages';
 }
 function renderTg() { const el = document.getElementById('tg-messages'); if (!el) return; el.innerHTML = TG_STATE.messages.slice(0,30).map(m=>`<div class="panel" style="padding:12px;"><div class="flex-between"><span style="color:#2aabee;font-weight:700;">${m.sender}</span><span class="dim-text" style="font-size:10.5px;">${m.time}</span></div><div style="font-size:13px;margin-top:5px;">${m.text}</div></div>`).join(''); }
 function renderTgSignals() {
   const el = document.getElementById('tg-alerts-list'); const countEl = document.getElementById('tg-alert-count'); if (!el) return;
   if (countEl) countEl.textContent = TG_STATE.parsedSignals.length;
   if (!TG_STATE.parsedSignals.length) { el.innerHTML = '<div class="dim-text" style="font-size:12px;padding:10px 0;">No signals yet</div>'; return; }
-  el.innerHTML = TG_STATE.parsedSignals.slice(0,20).map(s => `<div class="panel" style="padding:12px;border-left:3px solid ${s.side==='BUY'?'var(--bull)':'var(--bear)'};">
+  el.innerHTML = TG_STATE.parsedSignals.slice(0,20).map((s, idx) => `<div class="panel" style="padding:12px;border-left:3px solid ${s.side==='BUY'?'var(--bull)':'var(--bear)'};">
     <div class="flex-between"><span class="${s.side==='BUY'?'bull-text':'bear-text'}" style="font-weight:700;">${s.side} ${s.symbol}</span>${s.conflict?'<span class="conflict-badge">Conflicts with bias</span>':''}</div>
     <div class="dim-text" style="font-size:12px;margin-top:5px;">Entry ${s.entry} · SL ${s.sl} · TP ${s.tp}${s.rr?' · RR '+s.rr:''} · from ${s.channel}</div>
-    <div class="flex gap-8 mt-8"><button class="btn btn-ghost btn-sm" onclick="approveTgSignalToPlanner(${TG_STATE.parsedSignals.indexOf(s)})">Approve to Planner</button><button class="btn btn-gold btn-sm" onclick="approveTgSignalToBot(${TG_STATE.parsedSignals.indexOf(s)})">Approve to Bot</button></div>
+    <div class="flex gap-8 mt-8"><button class="btn btn-ghost btn-sm" onclick="approveTgSignalToPlanner(${idx})">Approve to Planner</button><button class="btn btn-gold btn-sm" onclick="approveTgSignalToBot(${idx})">Approve to Bot</button></div>
   </div>`).join('');
 }
 function approveTgSignalToPlanner(idx) { const s = TG_STATE.parsedSignals[idx]; if (!s) return; if (s.symbol !== GLOBAL_SYMBOL) { showToast(`Switch global instrument to ${s.symbol} first`, 'bear'); return; } setBias(s.side==='BUY' ? 'BULLISH' : 'BEARISH'); document.getElementById('planner-dol').value = `Telegram signal (${s.channel}): TP ${s.tp}`; setAppMode('plan'); showSection('planner'); showToast(`Telegram signal approved to Planner`, 'bull'); }
 function approveTgSignalToBot(idx) { const s = TG_STATE.parsedSignals[idx]; if (!s) return; const inst = INSTRUMENTS[s.symbol]; if (!inst) { showToast('Unknown symbol for this signal', 'bear'); return; } const qty = Math.max(0.01, +(100/(Math.abs(s.entry-s.sl)*unitMultiplier(s.symbol))).toFixed(2)); const order = engineCreateOrder({ source:'Telegram', symbol:s.symbol, side:s.side, qty, entry:s.entry, sl:s.sl, tp1:s.tp, comment:`Telegram signal from ${s.channel}`, strategy:'Telegram Signal', marketCondition: currentActiveSessionLabel() }); showToast(`Telegram signal executed — ${s.side} ${qty} ${s.symbol} (#${order.id.slice(-4)})`, s.side==='BUY'?'bull':'bear'); }
-function disconnectTelegram() { if (TG_STATE.demoInterval) clearInterval(TG_STATE.demoInterval); TG_STATE.connected=false; TG_STATE.demoMode=false; setTgStatus('disconnected','Disconnected'); }
+async function disconnectTelegram() { const bridgeUrl = document.getElementById('mt5-bridge-url').value.trim(); try { await fetch(`${bridgeUrl}/telegram/disconnect`, { method:'POST' }); } catch (e) { console.warn('Telegram disconnect failed', e); }
+  if (TG_STATE.demoInterval) clearInterval(TG_STATE.demoInterval);
+  stopTelegramUIPoll();
+  TG_STATE.connected=false; TG_STATE.demoMode=false; setTgStatus('disconnected','Disconnected');
+}
 function setTgStatus(s,text) { const dot=document.getElementById('tg-dot'); if(!dot) return; dot.className='status-dot'+(s==='connected'?' connected':s==='demo'?' live':''); document.getElementById('tg-status-text').textContent=text; }
 
 /* ================================================================
