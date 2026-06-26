@@ -1,4 +1,4 @@
-# ICT Trading OS Backend (Vercel)
+# ICT Trading OS Backend 
 
 Live API for market data, ICT pattern detection, trading signals, and quantitative analytics.
 
@@ -50,30 +50,3 @@ npm run dev
 
 The app proxy forwards `/api/mt5/*` to the local bridge, and executed trades can be relayed to Telegram automatically.
 
-## Deploy to Vercel
-
-```bash
-# 1. Install Vercel CLI
-npm i -g vercel
-
-# 2. Login
-vercel login
-
-# 3. Deploy
-vercel --prod
-```
-
-## Frontend Integration
-
-```javascript
-const API = 'https://your-api.vercel.app';
-
-// Get live price
-const price = await fetch(`${API}/market/price/NQ1!`).then(r => r.json());
-
-// Get ICT analysis
-const analysis = await fetch(`${API}/ict/analyze/NQ1!`).then(r => r.json());
-
-// Get signal
-const signal = await fetch(`${API}/signals/analyze/NQ1!`).then(r => r.json());
-```
