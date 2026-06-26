@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "api/**/*.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "^/$", "dest": "/index.html" },
+    { "src": "^/index.html$", "dest": "/index.html" },
+    { "src": "^/ICT_Trading_OS_v7.html$", "dest": "/ICT_Trading_OS_v7.html" },
+    { "src": "^/market/price/(.*)$", "dest": "/api/market/price/[symbol].js" },
+    { "src": "^/market/prices$", "dest": "/api/market/prices.js" },
+    { "src": "^/market/history/(.*)$", "dest": "/api/market/history/[symbol].js" },
+    { "src": "^/market/instruments$", "dest": "/api/market/instruments.js" },
+    { "src": "^/ict/analyze/(.*)$", "dest": "/api/ict/analyze/$1.js" },
+    { "src": "^/ict/analyze/multi/(.*)$", "dest": "/api/ict/analyze/multi/$1.js" },
+    { "src": "^/ict/entry-zone/(.*)$", "dest": "/api/ict/entry-zone/$1.js" },
+    { "src": "^/signals/analyze/(.*)$", "dest": "/api/signals/analyze/$1.js" },
+    { "src": "^/signals/scan$", "dest": "/api/signals/scan.js" },
+    { "src": "^/trades(?:/(.*))?$", "dest": "/api/trades/index.js" },
+    { "src": "^/quant/metrics$", "dest": "/api/quant/metrics.js" },
+    { "src": "^/quant/kelly$", "dest": "/api/quant/kelly.js" },
+    { "src": "^/quant/monte-carlo$", "dest": "/api/quant/monte-carlo.js" },
+    { "src": "^/quant/coach$", "dest": "/api/quant/coach.js" },
+    { "src": "^/mt5/(.*)$", "dest": "/api/mt5/proxy.js" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
+    }
+  ]
+}

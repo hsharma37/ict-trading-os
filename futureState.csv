@@ -1,0 +1,13 @@
+﻿Feature,Endpoint,Status
+Live prices (Yahoo Finance),`GET /market/price/{symbol}`,✅
+Candle history,`GET /market/history/{symbol}`,✅
+"ICT pattern detection (MSS, FVG, OB, Liquidity)",`GET /ict/analyze/{symbol}`,✅
+Multi-timeframe analysis,`GET /ict/analyze/multi/{symbol}`,✅
+Entry zone calculation,`GET /ict/entry-zone/{symbol}`,✅
+Trading signals (confluence-based),`GET /signals/analyze/{symbol}`,✅
+Signal scan (all symbols),`POST /signals/scan`,✅
+Trade journal,"`POST /trades/`, `GET /trades/`",✅
+"Quant metrics (Sharpe, Sortino, VaR, etc.)",`GET /quant/metrics`,✅
+Kelly Criterion sizing,`GET /quant/kelly`,✅
+Monte Carlo simulation,`POST /quant/monte-carlo`,✅
+Bot coach recommendations,`GET /quant/coach`,✅

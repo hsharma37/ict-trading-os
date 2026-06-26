@@ -1,0 +1,11 @@
+fastapi==0.109.0
+uvicorn==0.27.0
+python-multipart==0.0.6
+pydantic==2.5.3
+httpx==0.26.0
+numpy==1.26.3
+python-dotenv==1.0.0
+Flask==2.4.3
+Flask-Cors==4.0.1
+MetaTrader5==5.0.65
+scipy==1.13.1
