@@ -109,6 +109,31 @@ async function proxyMt5(req, res, pathname) {
   }
 }
 
+async function proxyBackend(req, res) {
+  const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8001';
+  const parsedUrl = new URL(req.url, 'http://localhost');
+  const targetUrl = `${BACKEND_URL}${parsedUrl.pathname.replace('/api', '')}${parsedUrl.search}`;
+  const body = await getRequestBody(req);
+  const headers = { ...req.headers };
+  delete headers.host;
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: req.method,
+      headers,
+      body,
+    });
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const responseHeaders = {};
+    response.headers.forEach((value, key) => { responseHeaders[key] = value; });
+    res.writeHead(response.status, responseHeaders);
+    res.end(buffer);
+  } catch (error) {
+    console.error('Backend proxy error:', error);
+    sendJson(res, 500, { error: 'Backend proxy request failed', details: error.message });
+  }
+}
+
 async function handleApi(req, res, pathname) {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
@@ -141,7 +166,7 @@ async function handleApi(req, res, pathname) {
   }
 
   if (!handlerPath) {
-    return sendText(res, 404, 'Not Found');
+    return proxyBackend(req, res);
   }
 
   try {

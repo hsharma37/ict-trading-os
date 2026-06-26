@@ -9,5 +9,5 @@ Flask==2.4.3
 Flask-Cors==4.0.1
 MetaTrader5==5.0.65
 pytube==15.0.0
-youtube-transcript-api==1.4.5
+youtube-transcript-api==1.2.4
 scipy==1.13.1

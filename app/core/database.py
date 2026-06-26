@@ -10,6 +10,7 @@ _memory_store = {
     "journal": [],
     "signals": [],
     "kb_sources": [],
+    "kb_chunks": [],
     "users": []
 }
 
