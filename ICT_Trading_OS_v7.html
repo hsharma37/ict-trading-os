@@ -1005,7 +1005,7 @@
 
   <div class="section" id="sec-ingestion">
     <div class="section-title">Knowledge Base <span>Your trading library</span></div>
-    <div class="accordion open" id="acc-kb-info"><div class="accordion-head" onclick="toggleAccordion('acc-kb-info')">Honest scope — what this actually does<span class="accordion-chevron">⌄</span></div><div class="accordion-body">This app cannot download, transcribe, or auto-chunk a YouTube video — there is no transcript API reachable from inside this artifact. Pasting a YouTube link embeds the player and stores its video ID. To make it genuinely searchable, open YouTube's own "Show transcript" panel, copy the text, and paste it into the notes field — the app chunks and concept-tags that pasted text. Mentor and Sentiment AI run on a built-in rule engine (never hallucinates), with an optional LLM layer for richer phrasing.</div></div>
+    <div class="accordion open" id="acc-kb-info"><div class="accordion-head" onclick="toggleAccordion('acc-kb-info')">Honest scope — what this actually does<span class="accordion-chevron">⌄</span></div><div class="accordion-body">This app can now auto-transcribe YouTube videos and playlists through the backend. Paste a playlist or video URL, click "Auto-transcribe", and each video is processed as a separate knowledge base source. Transcripts are chunked, vector indexed, and used to ground KB answers. Manual transcript paste is still supported when auto transcription is unavailable.</div></div>
     <div class="grid-60-40">
       <div>
         <div class="panel row-gap">
@@ -1016,7 +1016,7 @@
           <div class="form-row"><label>Tags</label><input type="text" id="ing-tags" placeholder="e.g. FVG, MSS, liquidity, kill zone"></div>
           <div class="preset-row"><span class="dim-text" style="font-size:11px;align-self:center;">Recommended:</span><button class="preset-btn-lg" onclick="addRecommendedTag('FVG')">FVG</button><button class="preset-btn-lg" onclick="addRecommendedTag('OTE')">OTE</button><button class="preset-btn-lg" onclick="addRecommendedTag('Kill Zones')">Kill Zones</button><button class="preset-btn-lg" onclick="addRecommendedTag('Liquidity')">Liquidity</button><button class="preset-btn-lg" onclick="addRecommendedTag('HTF MSS')">HTF MSS</button></div>
           <div class="form-row"><div class="toggle-wrap" onclick="toggleSourcePromote()"><div class="toggle" id="promote-toggle"></div><label style="cursor:pointer;margin:0;">Also add as a Library concept card</label></div></div>
-          <div class="flex gap-8"><button class="btn btn-primary" onclick="addKnowledgeSource()">Add to Knowledge Base</button><button class="btn btn-ghost" onclick="clearIngestionForm()">Clear</button></div>
+          <div class="flex gap-8"><button class="btn btn-primary" onclick="addKnowledgeSource()">Add to Knowledge Base</button><button class="btn btn-secondary" onclick="autoTranscribeSource()">Auto-transcribe</button><button class="btn btn-ghost" onclick="clearIngestionForm()">Clear</button></div>
         </div>
         <div class="panel">
           <div class="panel-header"><span class="panel-title">Sources</span><span class="dim-text" style="font-size:11px;" id="kb-count">0 sources</span></div>
@@ -2305,7 +2305,8 @@ function findKBSupportForConfluences(confluenceLabels) {
   return matches;
 }
 function extractYouTubeId(url) { if (!url) return null; const patterns = [/(?:youtube\.com\/watch\?v=)([\w-]{11})/, /(?:youtu\.be\/)([\w-]{11})/, /(?:youtube\.com\/embed\/)([\w-]{11})/, /(?:youtube\.com\/shorts\/)([\w-]{11})/]; for (const p of patterns) { const m = url.match(p); if (m) return m[1]; } return null; }
-function previewYouTubeId() { const url = document.getElementById('ing-url').value.trim(); const note = document.getElementById('yt-preview-note'); if (!url) { note.textContent=''; return; } const id = extractYouTubeId(url); note.textContent = id ? `Recognized YouTube video (ID: ${id}) — player will be embedded.` : 'Not a recognized YouTube URL format.'; note.className = id ? 'dim-text bull-text' : 'dim-text'; }
+function extractYouTubePlaylistId(url) { if (!url) return null; const patterns = [/\blist=([\w-]+)/, /(?:youtube\.com\/playlist\?list=)([\w-]+)/]; for (const p of patterns) { const m = url.match(p); if (m) return m[1]; } return null; }
+function previewYouTubeId() { const url = document.getElementById('ing-url').value.trim(); const note = document.getElementById('yt-preview-note'); if (!url) { note.textContent=''; return; } const playlistId = extractYouTubePlaylistId(url); const id = playlistId || extractYouTubeId(url); if (playlistId) { note.textContent = `Recognized YouTube playlist (ID: ${playlistId}) — auto-transcribe will process each video.`; note.className = 'dim-text bull-text'; } else if (id) { note.textContent = `Recognized YouTube video (ID: ${id}) — player will be embedded.`; note.className = 'dim-text bull-text'; } else { note.textContent = 'Not a recognized YouTube URL format.'; note.className = 'dim-text'; } }
 function toggleLLMLayer() { LLM_LAYER_ENABLED = !LLM_LAYER_ENABLED; document.getElementById('llm-layer-toggle').classList.toggle('on', LLM_LAYER_ENABLED); updateGroundingBadges(); showToast(LLM_LAYER_ENABLED?'LLM phrasing layer enabled':'LLM layer disabled — rule engine only', ''); }
 function updateGroundingBadges() {
   const hasKB = KNOWLEDGE_BASE.some(s => s.chunks && s.chunks.length);
@@ -2355,6 +2356,57 @@ async function addKnowledgeSource() {
     showToast('Failed to add source to backend', 'bear');
   }
 }
+
+async function autoTranscribeSource() {
+  const url = document.getElementById('ing-url').value.trim();
+  const tags = document.getElementById('ing-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  if (!url) { showToast('Provide a YouTube video or playlist URL', 'bear'); return; }
+  try {
+    const response = await apiPost('/kb/auto-transcribe', { url, tags: tags.join(',') });
+    const created = response.created || [];
+    const failed = response.failed || [];
+    created.forEach(item => {
+      logLine(`Auto-transcribed source: "${item.title || item.url}" ${item.transcript_added ? '✅' : '⚠️ no transcript'}`, 'ok');
+    });
+    failed.forEach(item => {
+      logLine(`Auto-transcribe failed: "${item.title || item.url}" — ${item.error}`, 'warn');
+    });
+    if (!created.length) {
+      showToast('No sources were added. Check the URL or transcripts.', 'bear');
+    } else {
+      showToast(`Auto-transcribed ${created.length} source(s)`, 'bull');
+    }
+    await loadKBSources();
+    clearIngestionForm();
+  } catch (e) {
+    console.warn('Auto-transcribe failed', e);
+    showToast('Auto-transcribe failed. Check backend logs.', 'bear');
+  }
+}
+
+async function searchKnowledgeEmbeddings(query) {
+  try {
+    const data = await apiGet(`/kb/search-embeddings?query=${encodeURIComponent(query)}`);
+    return Array.isArray(data) ? data : [];
+  } catch (e) {
+    console.warn('Embedding search failed', e);
+    return [];
+  }
+}
+
+async function sendSQMsg() {
+  const input = document.getElementById('sq-input'); const msg = input.value.trim(); if (!msg) return;
+  input.value=''; addSQMsg('user', msg);
+  const ruleAnswer = ruleEngineAnswer(msg);
+  if (!LLM_LAYER_ENABLED) { addSQMsg('bot', ruleAnswer); return; }
+  const thinkId = 'sq-think-'+Date.now(); addSQMsg('bot','<span class="loading-dots">Thinking</span>',thinkId);
+  const embeddingHits = await searchKnowledgeEmbeddings(msg);
+  const groundingChunks = embeddingHits.map(hit => `- ${hit.source_title}: ${hit.chunk_text.slice(0,180)}${hit.chunk_text.length>180?'...':''}`).join('\n');
+  const grounding = `Rule-engine base answer: ${ruleAnswer}\nKnowledge base sources available: ${KNOWLEDGE_BASE.map(s=>s.title).join('; ')||'none'}${embeddingHits.length ? '\n\nRelevant KB chunks:\n' + groundingChunks : ''}`;
+  const llmAnswer = await callLLMLayer('You are a trading knowledge assistant grounded strictly in ICT (Inner Circle Trader) Smart Money Concepts. Rephrase and lightly expand on the grounding context naturally — never invent new ICT concepts or facts not in the grounding context.', msg, grounding);
+  document.getElementById(thinkId)?.remove();
+  addSQMsg('bot', llmAnswer || ruleAnswer + (llmAnswer===null?'\n\n(LLM layer unavailable — showing rule-engine answer)':''));
+}
 async function removeKnowledgeSource(id) { try { await apiDelete(`/kb/sources/${id}`); } catch (e) { console.warn('KB source delete failed', e); }
   const idx = KNOWLEDGE_BASE.findIndex(s=>s.id===id); if (idx>-1) { TOTAL_CHUNKS -= KNOWLEDGE_BASE[idx].chunks.length; KNOWLEDGE_BASE.splice(idx,1); } renderKnowledgeBase(); updateGroundingBadges(); }
 function clearIngestionForm() { document.getElementById('ing-title').value=''; document.getElementById('ing-url').value=''; document.getElementById('ing-transcript').value=''; document.getElementById('ing-tags').value=''; document.getElementById('yt-preview-note').textContent=''; }
@@ -2375,7 +2427,6 @@ function renderKnowledgeBase() {
     <button class="btn btn-ghost btn-sm mt-8" onclick="removeKnowledgeSource('${s.id}')">Remove</button>
   </div>`).join('');
 }
-function removeKnowledgeSource(id) { const idx = KNOWLEDGE_BASE.findIndex(s=>s.id===id); if (idx>-1) { TOTAL_CHUNKS -= KNOWLEDGE_BASE[idx].chunks.length; KNOWLEDGE_BASE.splice(idx,1); } renderKnowledgeBase(); updateGroundingBadges(); }
 function logLine(msg,type='') { const ts=new Date().toLocaleTimeString('en-US',{hour12:false}); const el=document.getElementById('ing-log'); if(!el) return; const line=document.createElement('div'); line.className='log-line'; line.innerHTML=`<span class="log-ts">[${ts}]</span><span class="log-${type}">${msg}</span>`; el.appendChild(line); el.scrollTop=el.scrollHeight; }
 function clearLog() { const el = document.getElementById('ing-log'); if (el) el.innerHTML=''; }
 function searchKnowledge(query) {
@@ -2394,17 +2445,6 @@ function ruleEngineAnswer(query) {
 }
 async function callLLMLayer(systemPrompt, userMessage, groundingContext) {
   try { const res = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:700, system: systemPrompt + (groundingContext?`\n\nGROUNDING CONTEXT (use this, do not contradict it, do not invent facts beyond it):\n${groundingContext}`:''), messages:[{ role:'user', content:userMessage }] }), signal: AbortSignal.timeout(12000) }); if (!res.ok) throw new Error('bad status'); const data = await res.json(); return data.content?.[0]?.text || null; } catch { return null; }
-}
-async function sendSQMsg() {
-  const input = document.getElementById('sq-input'); const msg = input.value.trim(); if (!msg) return;
-  input.value=''; addSQMsg('user', msg);
-  const ruleAnswer = ruleEngineAnswer(msg);
-  if (!LLM_LAYER_ENABLED) { addSQMsg('bot', ruleAnswer); return; }
-  const thinkId = 'sq-think-'+Date.now(); addSQMsg('bot','<span class="loading-dots">Thinking</span>',thinkId);
-  const grounding = `Rule-engine base answer: ${ruleAnswer}\nKnowledge base sources available: ${KNOWLEDGE_BASE.map(s=>s.title).join('; ')||'none'}`;
-  const llmAnswer = await callLLMLayer('You are a trading knowledge assistant grounded strictly in ICT (Inner Circle Trader) Smart Money Concepts. Rephrase and lightly expand on the grounding context naturally — never invent new ICT concepts or facts not in the grounding context.', msg, grounding);
-  document.getElementById(thinkId)?.remove();
-  addSQMsg('bot', llmAnswer || ruleAnswer + (llmAnswer===null?'\n\n(LLM layer unavailable — showing rule-engine answer)':''));
 }
 function addSQMsg(type,text,id) { const el=document.getElementById('sq-messages'); if(!el) return; const div=document.createElement('div'); if(id) div.id=id; div.className = type==='user'?'sq-msg-user':'sq-msg-bot'; div.innerHTML = `<div class="sq-bubble">${(text||'').replace(/\n/g,'<br>')}</div>`; el.appendChild(div); el.scrollTop=el.scrollHeight; }
 function clearSQChat() { document.getElementById('sq-messages').innerHTML = '<div class="sq-msg-bot"><div class="sq-bubble">Cleared. Ask about ICT concepts or your notes.</div></div>'; }
