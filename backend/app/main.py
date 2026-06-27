@@ -12,7 +12,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.api.v1 import plans, trades, risk, journal, market, telegram, mt5, health
+from app.api.v1 import plans, trades, risk, journal, market, telegram, mt5, health, kb, agent, alert
 
 
 @asynccontextmanager
@@ -60,3 +60,6 @@ app.include_router(journal.router, prefix="/api/v1/journal", tags=["journal"])
 app.include_router(market.router, prefix="/api/v1/market", tags=["market"])
 app.include_router(telegram.router, prefix="/api/v1/telegram", tags=["telegram"])
 app.include_router(mt5.router, prefix="/api/v1/mt5", tags=["mt5"])
+app.include_router(kb.router, prefix="/api/v1/kb", tags=["knowledge"])
+app.include_router(agent.router, prefix="/api/v1/agent", tags=["agent"])
+app.include_router(alert.router, prefix="/api/v1/alerts", tags=["alerts"])
