@@ -1,0 +1,187 @@
+version: "3.8"
+
+services:
+  # ────────────────────────────────────────────
+  # PostgreSQL + pgvector
+  # ────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ictos-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ictos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ictos}
+      POSTGRES_DB: ${POSTGRES_DB:-ictos}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ictos} -d ${POSTGRES_DB:-ictos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ────────────────────────────────────────────
+  # Redis (cache, pub/sub, Celery broker)
+  # ────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ictos-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ────────────────────────────────────────────
+  # FastAPI Backend
+  # ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ictos-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://ictos:ictos@postgres:5432/ictos}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - API_SECRET_KEY=${API_SECRET_KEY:-dev-secret-change-in-production}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-db+postgresql://ictos:ictos@postgres:5432/ictos}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - MT5_BRIDGE_URL=${MT5_BRIDGE_URL:-http://host.docker.internal:5000}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ────────────────────────────────────────────
+  # Celery Worker
+  # ────────────────────────────────────────────
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ictos-celery
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://ictos:ictos@postgres:5432/ictos}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-db+postgresql://ictos:ictos@postgres:5432/ictos}
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.jobs worker --loglevel=info --concurrency=2
+
+  # ────────────────────────────────────────────
+  # Celery Beat (scheduled tasks)
+  # ────────────────────────────────────────────
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ictos-celery-beat
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://ictos:ictos@postgres:5432/ictos}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-db+postgresql://ictos:ictos@postgres:5432/ictos}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./backend:/app
+      - /app/__pycache__
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.jobs beat --loglevel=info
+
+  # ────────────────────────────────────────────
+  # Vite React Frontend
+  # ────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ictos-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+      - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:8000/ws}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0 --port 3000
+
+  # ────────────────────────────────────────────
+  # Ollama (Local LLM Serving)
+  # ────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ictos-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # GPU support on macOS / Linux with NVIDIA:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # ────────────────────────────────────────────
+  # MT5 Bridge (refactored from mt5bridgeScript.py)
+  # ────────────────────────────────────────────
+  # mt5-bridge:
+  #   build:
+  #     context: ./mt5-bridge
+  #     dockerfile: Dockerfile
+  #   container_name: ictos-mt5-bridge
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5000:5000"
+  #   environment:
+  #     - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+  #     - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+  #     - MT5_BRIDGE_PORT=5000
+  #   # Note: MT5 runs on Windows, so this is typically run natively on host
+  #   # and proxied via MT5_BRIDGE_URL. Uncomment only if running MT5 in a container.
+
+volumes:
+  postgres_data:
+  redis_data:
+  ollama_data:

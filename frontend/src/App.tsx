@@ -1,0 +1,27 @@
+import { Routes, Route } from 'react-router-dom'
+import Layout from './components/Layout'
+import Dashboard from './pages/Dashboard'
+import Plan from './pages/Plan'
+import Execute from './pages/Execute'
+import Journal from './pages/Journal'
+import Analytics from './pages/Analytics'
+import Knowledge from './pages/Knowledge'
+import Settings from './pages/Settings'
+
+function App() {
+  return (
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/plan" element={<Plan />} />
+        <Route path="/execute" element={<Execute />} />
+        <Route path="/journal" element={<Journal />} />
+        <Route path="/analytics" element={<Analytics />} />
+        <Route path="/knowledge" element={<Knowledge />} />
+        <Route path="/settings" element={<Settings />} />
+      </Routes>
+    </Layout>
+  )
+}
+
+export default App
