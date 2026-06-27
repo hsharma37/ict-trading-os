@@ -1,7 +1,44 @@
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { AIChatPanel } from '@/components/AIChatPanel'
 
 export default function Knowledge() {
+  const [youtubeUrl, setYoutubeUrl] = useState('')
+  const [transcript, setTranscript] = useState('')
+  const [isIngesting, setIsIngesting] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [isSearching, setIsSearching] = useState(false)
+
+  const handleAddSource = async () => {
+    if (!youtubeUrl && !transcript) return
+
+    setIsIngesting(true)
+    try {
+      // TODO: Call API to ingest
+      console.log('Ingesting:', { youtubeUrl, transcript })
+    } catch (error) {
+      console.error('Ingestion failed:', error)
+    } finally {
+      setIsIngesting(false)
+    }
+  }
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return
+
+    setIsSearching(true)
+    try {
+      // TODO: Call API to search
+      console.log('Searching:', searchQuery)
+    } catch (error) {
+      console.error('Search failed:', error)
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -21,9 +58,13 @@ export default function Knowledge() {
                 <input
                   type="text"
                   placeholder="Paste YouTube link..."
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
                   className="flex-1 px-3 py-2 border rounded-md bg-background"
                 />
-                <Button>Add</Button>
+                <Button onClick={handleAddSource} disabled={isIngesting}>
+                  {isIngesting ? 'Adding...' : 'Add'}
+                </Button>
               </div>
             </div>
 
@@ -32,8 +73,12 @@ export default function Knowledge() {
               <textarea
                 className="w-full px-3 py-2 border rounded-md bg-background min-h-[100px]"
                 placeholder="Paste transcript here..."
+                value={transcript}
+                onChange={(e) => setTranscript(e.target.value)}
               />
-              <Button className="w-full">Add to Knowledge Base</Button>
+              <Button onClick={handleAddSource} disabled={isIngesting} className="w-full">
+                {isIngesting ? 'Adding...' : 'Add to Knowledge Base'}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -42,19 +87,9 @@ export default function Knowledge() {
           <CardHeader>
             <CardTitle>AI Chat</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="h-[300px] border rounded-md bg-muted p-4 overflow-y-auto">
-              <div className="text-sm text-muted-foreground text-center mt-20">
-                Ask questions about ICT concepts, setups, or your knowledge base
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Ask a question..."
-                className="flex-1 px-3 py-2 border rounded-md bg-background"
-              />
-              <Button>Send</Button>
+          <CardContent className="p-0">
+            <div className="h-[400px]">
+              <AIChatPanel />
             </div>
           </CardContent>
         </Card>
@@ -69,12 +104,31 @@ export default function Knowledge() {
             <input
               type="text"
               placeholder="Search your knowledge base..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 px-3 py-2 border rounded-md bg-background"
             />
-            <Button>Search</Button>
+            <Button onClick={handleSearch} disabled={isSearching}>
+              {isSearching ? 'Searching...' : 'Search'}
+            </Button>
           </div>
-          <div className="mt-4 text-sm text-muted-foreground">
-            Search results will appear here
+          <div className="mt-4">
+            {searchResults.length > 0 ? (
+              <div className="space-y-2">
+                {searchResults.map((result: any, index: number) => (
+                  <div key={index} className="p-3 border rounded-md bg-muted">
+                    <div className="text-sm font-medium">{result.title}</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Similarity: {result.similarity?.toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Search results will appear here
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
