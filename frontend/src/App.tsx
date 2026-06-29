@@ -8,6 +8,8 @@ import Analytics from './pages/Analytics'
 import Research from './pages/Research'
 import Knowledge from './pages/Knowledge'
 import Settings from './pages/Settings'
+import AlertManager from './pages/AlertManager'
+import Suggestions from './pages/Suggestions'
 
 function App() {
   return (
@@ -21,6 +23,8 @@ function App() {
         <Route path="/research" element={<Research />} />
         <Route path="/knowledge" element={<Knowledge />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/alerts" element={<AlertManager />} />
+        <Route path="/suggestions" element={<Suggestions />} />
       </Routes>
     </Layout>
   )
