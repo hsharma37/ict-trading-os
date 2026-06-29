@@ -1,6 +1,13 @@
 import { useState } from 'react'
-import { Send, Bot, User, Loader2, Trash2 } from 'lucide-react'
+import { Send, Bot, User, Loader2, Trash2, ExternalLink } from 'lucide-react'
 import { useAIChat } from '@/hooks/useAIChat'
+
+interface Source {
+  id: string
+  title: string
+  url: string
+  score: number
+}
 
 export function AIChatPanel() {
   const [input, setInput] = useState('')
@@ -20,7 +27,7 @@ export function AIChatPanel() {
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
           <Bot className="w-5 h-5 text-primary" />
-          <h3 className="font-semibold">AI Mentor</h3>
+          <h3 className="font-semibold">AI Knowledge Assistant</h3>
         </div>
         <button
           onClick={clearChat}
@@ -36,8 +43,11 @@ export function AIChatPanel() {
         {messages.length === 0 && (
           <div className="text-center text-muted-foreground py-8">
             <Bot className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>Ask me anything about ICT trading concepts,</p>
-            <p>setup analysis, or journal review.</p>
+            <p className="font-medium">Ask me anything about your knowledge base</p>
+            <p className="text-sm mt-2">Try: "What is a fair value gap?" or "Explain order blocks"</p>
+            <p className="text-xs mt-4 opacity-70">
+              First ingest some YouTube videos or transcripts, then ask questions!
+            </p>
           </div>
         )}
 
@@ -54,14 +64,37 @@ export function AIChatPanel() {
               </div>
             )}
 
-            <div
-              className={`max-w-[80%] rounded-lg p-3 ${
-                message.role === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted'
-              }`}
-            >
-              <div className="whitespace-pre-wrap text-sm">{message.content}</div>
+            <div className="max-w-[85%]">
+              <div
+                className={`rounded-lg p-3 ${
+                  message.role === 'user'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted'
+                }`}
+              >
+                <div className="whitespace-pre-wrap text-sm">{message.content}</div>
+              </div>
+              
+              {/* Source citations for assistant messages */}
+              {message.role === 'assistant' && message.sources && message.sources.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <div className="text-xs font-semibold text-muted-foreground">Sources:</div>
+                  <div className="flex flex-wrap gap-1">
+                    {message.sources.map((source: Source) => (
+                      <a
+                        key={source.id}
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-muted rounded-md text-xs text-primary hover:bg-muted/80"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        {source.title} ({source.score.toFixed(2)})
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {message.role === 'user' && (
@@ -78,7 +111,7 @@ export function AIChatPanel() {
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
             </div>
             <div className="bg-muted rounded-lg p-3">
-              <div className="text-sm text-muted-foreground">Thinking...</div>
+              <div className="text-sm text-muted-foreground">Searching knowledge base...</div>
             </div>
           </div>
         )}
@@ -93,7 +126,7 @@ export function AIChatPanel() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about ICT concepts, setups, or journal review..."
+            placeholder="Ask about ICT concepts, setups, or your knowledge base..."
             className="flex-1 px-3 py-2 border rounded-md bg-background text-sm"
             disabled={isLoading}
           />
