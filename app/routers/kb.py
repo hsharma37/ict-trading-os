@@ -70,12 +70,19 @@ def auto_transcribe(request: AutoTranscribeRequest):
     Auto-transcribe a YouTube video, playlist, or channel.
     Supports optional AI analysis and whisper audio fallback.
     """
-    return kb_service.auto_transcribe(
-        url=request.url,
-        tags=request.tags,
-        use_ai_analysis=request.use_ai_analysis,
-        use_whisper=request.use_whisper,
-    )
+    try:
+        return kb_service.auto_transcribe(
+            url=request.url,
+            tags=request.tags,
+            use_ai_analysis=request.use_ai_analysis,
+            use_whisper=request.use_whisper,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 @router.post("/chat")
 def chat(request: ChatRequest):
