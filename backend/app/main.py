@@ -12,7 +12,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.api.v1 import plans, trades, risk, journal, market, telegram, mt5, health, kb, agent, alert
+from app.api.v1 import plans, trades, risk, journal, market, telegram, mt5, health, kb, agent, alert, analytics, research
 
 
 @asynccontextmanager
@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ICT Trading OS API",
-    description="Backend for trading plans, execution, risk, journal, and analytics",
+    description="Backend for trading plans, execution, risk, journal, analytics, and research",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -63,3 +63,5 @@ app.include_router(mt5.router, prefix="/api/v1/mt5", tags=["mt5"])
 app.include_router(kb.router, prefix="/api/v1/kb", tags=["knowledge"])
 app.include_router(agent.router, prefix="/api/v1/agent", tags=["agent"])
 app.include_router(alert.router, prefix="/api/v1/alerts", tags=["alerts"])
+app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
+app.include_router(research.router, prefix="/api/v1/research", tags=["research"])

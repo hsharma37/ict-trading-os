@@ -6,6 +6,7 @@ import {
   ArrowRightLeft,
   BookOpen,
   BarChart3,
+  FlaskConical,
   Brain,
   Settings,
   Menu,
@@ -19,6 +20,7 @@ const navItems = [
   { path: '/execute', label: 'Execute', icon: ArrowRightLeft },
   { path: '/journal', label: 'Journal', icon: BookOpen },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { path: '/research', label: 'Research', icon: FlaskConical },
   { path: '/knowledge', label: 'Knowledge', icon: Brain },
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
