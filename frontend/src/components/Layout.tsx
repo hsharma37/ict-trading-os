@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   TrendingUp,
+  Gamepad2,
 } from 'lucide-react'
 
 const navItems = [
@@ -26,6 +27,7 @@ const navItems = [
   { path: '/suggestions', label: 'Signals', icon: Zap },
   { path: '/alerts', label: 'Alerts', icon: Bell },
   { path: '/knowledge', label: 'Knowledge', icon: Brain },
+  { path: '/playground', label: 'Playground', icon: Gamepad2 },
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
 

@@ -1,7 +1,7 @@
 """
 Knowledge Base Router — YouTube ingestion, analysis, semantic search, and AI chat.
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.services.kb_service import kb_service
