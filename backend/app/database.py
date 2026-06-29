@@ -51,6 +51,9 @@ def init_db() -> None:
     In production, use Alembic migrations instead.
     """
     # Import models so they register with SQLModel metadata
-    from app.models import user, plan, trade, journal, kb, alert  # noqa: F401
+    from app.models import (  # noqa: F401
+        user, plan, trade, journal, kb, alert, risk_ledger,
+        audit_log, alert_history, suggestion,
+    )
 
     SQLModel.metadata.create_all(engine)

@@ -12,7 +12,11 @@ from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import settings
 from app.database import init_db
-from app.api.v1 import plans, trades, risk, journal, market, telegram, mt5, health, kb, agent, alert, analytics, research
+from app.api.v1 import (
+    plans, trades, risk, journal, market, telegram, mt5, health,
+    kb, agent, alert, analytics, research, suggestions, audit,
+    fail_safe, websocket,
+)
 
 
 @asynccontextmanager
@@ -30,7 +34,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ICT Trading OS API",
-    description="Backend for trading plans, execution, risk, journal, analytics, and research",
+    description="Backend for trading plans, execution, risk, journal, analytics, research, and alerts",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -65,3 +69,7 @@ app.include_router(agent.router, prefix="/api/v1/agent", tags=["agent"])
 app.include_router(alert.router, prefix="/api/v1/alerts", tags=["alerts"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 app.include_router(research.router, prefix="/api/v1/research", tags=["research"])
+app.include_router(suggestions.router, prefix="/api/v1/suggestions", tags=["suggestions"])
+app.include_router(audit.router, prefix="/api/v1/audit", tags=["audit"])
+app.include_router(fail_safe.router, prefix="/api/v1/fail-safe", tags=["fail-safe"])
+app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
