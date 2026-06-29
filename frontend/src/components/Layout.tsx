@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { playgroundApi } from '@/api/client'
 import {
   LayoutDashboard,
   ClipboardList,
@@ -15,6 +16,8 @@ import {
   X,
   TrendingUp,
   Gamepad2,
+  TrendingDown,
+  Activity,
 } from 'lucide-react'
 
 const navItems = [
@@ -38,6 +41,35 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
+  const [livePrice, setLivePrice] = useState<{ symbol: string; price: number; change: number } | null>(null)
+  const [priceLoading, setPriceLoading] = useState(true)
+
+  const fetchLivePrice = useCallback(async () => {
+    try {
+      const response = await playgroundApi.getPrices()
+      const prices = response.data?.prices || []
+      if (prices.length > 0) {
+        const first = prices[0]
+        setLivePrice({
+          symbol: first.symbol,
+          price: first.price,
+          change: first.change,
+        })
+      }
+    } catch (e) {
+      console.error('Live price fetch failed:', e)
+    } finally {
+      setPriceLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchLivePrice()
+    const interval = setInterval(fetchLivePrice, 30000)
+    return () => clearInterval(interval)
+  }, [fetchLivePrice])
+
+  const isPositive = (livePrice?.change ?? 0) >= 0
 
   return (
     <div className="flex h-screen bg-background text-foreground">
@@ -104,14 +136,42 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center gap-4">
             <span className="text-sm font-semibold">ICT Trading OS</span>
             <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-              v1.0.0
+              v8.0.0
             </span>
           </div>
           <div className="flex-1" />
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span>Price: ...</span>
+          <div className="flex items-center gap-4 text-sm">
+            {/* Live Price Display */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border">
+              <Activity className="w-4 h-4 text-muted-foreground" />
+              {priceLoading ? (
+                <span className="text-muted-foreground text-xs">Loading...</span>
+              ) : livePrice ? (
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-semibold text-sm">{livePrice.symbol}</span>
+                  <span className="font-mono font-bold">
+                    {livePrice.price.toFixed(2)}
+                  </span>
+                  <span
+                    className={`flex items-center gap-0.5 text-xs font-medium ${
+                      isPositive ? 'text-green-400' : 'text-red-400'
+                    }`}
+                  >
+                    {isPositive ? (
+                      <TrendingUp className="w-3 h-3" />
+                    ) : (
+                      <TrendingDown className="w-3 h-3" />
+                    )}
+                    {isPositive ? '+' : ''}
+                    {livePrice.change.toFixed(2)}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-muted-foreground text-xs">No data</span>
+              )}
+            </div>
             <span className="w-2 h-2 rounded-full bg-green-500" />
-            <span>Connected</span>
+            <span className="text-muted-foreground">Connected</span>
           </div>
         </header>
 
