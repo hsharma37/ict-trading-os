@@ -16,3 +16,5 @@ pytz>=2024.1
 yfinance>=0.2.40
 pandas>=2.2.0
 numpy>=1.26.0
+vectorbt>=0.26.0
+backtrader>=1.9.76.123
