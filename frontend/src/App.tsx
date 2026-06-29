@@ -5,6 +5,7 @@ import Plan from './pages/Plan'
 import Execute from './pages/Execute'
 import Journal from './pages/Journal'
 import Analytics from './pages/Analytics'
+import Research from './pages/Research'
 import Knowledge from './pages/Knowledge'
 import Settings from './pages/Settings'
 
@@ -17,6 +18,7 @@ function App() {
         <Route path="/execute" element={<Execute />} />
         <Route path="/journal" element={<Journal />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/research" element={<Research />} />
         <Route path="/knowledge" element={<Knowledge />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
