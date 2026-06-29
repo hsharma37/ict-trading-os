@@ -11,6 +11,7 @@ import Settings from './pages/Settings'
 import AlertManager from './pages/AlertManager'
 import Suggestions from './pages/Suggestions'
 import Playground from './pages/Playground'
+import Library from './pages/Library'
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
         <Route path="/research" element={<Research />} />
         <Route path="/knowledge" element={<Knowledge />} />
         <Route path="/playground" element={<Playground />} />
+        <Route path="/library" element={<Library />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/alerts" element={<AlertManager />} />
         <Route path="/suggestions" element={<Suggestions />} />

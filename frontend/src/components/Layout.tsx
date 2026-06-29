@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   TrendingUp,
+  Library,
   Gamepad2,
   TrendingDown,
   Activity,
@@ -30,6 +31,7 @@ const navItems = [
   { path: '/suggestions', label: 'Signals', icon: Zap },
   { path: '/alerts', label: 'Alerts', icon: Bell },
   { path: '/knowledge', label: 'Knowledge', icon: Brain },
+  { path: '/library', label: 'Library', icon: Library },
   { path: '/playground', label: 'Playground', icon: Gamepad2 },
   { path: '/settings', label: 'Settings', icon: Settings },
 ]

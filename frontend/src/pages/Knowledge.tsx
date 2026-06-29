@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { AIChatPanel } from '@/components/AIChatPanel'
@@ -6,8 +6,16 @@ import { useKnowledgeBase } from '@/hooks/useKnowledgeBase'
 import {
   Youtube, FileText, Trash2, Search, Loader2, BookOpen,
   Tag, Clock, Eye, BarChart3, Brain, CheckCircle, AlertCircle,
-  ChevronDown, ChevronUp, ExternalLink
+  ChevronDown, ChevronUp, ExternalLink, Activity, Hash,
+  Zap, MessageSquare, X, Play
 } from 'lucide-react'
+
+interface IngestLog {
+  id: string
+  time: string
+  message: string
+  type: 'info' | 'success' | 'error' | 'warning'
+}
 
 export default function Knowledge() {
   const [youtubeUrl, setYoutubeUrl] = useState('')
@@ -19,35 +27,87 @@ export default function Knowledge() {
   const [isSearching, setIsSearching] = useState(false)
   const [expandedSource, setExpandedSource] = useState<string | null>(null)
   const [useAI, setUseAI] = useState(true)
+  const [ingestLogs, setIngestLogs] = useState<IngestLog[]>([])
+  const [videoPreview, setVideoPreview] = useState<string | null>(null)
+
+  const logRef = useRef<HTMLDivElement>(null)
 
   const {
     sources, status, isLoading, isTranscribing, lastResult,
     addSource, autoTranscribe, deleteSource, refresh
   } = useKnowledgeBase()
 
+  const addLog = (message: string, type: IngestLog['type'] = 'info') => {
+    const log: IngestLog = {
+      id: Math.random().toString(36).slice(2),
+      time: new Date().toLocaleTimeString(),
+      message,
+      type,
+    }
+    setIngestLogs((prev) => [...prev, log])
+    setTimeout(() => {
+      logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' })
+    }, 50)
+  }
+
+  const clearLogs = () => setIngestLogs([])
+
+  const extractVideoId = (url: string): string | null => {
+    const match = url.match(/(?:v=|\/embed\/|youtu\.be\/|\/v\/|\/watch\?v=)([a-zA-Z0-9_-]{11})/)
+    return match ? match[1] : null
+  }
+
+  const handleYouTubeUrlChange = (url: string) => {
+    setYoutubeUrl(url)
+    const vid = extractVideoId(url)
+    setVideoPreview(vid)
+  }
+
   const handleAddSource = async () => {
     if (!manualTitle || !transcriptText) return
-    await addSource(manualTitle, 'manual-entry', transcriptText, tags)
-    setManualTitle('')
-    setTranscriptText('')
+    addLog(`Adding manual source: "${manualTitle}"`, 'info')
+    try {
+      await addSource(manualTitle, 'manual-entry', transcriptText, tags)
+      addLog(`Manual source "${manualTitle}" added successfully`, 'success')
+      setManualTitle('')
+      setTranscriptText('')
+    } catch (e) {
+      addLog('Failed to add manual source', 'error')
+    }
   }
 
   const handleAutoTranscribe = async () => {
     if (!youtubeUrl.trim()) return
-    await autoTranscribe(youtubeUrl.trim(), tags, useAI)
-    setYoutubeUrl('')
+    addLog(`Starting transcription for: ${youtubeUrl}`, 'info')
+    try {
+      const result = await autoTranscribe(youtubeUrl.trim(), tags, useAI)
+      if (result) {
+        addLog(`Transcription complete: ${result.source_count} sources created`, 'success')
+        if (result.failed.length > 0) {
+          addLog(`${result.failed.length} source(s) failed`, 'warning')
+        }
+      } else {
+        addLog('Transcription returned no result', 'warning')
+      }
+      setYoutubeUrl('')
+      setVideoPreview(null)
+    } catch (e: any) {
+      addLog(`Transcription failed: ${e?.message || 'Unknown error'}`, 'error')
+    }
   }
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
     setIsSearching(true)
+    addLog(`Searching knowledge base: "${searchQuery}"`, 'info')
     try {
       const { kbApi } = await import('@/api/client')
       const response = await kbApi.searchEmbeddings(searchQuery, 8)
       setSearchResults(response.data || [])
+      addLog(`Found ${(response.data || []).length} results`, 'success')
     } catch (e) {
       console.error('Search failed:', e)
-      // Fallback to text search
+      addLog('Vector search failed, falling back to text search', 'warning')
       try {
         const { kbApi } = await import('@/api/client')
         const response = await kbApi.search(searchQuery)
@@ -58,9 +118,43 @@ export default function Knowledge() {
           score: 1.0,
         }))
         setSearchResults(results)
+        addLog(`Found ${results.length} results (text search)`, 'success')
       } catch (e2) {
         console.error('Fallback search failed:', e2)
+        addLog('Search failed completely', 'error')
       }
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const handleQuickQuery = (query: string) => {
+    setSearchQuery(query)
+    // Auto search after a brief delay
+    setTimeout(() => {
+      handleSearchForQuery(query)
+    }, 100)
+  }
+
+  const handleSearchForQuery = async (query: string) => {
+    if (!query.trim()) return
+    setIsSearching(true)
+    try {
+      const { kbApi } = await import('@/api/client')
+      const response = await kbApi.searchEmbeddings(query, 8)
+      setSearchResults(response.data || [])
+    } catch (e) {
+      try {
+        const { kbApi } = await import('@/api/client')
+        const response = await kbApi.search(query)
+        const results = (response.data || []).map((s: any) => ({
+          source_title: s.title,
+          source_url: s.url,
+          chunk_text: s.transcript?.substring(0, 300) || '',
+          score: 1.0,
+        }))
+        setSearchResults(results)
+      } catch (e2) {}
     } finally {
       setIsSearching(false)
     }
@@ -82,18 +176,72 @@ export default function Knowledge() {
     }
   }
 
+  const logColor = (type: IngestLog['type']) => {
+    switch (type) {
+      case 'success': return 'text-emerald-400'
+      case 'error': return 'text-red-400'
+      case 'warning': return 'text-amber-400'
+      default: return 'text-blue-400'
+    }
+  }
+
+  const quickQueries = [
+    { label: 'What is FVG?', query: 'What is a Fair Value Gap?' },
+    { label: 'Explain Power of 3', query: 'Explain Power of 3' },
+    { label: 'Kill Zones', query: 'What are kill zones?' },
+    { label: 'My Sources', query: 'Summarize my added sources' },
+  ]
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Knowledge Base</h1>
+        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <Brain className="w-6 h-6 text-primary" />
+          Knowledge Base
+        </h1>
         <p className="text-muted-foreground">
           Ingest YouTube videos, transcripts, and chat with your ICT knowledge base
-          {status && (
-            <span className="ml-2 text-xs">
-              ({status.source_count} sources, {status.chunk_count} chunks, {status.youtube_source_count} videos)
-            </span>
-          )}
         </p>
+      </div>
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Sources</div>
+              <div className="text-xl font-bold">{status?.source_count ?? sources.length}</div>
+            </div>
+            <BookOpen className="w-5 h-5 text-primary/60" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Concepts</div>
+              <div className="text-xl font-bold">{status?.concept_count ?? 0}</div>
+            </div>
+            <Hash className="w-5 h-5 text-amber-400/60" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Chunks</div>
+              <div className="text-xl font-bold">{status?.chunk_count ?? 0}</div>
+            </div>
+            <Activity className="w-5 h-5 text-purple-400/60" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">Videos</div>
+              <div className="text-xl font-bold">{status?.youtube_source_count ?? 0}</div>
+            </div>
+            <Youtube className="w-5 h-5 text-red-500/60" />
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -114,10 +262,37 @@ export default function Knowledge() {
                   type="text"
                   placeholder="https://www.youtube.com/watch?v=..."
                   value={youtubeUrl}
-                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  onChange={(e) => handleYouTubeUrlChange(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md bg-background text-sm"
                 />
               </div>
+
+              {/* YouTube Video Preview */}
+              {videoPreview && (
+                <div className="rounded-md overflow-hidden border border-border bg-black">
+                  <div className="relative aspect-video">
+                    <img
+                      src={`https://img.youtube.com/vi/${videoPreview}/mqdefault.jpg`}
+                      alt="Video thumbnail"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <a
+                        href={`https://www.youtube.com/watch?v=${videoPreview}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-red-600 text-white rounded-full p-2 hover:bg-red-700 transition-colors"
+                      >
+                        <Play className="w-5 h-5 fill-current" />
+                      </a>
+                    </div>
+                    <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-0.5 rounded text-xs text-white">
+                      Preview
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <label className="text-sm font-medium">Tags (comma-separated)</label>
                 <input
@@ -127,6 +302,17 @@ export default function Knowledge() {
                   onChange={(e) => setTags(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md bg-background text-sm"
                 />
+                <div className="flex flex-wrap gap-1">
+                  {['FVG', 'OTE', 'Kill Zones', 'Liquidity', 'HTF MSS'].map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => setTags((prev) => (prev ? prev + ', ' + tag : tag))}
+                      className="px-2 py-0.5 rounded-full text-[10px] border border-border bg-muted hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -265,9 +451,9 @@ export default function Knowledge() {
           </Card>
         </div>
 
-        {/* Right Column: AI Chat */}
-        <div>
-          <Card className="h-[600px] flex flex-col">
+        {/* Right Column: AI Chat + Stats + Quick Queries + Log */}
+        <div className="space-y-4">
+          <Card className="h-[500px] flex flex-col">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <Brain className="w-5 h-5 text-primary" />
@@ -276,6 +462,64 @@ export default function Knowledge() {
             </CardHeader>
             <CardContent className="flex-1 p-0 overflow-hidden">
               <AIChatPanel />
+            </CardContent>
+          </Card>
+
+          {/* Quick Queries */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Zap className="w-4 h-4 text-amber-400" />
+                Quick Queries
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {quickQueries.map((qq) => (
+                  <button
+                    key={qq.label}
+                    onClick={() => handleQuickQuery(qq.query)}
+                    className="px-3 py-1.5 rounded-md text-xs border border-border bg-muted hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                  >
+                    {qq.label}
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Ingestion Log */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-blue-400" />
+                  Ingestion Log
+                </span>
+                <Button variant="ghost" size="sm" onClick={clearLogs} className="h-7 px-2">
+                  <X className="w-3 h-3 mr-1" />
+                  Clear
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                ref={logRef}
+                className="h-[160px] overflow-y-auto rounded-md bg-muted/50 border border-border p-2 space-y-1 font-mono text-xs"
+              >
+                {ingestLogs.length === 0 ? (
+                  <div className="text-muted-foreground text-center py-6">
+                    No activity yet. Add a source or run transcription to see logs.
+                  </div>
+                ) : (
+                  ingestLogs.map((log) => (
+                    <div key={log.id} className="flex items-start gap-2">
+                      <span className="text-muted-foreground flex-shrink-0">[{log.time}]</span>
+                      <span className={logColor(log.type)}>{log.message}</span>
+                    </div>
+                  ))
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -307,7 +551,7 @@ export default function Knowledge() {
                 const metadata = source.metadata || {}
 
                 return (
-                  <div key={source.id} className="border rounded-md overflow-hidden">
+                  <div key={source.id} className="border rounded-md overflow-hidden hover:border-foreground/20 transition-colors">
                     <div
                       className="p-3 flex items-center justify-between cursor-pointer hover:bg-muted/50"
                       onClick={() => setExpandedSource(isExpanded ? null : source.id)}
@@ -333,18 +577,18 @@ export default function Knowledge() {
                             )}
                             {analysis.ict_relevance && (
                               <span className={`px-1.5 py-0.5 rounded text-xs ${
-                                analysis.ict_relevance === 'high' ? 'bg-green-100 text-green-700' :
-                                analysis.ict_relevance === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-gray-100 text-gray-700'
+                                analysis.ict_relevance === 'high' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                analysis.ict_relevance === 'medium' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                'bg-muted text-muted-foreground border border-border'
                               }`}>
                                 {analysis.ict_relevance} relevance
                               </span>
                             )}
                             {analysis.sentiment && (
                               <span className={`px-1.5 py-0.5 rounded text-xs ${
-                                analysis.sentiment === 'bullish' ? 'bg-green-100 text-green-700' :
-                                analysis.sentiment === 'bearish' ? 'bg-red-100 text-red-700' :
-                                'bg-gray-100 text-gray-700'
+                                analysis.sentiment === 'bullish' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                analysis.sentiment === 'bearish' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                'bg-muted text-muted-foreground border border-border'
                               }`}>
                                 {analysis.sentiment}
                               </span>
@@ -363,6 +607,7 @@ export default function Knowledge() {
                           onClick={(e) => {
                             e.stopPropagation()
                             deleteSource(source.id)
+                            addLog(`Deleted source: ${source.title}`, 'warning')
                           }}
                           className="p-1 text-muted-foreground hover:text-destructive"
                         >
@@ -387,7 +632,7 @@ export default function Knowledge() {
                             <div className="text-xs font-semibold uppercase text-muted-foreground mb-1">Key Concepts</div>
                             <div className="flex flex-wrap gap-1">
                               {analysis.key_concepts.map((concept: string) => (
-                                <span key={concept} className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs">
+                                <span key={concept} className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs border border-primary/10">
                                   {concept}
                                 </span>
                               ))}
@@ -433,12 +678,12 @@ export default function Knowledge() {
                         {/* Tags & Concepts */}
                         <div className="flex flex-wrap gap-1">
                           {source.tags?.map((tag: string) => (
-                            <span key={tag} className="px-2 py-0.5 bg-muted rounded-full text-xs flex items-center gap-1">
+                            <span key={tag} className="px-2 py-0.5 bg-muted rounded-full text-xs flex items-center gap-1 border border-border">
                               <Tag className="w-3 h-3" />{tag}
                             </span>
                           ))}
                           {source.concepts?.map((concept: string) => (
-                            <span key={concept} className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs">
+                            <span key={concept} className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs border border-primary/10">
                               {concept}
                             </span>
                           ))}
