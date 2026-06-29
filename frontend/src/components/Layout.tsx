@@ -9,6 +9,8 @@ import {
   FlaskConical,
   Brain,
   Settings,
+  Bell,
+  Zap,
   Menu,
   X,
   TrendingUp,
@@ -21,6 +23,8 @@ const navItems = [
   { path: '/journal', label: 'Journal', icon: BookOpen },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   { path: '/research', label: 'Research', icon: FlaskConical },
+  { path: '/suggestions', label: 'Signals', icon: Zap },
+  { path: '/alerts', label: 'Alerts', icon: Bell },
   { path: '/knowledge', label: 'Knowledge', icon: Brain },
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
