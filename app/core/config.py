@@ -9,5 +9,6 @@ class Settings:
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHANNEL_ID: str = os.getenv("TELEGRAM_CHANNEL_ID", "")
+    MT5_BRIDGE_URL: str = os.getenv("MT5_BRIDGE_URL", "http://localhost:5001")
 
 settings = Settings()

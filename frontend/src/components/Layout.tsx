@@ -3,40 +3,30 @@ import { useState, useEffect, useCallback } from 'react'
 import { playgroundApi } from '@/api/client'
 import {
   LayoutDashboard,
-  ClipboardList,
   ArrowRightLeft,
-  BookOpen,
   BarChart3,
-  FlaskConical,
   Brain,
   Settings,
-  Bell,
-  Zap,
   Menu,
   X,
   TrendingUp,
   Library,
-  Gamepad2,
-  TrendingDown,
   Activity,
   Eye,
-  ChevronDown,
   MessageSquare,
+  Monitor,
+  FlaskConical,
 } from 'lucide-react'
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/plan', label: 'Plan', icon: ClipboardList },
+  { path: '/mt5', label: 'MT5 Terminal', icon: Monitor },
   { path: '/execute', label: 'Execute', icon: ArrowRightLeft },
-  { path: '/journal', label: 'Journal', icon: BookOpen },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   { path: '/research', label: 'Research', icon: FlaskConical },
-  { path: '/suggestions', label: 'Signals', icon: Zap },
   { path: '/telegram', label: 'Telegram', icon: MessageSquare },
-  { path: '/alerts', label: 'Alerts', icon: Bell },
   { path: '/knowledge', label: 'Knowledge', icon: Brain },
   { path: '/library', label: 'Library', icon: Library },
-  { path: '/playground', label: 'Playground', icon: Gamepad2 },
   { path: '/whatsup', label: "What's Up?", icon: Eye },
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -52,7 +42,7 @@ export default function Layout({ children }: LayoutProps) {
   const location = useLocation()
   const [selectedInstrument, setSelectedInstrument] = useState('EURUSD')
   const [livePrice, setLivePrice] = useState<{ symbol: string; price: number; change: number; change_percent: number; digits: number } | null>(null)
-  const [priceLoading, setPriceLoading] = useState(true)
+  const [priceLoading, setPriceLoading] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
 
   const fetchLivePrice = useCallback(async () => {
@@ -149,7 +139,7 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center gap-4">
             <span className="text-sm font-semibold">ICT Trading OS</span>
             <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-              v8.0.0
+              v9.0.0
             </span>
           </div>
           <div className="flex-1" />
@@ -158,13 +148,11 @@ export default function Layout({ children }: LayoutProps) {
             <div className="relative flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border">
               <Activity className="w-4 h-4 text-muted-foreground" />
               
-              {/* Instrument dropdown */}
               <button
                 onClick={() => setShowDropdown(!showDropdown)}
                 className="flex items-center gap-1 font-semibold text-sm hover:text-primary transition-colors"
               >
                 {selectedInstrument}
-                <ChevronDown className="w-3 h-3" />
               </button>
               
               {showDropdown && (
@@ -200,11 +188,6 @@ export default function Layout({ children }: LayoutProps) {
                       isPositive ? 'text-green-400' : 'text-red-400'
                     }`}
                   >
-                    {isPositive ? (
-                      <TrendingUp className="w-3 h-3" />
-                    ) : (
-                      <TrendingDown className="w-3 h-3" />
-                    )}
                     {isPositive ? '+' : ''}
                     {livePrice.change.toFixed(livePrice.digits)} ({isPositive ? '+' : ''}
                     {livePrice.change_percent.toFixed(2)}%)

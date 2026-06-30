@@ -121,4 +121,29 @@ export const marketApi = {
   instruments: () => apiClient.get('/market/instruments'),
 }
 
+// MT5 API
+export const mt5Api = {
+  status: () => apiClient.get('/mt5/status'),
+  account: () => apiClient.get('/mt5/account'),
+  positions: () => apiClient.get('/mt5/positions'),
+  trade: (data: any) => apiClient.post('/mt5/trade', data),
+  close: (data: any) => apiClient.post('/mt5/close', data),
+  history: () => apiClient.get('/mt5/history'),
+}
+
+// Quant API
+export const quantApi = {
+  metrics: () => apiClient.get('/quant/metrics'),
+  kelly: () => apiClient.get('/quant/kelly'),
+  monteCarlo: (n_simulations?: number, n_trades?: number) =>
+    apiClient.post('/quant/monte-carlo', null, { params: { n_simulations, n_trades } }),
+  coach: () => apiClient.get('/quant/coach'),
+  trend: (symbol: string) => apiClient.get(`/quant/trend/${symbol}`),
+  volatility: (symbol: string) => apiClient.get(`/quant/volatility/${symbol}`),
+  levels: (symbol: string) => apiClient.get(`/quant/levels/${symbol}`),
+  session: (symbol: string) => apiClient.get(`/quant/session/${symbol}`),
+  decision: (symbol: string, direction: string) =>
+    apiClient.get(`/quant/decision/${symbol}`, { params: { direction } }),
+}
+
 // Add interceptors here later (auth, error handling, etc.)

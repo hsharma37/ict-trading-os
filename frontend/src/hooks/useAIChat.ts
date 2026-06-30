@@ -10,6 +10,7 @@ interface ChatMessage {
     url: string
     score: number
   }>
+  key_concepts?: string[]
 }
 
 export function useAIChat() {
@@ -36,6 +37,7 @@ export function useAIChat() {
         role: 'assistant',
         content: data.answer || 'No answer generated.',
         sources: data.sources || [],
+        key_concepts: data.key_concepts || data.concepts || [],
       }
       setMessages(prev => [...prev, assistantMessage])
     } catch (error: any) {

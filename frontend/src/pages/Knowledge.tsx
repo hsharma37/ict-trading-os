@@ -7,7 +7,7 @@ import {
   Youtube, FileText, Trash2, Search, Loader2, BookOpen,
   Tag, Clock, Eye, BarChart3, Brain, CheckCircle, AlertCircle,
   ChevronDown, ChevronUp, ExternalLink, Activity, Hash,
-  Zap, MessageSquare, X, Play
+  Zap, MessageSquare, X, Play, Download, GraduationCap
 } from 'lucide-react'
 
 interface IngestLog {
@@ -15,6 +15,45 @@ interface IngestLog {
   time: string
   message: string
   type: 'info' | 'success' | 'error' | 'warning'
+}
+
+function downloadMarkdown(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'text/markdown' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+function buildSourceMarkdown(source: any): string {
+  const analysis = source.analysis || {}
+  const tags = (source.tags || []).join(', ')
+  const concepts = (source.concepts || []).join(', ')
+  return `# ${source.title}
+
+**Source:** ${source.url || 'manual-entry'}
+**Tags:** ${tags}
+**Type:** ${source.source_type}
+**Date:** ${source.created_at || 'N/A'}
+
+## Summary
+${analysis.summary || 'No summary available.'}
+
+## Key Concepts
+${analysis.key_concepts?.join(', ') || concepts || 'None identified.'}
+
+## Transcript
+${source.transcript || 'No transcript available.'}
+
+## Full Analysis
+\`\`\`json
+${JSON.stringify(analysis, null, 2)}
+\`\`\`
+`
 }
 
 export default function Knowledge() {
@@ -130,7 +169,6 @@ export default function Knowledge() {
 
   const handleQuickQuery = (query: string) => {
     setSearchQuery(query)
-    // Auto search after a brief delay
     setTimeout(() => {
       handleSearchForQuery(query)
     }, 100)
@@ -158,6 +196,20 @@ export default function Knowledge() {
     } finally {
       setIsSearching(false)
     }
+  }
+
+  const handleExportSource = (source: any) => {
+    const md = buildSourceMarkdown(source)
+    const filename = `${source.title.replace(/[^a-z0-9]/gi, '_').substring(0, 40)}.md`
+    downloadMarkdown(filename, md)
+    addLog(`Exported "${source.title}" to ${filename}`, 'success')
+  }
+
+  const handleLearnSource = (source: any) => {
+    const md = buildSourceMarkdown(source)
+    const filename = `${source.title.replace(/[^a-z0-9]/gi, '_').substring(0, 40)}_agent.md`
+    downloadMarkdown(filename, md)
+    addLog(`Learned "${source.title}" — saved agent training file`, 'success')
   }
 
   const formatDuration = (seconds: number) => {
@@ -602,6 +654,26 @@ export default function Knowledge() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleExportSource(source)
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors"
+                          title="Export .md"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleLearnSource(source)
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 rounded-md transition-colors"
+                          title="Learn (save for agent training)"
+                        >
+                          <GraduationCap className="w-4 h-4" />
+                        </button>
                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         <button
                           onClick={(e) => {

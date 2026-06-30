@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.routers import market, ict, signals, trades, quant, orders, plans, kb, bot, playground, analytics, alerts, research, telegram
+from app.routers import market, ict, signals, trades, quant, orders, plans, kb, bot, playground, analytics, alerts, research, telegram, mt5
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -33,6 +33,7 @@ app.include_router(analytics.router)
 app.include_router(alerts.router)
 app.include_router(research.router)
 app.include_router(telegram.router)
+app.include_router(mt5.router)
 
 @app.get("/")
 def root():
