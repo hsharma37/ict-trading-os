@@ -5,7 +5,7 @@ import { researchApi, quantApi } from '@/api/client'
 import {
   Activity, DollarSign, AlertTriangle, Shield, Globe, BarChart3, Layers,
   TrendingUp, TrendingDown, Zap, Clock, Target, HelpCircle,
-  Loader2, FlaskConical, CheckCircle, XCircle, AlertCircle, ArrowRight
+  Loader2, FlaskConical, CheckCircle, XCircle, AlertCircle, ArrowRight, RefreshCw
 } from 'lucide-react'
 
 interface InstrumentAnalysis {
@@ -69,6 +69,8 @@ export default function QuantLab() {
   const [correlation, setCorrelation] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
+  const [demoMode, setDemoMode] = useState(false)
 
   const [agentResults, setAgentResults] = useState<AgentResult[]>([])
   const [decisionSymbol, setDecisionSymbol] = useState('EURUSD')
@@ -76,23 +78,66 @@ export default function QuantLab() {
   const [decisionResult, setDecisionResult] = useState<DecisionResult | null>(null)
   const [decisionLoading, setDecisionLoading] = useState(false)
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [allRes, corrRes] = await Promise.all([
-          researchApi.all(),
-          researchApi.correlation(),
-        ])
-        setInstruments(allRes.data?.instruments || [])
-        setCorrelation(corrRes.data)
-      } catch (err: any) {
-        setError(err.message || 'Failed to load research data')
-      } finally {
-        setLoading(false)
+  const load = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const [allRes, corrRes] = await Promise.all([
+        researchApi.all(),
+        researchApi.correlation(),
+      ])
+      const insts = allRes.data?.instruments || []
+      if (!insts.length) {
+        throw new Error('No instrument data returned from API. Yahoo Finance may be unreachable.')
       }
+      setInstruments(insts)
+      setCorrelation(corrRes.data)
+      setDemoMode(false)
+    } catch (err: any) {
+      setError(err.message || 'Failed to load research data')
+      setInstruments([])
+      // Offer demo mode if API fails
+      if (retryCount >= 1) {
+        setDemoMode(true)
+      }
+    } finally {
+      setLoading(false)
     }
+  }, [retryCount])
+
+  useEffect(() => {
     load()
-  }, [])
+  }, [load])
+
+  const handleRetry = () => {
+    setRetryCount(c => c + 1)
+    load()
+  }
+
+  const enableDemo = () => {
+    setDemoMode(true)
+    setError(null)
+    const mockInstruments: InstrumentAnalysis[] = SYMBOLS.map((sym, i) => ({
+      symbol: sym,
+      label: sym,
+      kind: ['fx', 'index', 'metal', 'crypto', 'commodity'][i % 5],
+      current_price: 100 + i * 10 + Math.random() * 5,
+      change: (Math.random() - 0.5) * 2,
+      change_pct: (Math.random() - 0.5) * 2,
+      trend: ['BULLISH', 'BEARISH', 'NEUTRAL'][i % 3],
+      sentiment: ['BULLISH', 'BEARISH', 'NEUTRAL'][i % 3],
+      volatility: { atr: 0.5 + Math.random(), daily_range: 2 + Math.random() * 3, volatility_pct: 0.5 + Math.random() },
+      support: 90 + i * 10,
+      resistance: 110 + i * 10,
+      dist_to_support: 2 + Math.random() * 3,
+      dist_to_resistance: 2 + Math.random() * 3,
+      key_levels: [{ level: 100 + i * 10, type: 'support' }, { level: 105 + i * 10, type: 'resistance' }],
+      sma20: 100 + i * 10 - 1,
+      sma50: 100 + i * 10 - 2,
+      timestamp: new Date().toISOString(),
+    }))
+    setInstruments(mockInstruments)
+  }
 
   const runAgent = useCallback(async (agentKey: string, symbol: string) => {
     setAgentResults((prev) => [
@@ -277,18 +322,49 @@ export default function QuantLab() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <FlaskConical className="w-6 h-6 text-primary" />
-          QuantLab
-        </h1>
-        <p className="text-muted-foreground">Quantitative research, agent analysis & trade decision support</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <FlaskConical className="w-6 h-6 text-primary" />
+            QuantLab
+          </h1>
+          <p className="text-muted-foreground">Quantitative research, agent analysis & trade decision support</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleRetry}>
+            <RefreshCw className="w-4 h-4 mr-1" /> Refresh Data
+          </Button>
+        </div>
       </div>
 
       {error && (
         <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />
           {error}
+        </div>
+      )}
+
+      {demoMode && (
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" />
+          <span>Demo mode active — showing synthetic data. API data unavailable.</span>
+          <Button variant="ghost" size="sm" className="h-6 text-xs ml-auto" onClick={handleRetry}>
+            Try Real Data
+          </Button>
+        </div>
+      )}
+
+      {error && instruments.length === 0 && !demoMode && (
+        <div className="p-6 rounded-lg border border-border bg-card text-center">
+          <p className="text-muted-foreground mb-4">Unable to load instrument data from the API.</p>
+          <div className="flex justify-center gap-3">
+            <Button onClick={handleRetry}>
+              <RefreshCw className="w-4 h-4 mr-2" /> Retry
+            </Button>
+            <Button variant="outline" onClick={enableDemo}>
+              Use Demo Data
+            </Button>
+          </div>
         </div>
       )}
 
@@ -452,14 +528,14 @@ export default function QuantLab() {
                   <span className="font-semibold text-sm">{inst.symbol}</span>
                 </div>
                 <span className={`text-xs font-medium ${positive ? 'text-green-400' : 'text-red-400'}`}>
-                  {positive ? '+' : ''}{inst.change_pct?.toFixed(2)}%
+                  {positive ? '+' : ''}{(inst.change_pct ?? 0).toFixed(2)}%
                 </span>
               </div>
               <div className="text-xl font-bold font-mono">
-                {inst.current_price?.toFixed(2) || '-'}
+                {inst.current_price != null ? inst.current_price.toFixed(2) : '-'}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                {inst.trend} | {inst.sentiment}
+                {inst.trend || 'NEUTRAL'} | {inst.sentiment || 'NEUTRAL'}
               </div>
             </button>
           )
@@ -479,57 +555,59 @@ export default function QuantLab() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">Current Price</div>
-                <div className="text-xl font-bold font-mono">{selected.current_price?.toFixed(selected.symbol === 'BTCUSD' ? 0 : 2)}</div>
+                <div className="text-xl font-bold font-mono">
+                  {selected.current_price != null ? selected.current_price.toFixed(selected.symbol === 'BTCUSD' ? 0 : 2) : '-'}
+                </div>
               </div>
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">Change</div>
-                <div className={`text-lg font-bold ${isPositive(selected.change_pct) ? 'text-green-400' : 'text-red-400'}`}>
-                  {isPositive(selected.change_pct) ? '+' : ''}{selected.change_pct?.toFixed(2)}%
+                <div className={`text-lg font-bold ${isPositive(selected.change_pct ?? 0) ? 'text-green-400' : 'text-red-400'}`}>
+                  {isPositive(selected.change_pct ?? 0) ? '+' : ''}{(selected.change_pct ?? 0).toFixed(2)}%
                 </div>
               </div>
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">Trend</div>
                 <div className={`text-lg font-bold ${selected.trend === 'BULLISH' ? 'text-green-400' : selected.trend === 'BEARISH' ? 'text-red-400' : 'text-muted-foreground'}`}>
-                  {selected.trend}
+                  {selected.trend || 'NEUTRAL'}
                 </div>
               </div>
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">Sentiment</div>
-                <div className="text-lg font-bold">{selected.sentiment}</div>
+                <div className="text-lg font-bold">{selected.sentiment || 'NEUTRAL'}</div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">SMA 20</div>
-                <div className="text-sm font-mono font-semibold">{selected.sma20?.toFixed(2) || '-'}</div>
+                <div className="text-sm font-mono font-semibold">{selected.sma20 != null ? selected.sma20.toFixed(2) : '-'}</div>
               </div>
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">SMA 50</div>
-                <div className="text-sm font-mono font-semibold">{selected.sma50?.toFixed(2) || '-'}</div>
+                <div className="text-sm font-mono font-semibold">{selected.sma50 != null ? selected.sma50.toFixed(2) : '-'}</div>
               </div>
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">Support</div>
-                <div className="text-sm font-mono font-semibold text-green-400">{selected.support?.toFixed(2) || '-'}</div>
+                <div className="text-sm font-mono font-semibold text-green-400">{selected.support != null ? selected.support.toFixed(2) : '-'}</div>
               </div>
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">Resistance</div>
-                <div className="text-sm font-mono font-semibold text-red-400">{selected.resistance?.toFixed(2) || '-'}</div>
+                <div className="text-sm font-mono font-semibold text-red-400">{selected.resistance != null ? selected.resistance.toFixed(2) : '-'}</div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">Volatility</div>
-                <div className="text-sm font-semibold">{selected.volatility?.volatility_pct?.toFixed(2) || '-'}%</div>
+                <div className="text-sm font-semibold">{(selected.volatility?.volatility_pct ?? 0).toFixed(2)}%</div>
               </div>
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">Daily Range</div>
-                <div className="text-sm font-semibold">{selected.volatility?.daily_range?.toFixed(2) || '-'}</div>
+                <div className="text-sm font-semibold">{selected.volatility?.daily_range != null ? selected.volatility.daily_range.toFixed(2) : '-'}</div>
               </div>
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">ATR</div>
-                <div className="text-sm font-semibold">{selected.volatility?.atr?.toFixed(2) || '-'}</div>
+                <div className="text-sm font-semibold">{selected.volatility?.atr != null ? selected.volatility.atr.toFixed(2) : '-'}</div>
               </div>
             </div>
 
