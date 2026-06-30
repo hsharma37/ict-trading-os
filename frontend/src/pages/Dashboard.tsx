@@ -4,6 +4,7 @@ import {
   TrendingUp, DollarSign, Activity, Target, AlertTriangle
 } from 'lucide-react'
 import { tradesApi, researchApi } from '@/api/client'
+import TradingViewChart from '@/components/TradingViewChart'
 
 interface TradeStats {
   total_trades: number
@@ -47,6 +48,7 @@ export default function Dashboard() {
   const [openTrades, setOpenTrades] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [chartSymbol, setChartSymbol] = useState('EURUSD')
 
   const loadData = useCallback(async () => {
     try {
@@ -156,6 +158,25 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Chart Section */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Price Chart</CardTitle>
+          <select
+            className="px-2 py-1 text-xs border rounded-md bg-background"
+            value={chartSymbol}
+            onChange={(e) => setChartSymbol(e.target.value)}
+          >
+            {['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!'].map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </CardHeader>
+        <CardContent>
+          <TradingViewChart symbol={chartSymbol} timeframe="1h" height={350} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {/* Streaks & Stats */}
