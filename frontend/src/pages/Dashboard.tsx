@@ -1,7 +1,89 @@
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { TrendingUp, TrendingDown, DollarSign, Activity } from 'lucide-react'
+import {
+  TrendingUp, DollarSign, Activity, Target, AlertTriangle
+} from 'lucide-react'
+import { tradesApi, researchApi } from '@/api/client'
+
+interface TradeStats {
+  total_trades: number
+  open_trades: number
+  closed_trades: number
+  winning_trades: number
+  losing_trades: number
+  win_rate: number
+  total_pnl: number
+  avg_pnl: number
+  avg_r: number
+  total_r: number
+  best_trade: number
+  worst_trade: number
+  max_drawdown: number
+  max_win_streak: number
+  max_loss_streak: number
+  current_streak: number
+}
+
+interface MarketMover {
+  symbol: string
+  change_pct: number
+  trend: string
+  sentiment: string
+}
+
+interface Instrument {
+  symbol: string
+  label: string
+  current_price: number
+  change_pct: number
+  trend: string
+  sentiment: string
+}
 
 export default function Dashboard() {
+  const [stats, setStats] = useState<TradeStats | null>(null)
+  const [movers, setMovers] = useState<MarketMover[]>([])
+  const [instruments, setInstruments] = useState<Instrument[]>([])
+  const [openTrades, setOpenTrades] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadData = useCallback(async () => {
+    try {
+      setError(null)
+      const [statsRes, researchRes, openRes] = await Promise.all([
+        tradesApi.stats(),
+        researchApi.summary(),
+        tradesApi.open(),
+      ])
+      setStats(statsRes.data)
+      setMovers(researchRes.data?.biggest_movers || [])
+      setInstruments(researchRes.data?.instruments?.slice(0, 4) || [])
+      setOpenTrades(openRes.data?.trades || [])
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load dashboard data')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+    const interval = setInterval(loadData, 30000)
+    return () => clearInterval(interval)
+  }, [loadData])
+
+  const isPositive = (val: number) => val >= 0
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground">Loading trading data...</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -9,6 +91,14 @@ export default function Dashboard() {
         <p className="text-muted-foreground">Overview of your trading activity</p>
       </div>
 
+      {error && (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" />
+          {error}
+        </div>
+      )}
+
+      {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -16,8 +106,12 @@ export default function Dashboard() {
             <DollarSign className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$0.00</div>
-            <p className="text-xs text-muted-foreground">+0% from last week</p>
+            <div className={`text-2xl font-bold ${isPositive(stats?.total_pnl || 0) ? 'text-green-400' : 'text-red-400'}`}>
+              ${(stats?.total_pnl || 0).toFixed(2)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {stats?.closed_trades || 0} closed trades
+            </p>
           </CardContent>
         </Card>
 
@@ -27,8 +121,10 @@ export default function Dashboard() {
             <TrendingUp className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0%</div>
-            <p className="text-xs text-muted-foreground">0 wins / 0 losses</p>
+            <div className="text-2xl font-bold">{(stats?.win_rate || 0).toFixed(1)}%</div>
+            <p className="text-xs text-muted-foreground">
+              {stats?.winning_trades || 0} wins / {stats?.losing_trades || 0} losses
+            </p>
           </CardContent>
         </Card>
 
@@ -38,35 +134,154 @@ export default function Dashboard() {
             <Activity className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">0 open positions</p>
+            <div className="text-2xl font-bold">{stats?.open_trades || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              {openTrades.length} open positions
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Risk Used</CardTitle>
-            <TrendingDown className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Avg R</CardTitle>
+            <Target className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0%</div>
-            <p className="text-xs text-muted-foreground">of daily limit</p>
+            <div className={`text-2xl font-bold ${isPositive(stats?.avg_r || 0) ? 'text-green-400' : 'text-red-400'}`}>
+              {(stats?.avg_r || 0).toFixed(2)}R
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Total: {(stats?.total_r || 0).toFixed(2)}R
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="col-span-2">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* Streaks & Stats */}
+        <Card>
           <CardHeader>
-            <CardTitle>Market Overview</CardTitle>
+            <CardTitle className="text-sm">Performance</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-              Chart placeholder — TradingView Lightweight Charts will render here
+          <CardContent className="space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Expectancy</span>
+              <span className={`font-semibold ${isPositive(stats?.avg_pnl || 0) ? 'text-green-400' : 'text-red-400'}`}>
+                ${(stats?.avg_pnl || 0).toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Best Trade</span>
+              <span className="font-semibold text-green-400">${(stats?.best_trade || 0).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Worst Trade</span>
+              <span className="font-semibold text-red-400">${(stats?.worst_trade || 0).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Max Drawdown</span>
+              <span className="font-semibold text-red-400">{(stats?.max_drawdown || 0).toFixed(1)}%</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Max Win Streak</span>
+              <span className="font-semibold text-green-400">{stats?.max_win_streak || 0}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Max Loss Streak</span>
+              <span className="font-semibold text-red-400">{stats?.max_loss_streak || 0}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Current Streak</span>
+              <span className={`font-semibold ${isPositive(stats?.current_streak || 0) ? 'text-green-400' : 'text-red-400'}`}>
+                {stats?.current_streak || 0}
+              </span>
             </div>
           </CardContent>
         </Card>
+
+        {/* Market Movers */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Market Movers</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {movers.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No market data available</p>
+            ) : (
+              movers.map((m) => (
+                <div key={m.symbol} className="flex items-center justify-between p-2 rounded bg-muted">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm">{m.symbol}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                      m.trend === 'BULLISH' ? 'bg-green-100 text-green-800' : m.trend === 'BEARISH' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {m.trend}
+                    </span>
+                  </div>
+                  <div className={`text-sm font-semibold ${isPositive(m.change_pct) ? 'text-green-400' : 'text-red-400'}`}>
+                    {isPositive(m.change_pct) ? '+' : ''}{m.change_pct.toFixed(2)}%
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Open Positions */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Open Positions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {openTrades.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No open positions</p>
+            ) : (
+              openTrades.slice(0, 5).map((t) => {
+                const totalPnl = (t.realized_pnl || 0) + (t.unrealized_pnl || 0)
+                return (
+                  <div key={t.id} className="flex items-center justify-between p-2 rounded bg-muted">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${
+                        t.side === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {t.side}
+                      </span>
+                      <span className="font-semibold text-sm">{t.symbol}</span>
+                      <span className="text-xs text-muted-foreground">{t.strategy}</span>
+                    </div>
+                    <div className={`text-sm font-semibold ${isPositive(totalPnl) ? 'text-green-400' : 'text-red-400'}`}>
+                      ${totalPnl.toFixed(2)}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Instruments Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Instruments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {instruments.map((inst) => (
+              <div key={inst.symbol} className="p-3 rounded-lg border border-border bg-card">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-semibold text-sm">{inst.symbol}</span>
+                  <span className={`text-xs ${isPositive(inst.change_pct) ? 'text-green-400' : 'text-red-400'}`}>
+                    {isPositive(inst.change_pct) ? '+' : ''}{inst.change_pct.toFixed(2)}%
+                  </span>
+                </div>
+                <div className="text-lg font-bold font-mono">{inst.current_price?.toFixed(2) || '-'}</div>
+                <div className="text-xs text-muted-foreground mt-1">{inst.label}</div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

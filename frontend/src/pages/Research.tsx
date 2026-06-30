@@ -1,123 +1,263 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { apiClient } from '@/api/client'
+import { researchApi } from '@/api/client'
+import {
+  Activity, DollarSign, AlertTriangle, Shield, Globe, BarChart3, Layers,
+} from 'lucide-react'
+
+interface InstrumentAnalysis {
+  symbol: string
+  label: string
+  kind: string
+  current_price: number
+  change: number
+  change_pct: number
+  trend: string
+  sentiment: string
+  volatility: { atr: number | null; daily_range: number | null; volatility_pct: number | null }
+  support: number | null
+  resistance: number | null
+  dist_to_support: number | null
+  dist_to_resistance: number | null
+  key_levels: { level: number; type: string }[]
+  sma20: number | null
+  sma50: number | null
+  timestamp: string
+}
 
 export default function Research() {
-  const [response, setResponse] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [instruments, setInstruments] = useState<InstrumentAnalysis[]>([])
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null)
+  const [correlation, setCorrelation] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'backtest' | 'montecarlo' | 'backtrader'>('backtest')
 
-  const runBacktest = async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const result = await apiClient.post('/api/v1/research/backtest', {
-        strategy: 'sma-crossover',
-        symbol: 'EURUSD',
-        timeframe: '1h',
-        start: '2024-01-01',
-        end: '2024-06-01',
-        params: { fast: 10, slow: 30 },
-      })
-      setResponse(JSON.stringify(result.data, null, 2))
-    } catch (err: any) {
-      setError(err.message || 'Request failed')
-    } finally {
-      setIsLoading(false)
+  useEffect(() => {
+    async function load() {
+      try {
+        const [allRes, corrRes] = await Promise.all([
+          researchApi.all(),
+          researchApi.correlation(),
+        ])
+        setInstruments(allRes.data?.instruments || [])
+        setCorrelation(corrRes.data)
+      } catch (err: any) {
+        setError(err.message || 'Failed to load research data')
+      } finally {
+        setLoading(false)
+      }
     }
+    load()
+  }, [])
+
+  const selected = instruments.find(i => i.symbol === selectedSymbol)
+  const isPositive = (val: number) => val >= 0
+
+  const kindIcons: Record<string, any> = {
+    fx: <DollarSign className="w-4 h-4" />,
+    index: <BarChart3 className="w-4 h-4" />,
+    metal: <Shield className="w-4 h-4" />,
+    crypto: <Globe className="w-4 h-4" />,
+    commodity: <Layers className="w-4 h-4" />,
   }
 
-  const runMonteCarlo = async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const result = await apiClient.post('/api/v1/research/montecarlo', {
-        trials: 1000,
-        scenario: {
-          win_rate: 0.55,
-          avg_win: 150,
-          avg_loss: 100,
-          num_trades: 100,
-          initial_capital: 10000,
-        },
-      })
-      setResponse(JSON.stringify(result.data, null, 2))
-    } catch (err: any) {
-      setError(err.message || 'Request failed')
-    } finally {
-      setIsLoading(false)
-    }
+  const kindColors: Record<string, string> = {
+    fx: 'text-blue-400',
+    index: 'text-blue-400',
+    metal: 'text-yellow-400',
+    crypto: 'text-purple-400',
+    commodity: 'text-orange-400',
   }
 
-  const runBacktrader = async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const result = await apiClient.post('/api/v1/research/backtrader', {
-        strategy: 'sma-crossover',
-        symbol: 'EURUSD',
-        timeframe: '1h',
-        start: '2024-01-01',
-        end: '2024-06-01',
-        params: { fast: 10, slow: 30 },
-      })
-      setResponse(JSON.stringify(result.data, null, 2))
-    } catch (err: any) {
-      setError(err.message || 'Request failed')
-    } finally {
-      setIsLoading(false)
-    }
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold tracking-tight">Research</h1>
+        <p className="text-muted-foreground">Loading instrument analysis...</p>
+      </div>
+    )
   }
-
-  const tabs = [
-    { key: 'backtest' as const, label: 'VectorBT Backtest', action: runBacktest },
-    { key: 'montecarlo' as const, label: 'Monte Carlo', action: runMonteCarlo },
-    { key: 'backtrader' as const, label: 'Backtrader', action: runBacktrader },
-  ]
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Research</h1>
-        <p className="text-muted-foreground">Backtesting and quantitative analysis</p>
-      </div>
-
-      <div className="flex flex-wrap gap-3">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => {
-              setActiveTab(t.key)
-              t.action()
-            }}
-            disabled={isLoading}
-            className={`px-4 py-2 rounded-lg border transition-colors cursor-pointer ${
-              activeTab === t.key
-                ? 'bg-black text-white border-black'
-                : 'bg-white text-black border-gray-300 hover:bg-gray-50'
-            } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            {isLoading && activeTab === t.key ? 'Running…' : t.label}
-          </button>
-        ))}
+        <p className="text-muted-foreground">Technical analysis and market insights</p>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" />
           {error}
         </div>
       )}
 
-      {response && (
+      {/* Instrument Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {instruments.map((inst) => {
+          const positive = isPositive(inst.change_pct)
+          return (
+            <button
+              key={inst.symbol}
+              onClick={() => setSelectedSymbol(inst.symbol === selectedSymbol ? null : inst.symbol)}
+              className={`p-4 rounded-xl border text-left transition-all hover:scale-[1.02] ${
+                selectedSymbol === inst.symbol
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                  : 'border-border bg-card hover:bg-muted/50'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className={kindColors[inst.kind] || 'text-muted-foreground'}>
+                    {kindIcons[inst.kind] || <Activity className="w-4 h-4" />}
+                  </span>
+                  <span className="font-semibold text-sm">{inst.symbol}</span>
+                </div>
+                <span className={`text-xs font-medium ${positive ? 'text-green-400' : 'text-red-400'}`}>
+                  {positive ? '+' : ''}{inst.change_pct?.toFixed(2)}%
+                </span>
+              </div>
+              <div className="text-xl font-bold font-mono">
+                {inst.current_price?.toFixed(2) || '-'}
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {inst.trend} | {inst.sentiment}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Detail Panel */}
+      {selected && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-mono">Results</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              {kindIcons[selected.kind] || <Activity className="w-5 h-5" />}
+              {selected.symbol} — {selected.label}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="bg-gray-50 p-4 rounded-lg text-xs font-mono overflow-x-auto">
-              {response}
-            </pre>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-xs text-muted-foreground">Current Price</div>
+                <div className="text-xl font-bold font-mono">{selected.current_price?.toFixed(selected.symbol === 'BTCUSD' ? 0 : 2)}</div>
+              </div>
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-xs text-muted-foreground">Change</div>
+                <div className={`text-lg font-bold ${isPositive(selected.change_pct) ? 'text-green-400' : 'text-red-400'}`}>
+                  {isPositive(selected.change_pct) ? '+' : ''}{selected.change_pct?.toFixed(2)}%
+                </div>
+              </div>
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-xs text-muted-foreground">Trend</div>
+                <div className={`text-lg font-bold ${selected.trend === 'BULLISH' ? 'text-green-400' : selected.trend === 'BEARISH' ? 'text-red-400' : 'text-muted-foreground'}`}>
+                  {selected.trend}
+                </div>
+              </div>
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-xs text-muted-foreground">Sentiment</div>
+                <div className="text-lg font-bold">{selected.sentiment}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-xs text-muted-foreground">SMA 20</div>
+                <div className="text-sm font-mono font-semibold">{selected.sma20?.toFixed(2) || '-'}</div>
+              </div>
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-xs text-muted-foreground">SMA 50</div>
+                <div className="text-sm font-mono font-semibold">{selected.sma50?.toFixed(2) || '-'}</div>
+              </div>
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-xs text-muted-foreground">Support</div>
+                <div className="text-sm font-mono font-semibold text-green-400">{selected.support?.toFixed(2) || '-'}</div>
+              </div>
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-xs text-muted-foreground">Resistance</div>
+                <div className="text-sm font-mono font-semibold text-red-400">{selected.resistance?.toFixed(2) || '-'}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-xs text-muted-foreground">Volatility</div>
+                <div className="text-sm font-semibold">{selected.volatility?.volatility_pct?.toFixed(2) || '-'}%</div>
+              </div>
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-xs text-muted-foreground">Daily Range</div>
+                <div className="text-sm font-semibold">{selected.volatility?.daily_range?.toFixed(2) || '-'}</div>
+              </div>
+              <div className="p-3 rounded-lg bg-muted">
+                <div className="text-xs text-muted-foreground">ATR</div>
+                <div className="text-sm font-semibold">{selected.volatility?.atr?.toFixed(2) || '-'}</div>
+              </div>
+            </div>
+
+            {selected.key_levels && selected.key_levels.length > 0 && (
+              <div>
+                <div className="text-sm font-medium mb-2">Key Levels</div>
+                <div className="flex gap-2 flex-wrap">
+                  {selected.key_levels.map((level, i) => (
+                    <span
+                      key={i}
+                      className={`text-xs px-2 py-1 rounded ${
+                        level.type === 'support' ? 'bg-green-100 text-green-800' :
+                        level.type === 'resistance' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      {level.type}: {level.level.toFixed(2)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Correlation Matrix */}
+      {correlation?.matrix && Object.keys(correlation.matrix).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Correlation Matrix</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr>
+                    <th className="p-2 text-left">Symbol</th>
+                    {correlation.symbols?.map((s: string) => (
+                      <th key={s} className="p-2 text-center">{s}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {correlation.symbols?.map((sym1: string) => (
+                    <tr key={sym1}>
+                      <td className="p-2 font-semibold">{sym1}</td>
+                      {correlation.symbols?.map((sym2: string) => {
+                        const val = correlation.matrix?.[sym1]?.[sym2] ?? 0
+                        const intensity = Math.abs(val)
+                        const color = val > 0 ? `rgba(34, 197, 94, ${intensity * 0.3})` : `rgba(239, 68, 68, ${intensity * 0.3})`
+                        return (
+                          <td
+                            key={sym2}
+                            className="p-2 text-center font-mono"
+                            style={{ backgroundColor: color }}
+                          >
+                            {val.toFixed(2)}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
       )}

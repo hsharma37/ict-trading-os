@@ -19,6 +19,7 @@ import {
   Gamepad2,
   TrendingDown,
   Activity,
+  Eye,
 } from 'lucide-react'
 
 const navItems = [
@@ -33,6 +34,7 @@ const navItems = [
   { path: '/knowledge', label: 'Knowledge', icon: Brain },
   { path: '/library', label: 'Library', icon: Library },
   { path: '/playground', label: 'Playground', icon: Gamepad2 },
+  { path: '/whatsup', label: "What's Up?", icon: Eye },
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
 
