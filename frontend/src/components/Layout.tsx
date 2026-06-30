@@ -16,6 +16,11 @@ import {
   MessageSquare,
   Monitor,
   FlaskConical,
+  Zap,
+  BookOpen,
+  Target,
+  Lightbulb,
+  Bell,
 } from 'lucide-react'
 
 const navItems = [
@@ -24,9 +29,16 @@ const navItems = [
   { path: '/execute', label: 'Execute', icon: ArrowRightLeft },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   { path: '/research', label: 'Research', icon: FlaskConical },
+  { path: '/quant', label: 'Quant Lab', icon: Zap },
+  { path: '/signals', label: 'Signals', icon: Activity },
+  { path: '/playground', label: 'Playground', icon: Target },
   { path: '/telegram', label: 'Telegram', icon: MessageSquare },
   { path: '/knowledge', label: 'Knowledge', icon: Brain },
   { path: '/library', label: 'Library', icon: Library },
+  { path: '/journal', label: 'Journal', icon: BookOpen },
+  { path: '/plan', label: 'Plans', icon: Target },
+  { path: '/suggestions', label: 'Suggestions', icon: Lightbulb },
+  { path: '/alerts', label: 'Alerts', icon: Bell },
   { path: '/whatsup', label: "What's Up?", icon: Eye },
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -139,7 +151,7 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center gap-4">
             <span className="text-sm font-semibold">ICT Trading OS</span>
             <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-              v9.0.0
+              v9.1.0
             </span>
           </div>
           <div className="flex-1" />
