@@ -131,18 +131,40 @@ class ICTPatternEngine:
         return "premium" if price > mid else "discount"
 
     def calculate_entry(self, patterns, bias, current_price):
+        """Calculate entry zone, SL, and TPs from detected patterns.
+        
+        Fixes: correctly reads OB metadata (ob_high/ob_low) and FVG metadata (top/bottom).
+        """
         if bias == "NEUTRAL": return None
         relevant = [p for p in patterns if p["direction"] == bias.lower() and p["type"] in ["FVG", "OB"]]
         if not relevant: return None
         nearest = min(relevant, key=lambda p: abs(p["price_level"] - current_price))
         entry = nearest["price_level"]
+        meta = nearest.get("metadata", {})
+        
         if bias == "BULLISH":
-            sl = nearest["metadata"].get("bottom", entry * 0.995)
+            # For bullish entry: SL is below the pattern's lower boundary
+            # FVG uses "bottom" key, OB uses "ob_low" key
+            sl = meta.get("bottom") or meta.get("ob_low") or entry * 0.995
             risk = entry - sl
-            return {"entry": round(entry, 5), "sl": round(sl, 5), "tp1": round(entry + risk, 5), "tp2": round(entry + risk * 2, 5), "tp3": round(entry + risk * 3, 5), "risk": round(risk, 5)}
+            if risk <= 0:
+                risk = entry * 0.005  # fallback 0.5%
+            return {
+                "entry": round(entry, 5), "sl": round(sl, 5),
+                "tp1": round(entry + risk, 5), "tp2": round(entry + risk * 2, 5), "tp3": round(entry + risk * 3, 5),
+                "risk": round(risk, 5)
+            }
         else:
-            sl = nearest["metadata"].get("top", entry * 1.005)
+            # For bearish entry: SL is above the pattern's upper boundary
+            # FVG uses "top" key, OB uses "ob_high" key
+            sl = meta.get("top") or meta.get("ob_high") or entry * 1.005
             risk = sl - entry
-            return {"entry": round(entry, 5), "sl": round(sl, 5), "tp1": round(entry - risk, 5), "tp2": round(entry - risk * 2, 5), "tp3": round(entry - risk * 3, 5), "risk": round(risk, 5)}
+            if risk <= 0:
+                risk = entry * 0.005  # fallback 0.5%
+            return {
+                "entry": round(entry, 5), "sl": round(sl, 5),
+                "tp1": round(entry - risk, 5), "tp2": round(entry - risk * 2, 5), "tp3": round(entry - risk * 3, 5),
+                "risk": round(risk, 5)
+            }
 
 ict_engine = ICTPatternEngine()
