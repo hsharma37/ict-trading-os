@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.routers import market, ict, signals, trades, quant, orders, plans, kb, bot, playground, analytics, alerts, research
+from app.routers import market, ict, signals, trades, quant, orders, plans, kb, bot, playground, analytics, alerts, research, telegram
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -32,6 +32,7 @@ app.include_router(playground.router)
 app.include_router(analytics.router)
 app.include_router(alerts.router)
 app.include_router(research.router)
+app.include_router(telegram.router)
 
 @app.get("/")
 def root():
@@ -39,7 +40,7 @@ def root():
         "name": settings.APP_NAME, "version": settings.APP_VERSION, "status": "operational",
         "endpoints": {
             "market": "/market", "ict_analysis": "/ict", "signals": "/signals",
-            "trades": "/trades", "quant_lab": "/quant"
+            "trades": "/trades", "quant_lab": "/quant", "telegram": "/telegram"
         }
     }
 

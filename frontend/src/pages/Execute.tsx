@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import {
-  Target, Shield, AlertTriangle, Zap, CheckCircle, RefreshCw, BarChart3
+  Target, Shield, AlertTriangle, Zap, CheckCircle, RefreshCw, BarChart3, Sparkles
 } from 'lucide-react'
-import { tradesApi, ordersApi } from '@/api/client'
+import { tradesApi, ordersApi, playgroundApi } from '@/api/client'
 
 interface Trade {
   id: string
@@ -53,9 +53,27 @@ interface LotCalc {
   error?: string
 }
 
-const INSTRUMENTS = [
-  'NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!'
-]
+const INSTRUMENTS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
+
+// Standard 1R distances per instrument (in price terms)
+const R_DISTANCES: Record<string, number> = {
+  'EURUSD': 0.0020,
+  'GBPUSD': 0.0020,
+  'USDJPY': 0.20,
+  'NQ1!': 15.0,
+  'ES1!': 10.0,
+  'XAUUSD': 3.0,
+  'BTCUSD': 0.02,  // 2% — will multiply by price
+  'CL1!': 1.0,
+}
+
+function getRDistance(symbol: string, price: number): number {
+  const base = R_DISTANCES[symbol] || 0.01
+  if (symbol === 'BTCUSD') {
+    return price * base
+  }
+  return base
+}
 
 export default function Execute() {
   const [symbol, setSymbol] = useState('EURUSD')
@@ -76,6 +94,8 @@ export default function Execute() {
   const [stats, setStats] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [livePrice, setLivePrice] = useState<number | null>(null)
+  const [priceLoading, setPriceLoading] = useState(false)
 
   const fetchOpenTrades = useCallback(async () => {
     try {
@@ -93,6 +113,55 @@ export default function Execute() {
     const interval = setInterval(fetchOpenTrades, 15000)
     return () => clearInterval(interval)
   }, [fetchOpenTrades])
+
+  // Auto-fetch live price when symbol changes
+  useEffect(() => {
+    async function fetchPrice() {
+      setPriceLoading(true)
+      try {
+        const res = await playgroundApi.getPrice(symbol)
+        const p = res.data?.price
+        if (p) {
+          setLivePrice(p)
+          setEntryPrice(p.toString())
+          // Auto-calculate SL/TP after setting entry
+          autoFillSLTP(p)
+        }
+      } catch (e) {
+        console.error('Price fetch failed', e)
+      } finally {
+        setPriceLoading(false)
+      }
+    }
+    fetchPrice()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol])
+
+  function autoFillSLTP(price: number) {
+    const rDist = getRDistance(symbol, price)
+    const digits = symbol === 'BTCUSD' ? 0 : symbol === 'USDJPY' ? 3 : symbol === 'EURUSD' || symbol === 'GBPUSD' ? 5 : 2
+
+    if (side === 'BUY') {
+      setStopLoss((price - rDist).toFixed(digits))
+      setTp1((price + rDist).toFixed(digits))
+      setTp2((price + 2 * rDist).toFixed(digits))
+      setTp3((price + 3 * rDist).toFixed(digits))
+    } else {
+      setStopLoss((price + rDist).toFixed(digits))
+      setTp1((price - rDist).toFixed(digits))
+      setTp2((price - 2 * rDist).toFixed(digits))
+      setTp3((price - 3 * rDist).toFixed(digits))
+    }
+  }
+
+  const handleAutoFill = () => {
+    const ep = parseFloat(entryPrice)
+    if (!ep || ep <= 0) {
+      setError('Entry price required for auto-fill')
+      return
+    }
+    autoFillSLTP(ep)
+  }
 
   const calculateLot = async () => {
     setLotLoading(true)
@@ -124,6 +193,15 @@ export default function Execute() {
     }
   }
 
+  // Auto-calculate lot when SL/TP change (after auto-fill)
+  useEffect(() => {
+    if (entryPrice && stopLoss && !lotCalc) {
+      const timer = setTimeout(() => calculateLot(), 500)
+      return () => clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryPrice, stopLoss])
+
   const placeOrder = async () => {
     setOrderLoading(true)
     setError(null)
@@ -152,6 +230,11 @@ export default function Execute() {
       setSuccess(`Trade created: ${res.data.symbol} ${res.data.side} @ ${res.data.quantity} lots`)
       fetchOpenTrades()
       setLotCalc(null)
+      // Reset form
+      setTp1('')
+      setTp2('')
+      setTp3('')
+      setStopLoss('')
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Order placement failed')
     } finally {
@@ -187,7 +270,7 @@ export default function Execute() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Execution Console</h1>
-        <p className="text-muted-foreground">Place orders with automatic lot calculation</p>
+        <p className="text-muted-foreground">Place orders with automatic lot calculation and 1R-based targets</p>
       </div>
 
       {error && (
@@ -249,15 +332,19 @@ export default function Execute() {
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Entry Price</label>
-                <input
-                  type="number"
-                  step="0.00001"
-                  value={entryPrice}
-                  onChange={(e) => setEntryPrice(e.target.value)}
-                  placeholder="Live"
-                  className="w-full px-3 py-2 border rounded-md bg-background"
-                />
-                <p className="text-xs text-muted-foreground">Leave empty for live price</p>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    step="0.00001"
+                    value={entryPrice}
+                    onChange={(e) => setEntryPrice(e.target.value)}
+                    className="flex-1 px-3 py-2 border rounded-md bg-background"
+                  />
+                  {priceLoading && <RefreshCw className="w-4 h-4 animate-spin text-muted-foreground mt-2" />}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {livePrice ? `Live: ${livePrice}` : 'Auto-fetched from market'}
+                </p>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-red-500">Stop Loss *</label>
@@ -348,12 +435,21 @@ export default function Execute() {
 
             <div className="flex gap-3">
               <Button
+                onClick={handleAutoFill}
+                variant="outline"
+                className="flex-1"
+                disabled={!entryPrice}
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                Auto Set SL/TP (1R)
+              </Button>
+              <Button
                 onClick={calculateLot}
                 disabled={lotLoading}
                 variant="outline"
                 className="flex-1"
               >
-                <RefreshCw className="w-4 h-4 mr-2" />
+                <BarChart3 className="w-4 h-4 mr-2" />
                 {lotLoading ? 'Calculating...' : 'Calculate Lot'}
               </Button>
               <Button
@@ -417,8 +513,8 @@ export default function Execute() {
             ) : (
               <div className="text-center text-muted-foreground py-8">
                 <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Enter SL and click Calculate to see lot size</p>
-                <p className="text-xs mt-1">Leverage from FundingPips: Forex 1:100, Gold 1:200, Indices 1:100, Crypto 1:30</p>
+                <p className="text-sm">Select instrument and click Calculate to see lot size</p>
+                <p className="text-xs mt-1">Leverage: Forex 1:100, Gold 1:200, Indices 1:100, Crypto 1:30</p>
               </div>
             )}
           </CardContent>

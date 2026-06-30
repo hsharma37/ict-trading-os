@@ -29,7 +29,7 @@ export const kbApi = {
   status: () => apiClient.get('/kb/status'),
 }
 
-// Playground API
+// Add interceptors here later (auth, error handling, etc.)
 export const playgroundApi = {
   getPrices: () => apiClient.get('/playground/prices'),
   getPrice: (symbol: string) => apiClient.get(`/playground/price/${symbol}`),
@@ -98,6 +98,20 @@ export const alertsApi = {
   delete: (id: string) => apiClient.delete(`/alerts/${id}`),
   toggle: (id: string) => apiClient.patch(`/alerts/${id}/toggle`),
   check: () => apiClient.post('/alerts/check'),
+}
+
+// Telegram API
+export const telegramApi = {
+  status: () => apiClient.get('/telegram/status'),
+  signals: (limit: number = 50, acknowledged?: boolean, auto_traded?: boolean) =>
+    apiClient.get('/telegram/signals', { params: { limit, acknowledged, auto_traded } }),
+  poll: () => apiClient.post('/telegram/poll'),
+  acknowledge: (id: string) => apiClient.post(`/telegram/acknowledge/${id}`),
+  autoTrade: (id: string, data?: { account_balance?: number; risk_pct?: number }) =>
+    apiClient.post(`/telegram/auto-trade/${id}`, data),
+  stats: () => apiClient.get('/telegram/stats'),
+  configure: (data: { token: string; channel_id: string }) =>
+    apiClient.post('/telegram/configure', data),
 }
 
 // Market API

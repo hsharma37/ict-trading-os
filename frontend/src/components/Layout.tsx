@@ -20,6 +20,8 @@ import {
   TrendingDown,
   Activity,
   Eye,
+  ChevronDown,
+  MessageSquare,
 } from 'lucide-react'
 
 const navItems = [
@@ -30,6 +32,7 @@ const navItems = [
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   { path: '/research', label: 'Research', icon: FlaskConical },
   { path: '/suggestions', label: 'Signals', icon: Zap },
+  { path: '/telegram', label: 'Telegram', icon: MessageSquare },
   { path: '/alerts', label: 'Alerts', icon: Bell },
   { path: '/knowledge', label: 'Knowledge', icon: Brain },
   { path: '/library', label: 'Library', icon: Library },
@@ -38,6 +41,8 @@ const navItems = [
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
 
+const INSTRUMENTS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
+
 interface LayoutProps {
   children: React.ReactNode
 }
@@ -45,19 +50,23 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
-  const [livePrice, setLivePrice] = useState<{ symbol: string; price: number; change: number } | null>(null)
+  const [selectedInstrument, setSelectedInstrument] = useState('EURUSD')
+  const [livePrice, setLivePrice] = useState<{ symbol: string; price: number; change: number; change_percent: number; digits: number } | null>(null)
   const [priceLoading, setPriceLoading] = useState(true)
+  const [showDropdown, setShowDropdown] = useState(false)
 
   const fetchLivePrice = useCallback(async () => {
     try {
-      const response = await playgroundApi.getPrices()
-      const prices = response.data?.prices || []
-      if (prices.length > 0) {
-        const first = prices[0]
+      setPriceLoading(true)
+      const response = await playgroundApi.getPrice(selectedInstrument)
+      const p = response.data
+      if (p) {
         setLivePrice({
-          symbol: first.symbol,
-          price: first.price,
-          change: first.change,
+          symbol: p.symbol,
+          price: p.price,
+          change: p.change,
+          change_percent: p.change_percent,
+          digits: p.digits,
         })
       }
     } catch (e) {
@@ -65,11 +74,11 @@ export default function Layout({ children }: LayoutProps) {
     } finally {
       setPriceLoading(false)
     }
-  }, [])
+  }, [selectedInstrument])
 
   useEffect(() => {
     fetchLivePrice()
-    const interval = setInterval(fetchLivePrice, 30000)
+    const interval = setInterval(fetchLivePrice, 15000)
     return () => clearInterval(interval)
   }, [fetchLivePrice])
 
@@ -145,16 +154,46 @@ export default function Layout({ children }: LayoutProps) {
           </div>
           <div className="flex-1" />
           <div className="flex items-center gap-4 text-sm">
-            {/* Live Price Display */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border">
+            {/* Instrument Selector + Live Price */}
+            <div className="relative flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border">
               <Activity className="w-4 h-4 text-muted-foreground" />
+              
+              {/* Instrument dropdown */}
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="flex items-center gap-1 font-semibold text-sm hover:text-primary transition-colors"
+              >
+                {selectedInstrument}
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              
+              {showDropdown && (
+                <div className="absolute top-full left-0 mt-1 w-32 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+                  {INSTRUMENTS.map((inst) => (
+                    <button
+                      key={inst}
+                      onClick={() => {
+                        setSelectedInstrument(inst)
+                        setShowDropdown(false)
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors ${
+                        inst === selectedInstrument ? 'bg-primary/10 text-primary font-semibold' : ''
+                      }`}
+                    >
+                      {inst}
+                    </button>
+                  ))}
+                </div>
+              )}
+              
+              <div className="w-px h-4 bg-border mx-1" />
+              
               {priceLoading ? (
                 <span className="text-muted-foreground text-xs">Loading...</span>
               ) : livePrice ? (
                 <div className="flex items-center gap-2">
-                  <span className="font-mono font-semibold text-sm">{livePrice.symbol}</span>
                   <span className="font-mono font-bold">
-                    {livePrice.price.toFixed(2)}
+                    {livePrice.price.toFixed(livePrice.digits)}
                   </span>
                   <span
                     className={`flex items-center gap-0.5 text-xs font-medium ${
@@ -167,13 +206,15 @@ export default function Layout({ children }: LayoutProps) {
                       <TrendingDown className="w-3 h-3" />
                     )}
                     {isPositive ? '+' : ''}
-                    {livePrice.change.toFixed(2)}
+                    {livePrice.change.toFixed(livePrice.digits)} ({isPositive ? '+' : ''}
+                    {livePrice.change_percent.toFixed(2)}%)
                   </span>
                 </div>
               ) : (
                 <span className="text-muted-foreground text-xs">No data</span>
               )}
             </div>
+            
             <span className="w-2 h-2 rounded-full bg-green-500" />
             <span className="text-muted-foreground">Connected</span>
           </div>

@@ -13,6 +13,7 @@ import Suggestions from './pages/Suggestions'
 import Playground from './pages/Playground'
 import Library from './pages/Library'
 import WhatsUp from './pages/WhatsUp'
+import TelegramFeed from './pages/TelegramFeed'
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/alerts" element={<AlertManager />} />
         <Route path="/suggestions" element={<Suggestions />} />
+        <Route path="/telegram" element={<TelegramFeed />} />
       </Routes>
     </Layout>
   )
