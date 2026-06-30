@@ -4,6 +4,14 @@ from datetime import datetime, timedelta
 from app.services.market_data import market_service
 from app.services.ict_engine import ict_engine
 
+# Signal quality thresholds
+SIGNAL_THRESHOLD = 2        # Minimum score to generate a signal (was 4)
+SIGNAL_QUALITY_STRONG = 5  # Score >= 5 = STRONG
+SIGNAL_QUALITY_MODERATE = 3 # Score >= 3 = MODERATE
+SIGNAL_QUALITY_WEAK = 2     # Score >= 2 = WEAK
+SIGNAL_EXPIRY_MINUTES = 60  # Signal validity (was 5)
+BIAS_FLIP_COOLDOWN_SECONDS = 60  # Cooldown after bias flip (was 300)
+
 class SignalEngine:
     def __init__(self):
         self.active_signals = {}
@@ -48,27 +56,71 @@ class SignalEngine:
             if risk > 0 and reward / risk >= 2:
                 score += 1; confluences.append("2R_Target_Viable")
 
-        if score < 4: return None
+        # Determine signal quality even if below threshold
+        if score >= SIGNAL_QUALITY_STRONG:
+            quality = "STRONG"
+        elif score >= SIGNAL_QUALITY_MODERATE:
+            quality = "MODERATE"
+        elif score >= SIGNAL_QUALITY_WEAK:
+            quality = "WEAK"
+        else:
+            quality = "NONE"
 
+        # Build partial breakdown for frontend visibility
+        breakdown = {
+            "symbol": symbol,
+            "sentiment": htf_bias.lower(),
+            "score": score,
+            "max_score": 6,
+            "quality": quality,
+            "confluences": confluences,
+            "entry_zone": entry_zone.get("entry") if entry_zone else None,
+            "stop_loss": entry_zone.get("sl") if entry_zone else None,
+            "targets": [entry_zone.get("tp1"), entry_zone.get("tp2"), entry_zone.get("tp3")] if entry_zone else [],
+            "confidence": round(score / 6, 2),
+            "session": self._get_session(),
+            "executed": False,
+            "created_at": datetime.utcnow().isoformat(),
+            "expires_at": (datetime.utcnow() + timedelta(minutes=SIGNAL_EXPIRY_MINUTES)).isoformat(),
+            "htf_bias": htf_bias,
+            "itf_patterns": [{"type": p["type"], "direction": p["direction"]} for p in itf_patterns[:3]],
+            "ltf_patterns": [{"type": p["type"], "direction": p["direction"]} for p in ltf_patterns[:3]],
+        }
+
+        # Below threshold: return partial breakdown so UI can show "why no signal"
+        if score < SIGNAL_THRESHOLD:
+            return {**breakdown, "signal": None, "message": f"Score {score} below threshold {SIGNAL_THRESHOLD}. Confluences detected: {', '.join(confluences) or 'none'}."}
+
+        # Bias flip cooldown (reduced from 300s to 60s)
         state = self.get_state(symbol)
         now = datetime.utcnow()
         if state["bias"] != htf_bias and state["bias"] != "NEUTRAL":
-            if (now - state["last_flip"]).total_seconds() < 300:
-                return None
+            if (now - state["last_flip"]).total_seconds() < BIAS_FLIP_COOLDOWN_SECONDS:
+                return {**breakdown, "signal": None, "message": "Bias recently flipped. Cooling down."}
 
         state["bias"] = htf_bias
         state["last_flip"] = now
         state["count"] += 1
 
         signal = {
-            "id": f"SIG-{int(now.timestamp()*1000)}", "symbol": symbol,
-            "sentiment": htf_bias.lower(), "score": score, "max_score": 6,
-            "confluences": confluences, "entry_zone": entry_zone.get("entry") if entry_zone else None,
+            "id": f"SIG-{int(now.timestamp()*1000)}",
+            "symbol": symbol,
+            "sentiment": htf_bias.lower(),
+            "score": score,
+            "max_score": 6,
+            "quality": quality,
+            "confluences": confluences,
+            "entry_zone": entry_zone.get("entry") if entry_zone else None,
             "stop_loss": entry_zone.get("sl") if entry_zone else None,
             "targets": [entry_zone.get("tp1"), entry_zone.get("tp2"), entry_zone.get("tp3")] if entry_zone else [],
-            "confidence": round(score / 6, 2), "session": self._get_session(),
-            "executed": False, "created_at": now.isoformat(),
-            "expires_at": (now + timedelta(minutes=5)).isoformat()
+            "confidence": round(score / 6, 2),
+            "session": self._get_session(),
+            "executed": False,
+            "created_at": now.isoformat(),
+            "expires_at": (now + timedelta(minutes=SIGNAL_EXPIRY_MINUTES)).isoformat(),
+            "htf_bias": htf_bias,
+            "itf_patterns": [{"type": p["type"], "direction": p["direction"]} for p in itf_patterns[:3]],
+            "ltf_patterns": [{"type": p["type"], "direction": p["direction"]} for p in ltf_patterns[:3]],
         }
 
         self.active_signals[symbol] = signal
