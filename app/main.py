@@ -1,7 +1,8 @@
 """FastAPI Application - ICT Trading OS Backend."""
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.core.auth import auth_middleware
 from app.routers import market, ict, signals, trades, quant, orders, plans, kb, bot, playground, analytics, alerts, research, telegram, mt5
 
 app = FastAPI(
@@ -18,6 +19,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Optional API key auth middleware (enabled via AUTH_ENABLED env var)
+app.middleware("http")(auth_middleware)
 
 app.include_router(market.router)
 app.include_router(ict.router)
@@ -48,4 +52,9 @@ def root():
 @app.get("/health")
 def health():
     from datetime import datetime
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    from app.core.database import db
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "database": db.get_stats()
+    }
