@@ -1,20 +1,14 @@
 """
-Price Service — Live market data fetching for instruments.
-
-Uses yfinance to fetch real-time prices for stocks, forex, crypto, and commodities.
-Caches results for 30 seconds to avoid rate limiting.
+Price Service — Live market data fetching using correct Yahoo Finance tickers.
+Uses instrument_config for accurate futures/forex/crypto tickers and httpx for fast API calls.
+Caches results for 15 seconds.
 """
 import time
 import threading
+import httpx
 from typing import Dict, Optional, Any
 from dataclasses import dataclass, asdict
-
-try:
-    import yfinance as yf
-    YFINANCE_AVAILABLE = True
-except ImportError:
-    yf = None
-    YFINANCE_AVAILABLE = False
+from app.services.instrument_config import get_instrument, get_all_instruments
 
 
 @dataclass
@@ -34,148 +28,87 @@ class PriceData:
     digits: int
 
 
-# ── Instrument configuration ───────────────────
-INSTRUMENTS = {
-    "NQ1!": {
-        "ticker": "^IXIC",
-        "label": "NQ1! (Nasdaq)",
-        "kind": "index",
-        "digits": 2,
-        "pip_digits": 1,
-        "pip_val": 1,
-        "mult": 20,
-    },
-    "ES1!": {
-        "ticker": "^GSPC",
-        "label": "ES1! (S&P 500)",
-        "kind": "index",
-        "digits": 2,
-        "pip_digits": 1,
-        "pip_val": 1,
-        "mult": 50,
-    },
-    "EURUSD": {
-        "ticker": "EURUSD=X",
-        "label": "EUR/USD",
-        "kind": "fx",
-        "digits": 5,
-        "pip_digits": 4,
-        "pip_val": 10,
-        "mult": 100000,
-    },
-    "GBPUSD": {
-        "ticker": "GBPUSD=X",
-        "label": "GBP/USD",
-        "kind": "fx",
-        "digits": 5,
-        "pip_digits": 4,
-        "pip_val": 10,
-        "mult": 100000,
-    },
-    "XAUUSD": {
-        "ticker": "XAUUSD=X",
-        "label": "XAU/USD (Gold)",
-        "kind": "metal",
-        "digits": 2,
-        "pip_digits": 2,
-        "pip_val": 10,
-        "mult": 100,
-    },
-    "USDJPY": {
-        "ticker": "USDJPY=X",
-        "label": "USD/JPY",
-        "kind": "fx",
-        "digits": 3,
-        "pip_digits": 2,
-        "pip_val": 9.1,
-        "mult": 100000,
-    },
-    "BTCUSD": {
-        "ticker": "BTC-USD",
-        "label": "BTC/USD",
-        "kind": "crypto",
-        "digits": 0,
-        "pip_digits": 0,
-        "pip_val": 1,
-        "mult": 1,
-    },
-    "CL1!": {
-        "ticker": "CL=F",
-        "label": "CL1! (Crude Oil)",
-        "kind": "commodity",
-        "digits": 2,
-        "pip_digits": 2,
-        "pip_val": 10,
-        "mult": 1000,
-    },
-}
-
-
 class PriceService:
-    """Fetches and caches live market prices."""
+    """Fetches and caches live market prices using correct Yahoo Finance tickers."""
 
-    def __init__(self, cache_ttl: int = 30):
+    def __init__(self, cache_ttl: int = 15):
         self.cache: Dict[str, PriceData] = {}
         self.cache_ttl = cache_ttl
         self.last_fetch: Dict[str, float] = {}
         self._lock = threading.Lock()
-
-    def _get_ticker(self, symbol: str) -> Optional[Dict[str, Any]]:
-        return INSTRUMENTS.get(symbol)
+        self._headers = {'User-Agent': 'Mozilla/5.0'}
 
     def fetch_price(self, symbol: str) -> Optional[PriceData]:
         """Fetch price for a single symbol, using cache if available."""
         now = time.time()
+        symbol = symbol.upper()
 
         with self._lock:
             if symbol in self.cache and symbol in self.last_fetch:
                 if now - self.last_fetch[symbol] < self.cache_ttl:
                     return self.cache[symbol]
 
-        if not YFINANCE_AVAILABLE or yf is None:
-            return self._mock_price(symbol)
-
-        config = self._get_ticker(symbol)
+        config = get_instrument(symbol)
         if not config:
             return None
 
-        try:
-            ticker = yf.Ticker(config["ticker"])
-            hist = ticker.history(period="1d", interval="1m")
-            if hist.empty:
-                info = ticker.info
-                price = info.get("regularMarketPrice", info.get("previousClose", 0))
-                prev = info.get("previousClose", price)
-                high = info.get("regularMarketDayHigh", price)
-                low = info.get("regularMarketDayLow", price)
-                open_ = info.get("regularMarketOpen", price)
-                volume = info.get("regularMarketVolume", 0)
-            else:
-                latest = hist.iloc[-1]
-                price = latest["Close"]
-                high = latest["High"] if "High" in hist.columns else price
-                low = latest["Low"] if "Low" in hist.columns else price
-                open_ = hist["Open"].iloc[0] if "Open" in hist.columns else price
-                volume = int(latest["Volume"]) if "Volume" in hist.columns else 0
-                prev = hist["Close"].iloc[-2] if len(hist) > 1 else price
+        yahoo_ticker = config.get("yahoo", config.get("ticker", symbol))
 
-            change = price - prev if prev else 0
-            change_pct = (change / prev * 100) if prev else 0
+        try:
+            url = f'https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_ticker}?range=1d&interval=1m'
+            with httpx.Client(timeout=10.0, headers=self._headers) as client:
+                resp = client.get(url)
+                resp.raise_for_status()
+                payload = resp.json()
+
+            result = payload.get("chart", {}).get("result", [None])[0]
+            if not result:
+                return self._mock_price(symbol, config)
+
+            meta = result.get("meta", {})
+            quote = result.get("indicators", {}).get("quote", [{}])[0]
+            timestamps = result.get("timestamp", [])
+
+            close_prices = quote.get("close", [])
+            high_prices = quote.get("high", [])
+            low_prices = quote.get("low", [])
+            open_prices = quote.get("open", [])
+            volumes = quote.get("volume", [])
+
+            current_price = meta.get("regularMarketPrice", 0)
+            prev_close = meta.get("previousClose", meta.get("chartPreviousClose", 0))
+            if not current_price and close_prices:
+                current_price = next((c for c in reversed(close_prices) if c), 0)
+            if not prev_close and close_prices and len(close_prices) > 1:
+                prev_close = next((c for c in reversed(close_prices[:-1]) if c), 0)
+
+            if not current_price:
+                return self._mock_price(symbol, config)
+
+            change = current_price - prev_close if prev_close else 0
+            change_pct = (change / prev_close * 100) if prev_close else 0
+
+            high = max([h for h in high_prices if h]) if high_prices else current_price
+            low = min([l for l in low_prices if l]) if low_prices else current_price
+            open_ = next((o for o in open_prices if o), current_price) if open_prices else current_price
+            volume = sum([v for v in volumes if v]) if volumes else 0
+
+            digits = config.get("digits", 5)
 
             data = PriceData(
                 symbol=symbol,
-                label=config["label"],
-                price=round(price, config["digits"]),
-                change=round(change, config["digits"]),
+                label=config.get("label", symbol),
+                price=round(current_price, digits),
+                change=round(change, digits),
                 change_percent=round(change_pct, 3),
-                high=round(high, config["digits"]),
-                low=round(low, config["digits"]),
-                open=round(open_, config["digits"]),
+                high=round(high, digits),
+                low=round(low, digits),
+                open=round(open_, digits),
                 volume=int(volume) if volume else 0,
-                prev_close=round(prev, config["digits"]),
+                prev_close=round(prev_close, digits) if prev_close else round(current_price, digits),
                 timestamp=now,
-                kind=config["kind"],
-                digits=config["digits"],
+                kind=config.get("kind", "unknown"),
+                digits=digits,
             )
 
             with self._lock:
@@ -185,69 +118,54 @@ class PriceService:
             return data
 
         except Exception as e:
-            print(f"[PriceService] Error fetching {symbol}: {e}")
-            return self._mock_price(symbol)
+            print(f"[PriceService] Error fetching {symbol} ({yahoo_ticker}): {e}")
+            return self._mock_price(symbol, config)
 
-    def _mock_price(self, symbol: str) -> Optional[PriceData]:
-        """Return mock price data when yfinance is unavailable."""
-        config = self._get_ticker(symbol)
-        if not config:
-            return None
-
+    def _mock_price(self, symbol: str, config: Dict) -> PriceData:
+        """Return mock price data when API fails."""
         now = time.time()
-        # Check if we have a cached mock price
-        with self._lock:
-            if symbol in self.cache and now - self.last_fetch.get(symbol, 0) < self.cache_ttl:
-                return self.cache[symbol]
-
-        # Base mock prices
         base_prices = {
-            "NQ1!": 18445.25,
-            "ES1!": 5523.75,
-            "EURUSD": 1.08342,
-            "GBPUSD": 1.26581,
-            "XAUUSD": 2382.40,
-            "USDJPY": 157.423,
-            "BTCUSD": 64820,
-            "CL1!": 82.34,
+            "NQ1!": 20150.0, "ES1!": 5850.0, "EURUSD": 1.0830,
+            "GBPUSD": 1.2650, "XAUUSD": 2350.0, "USDJPY": 157.50,
+            "BTCUSD": 67500, "CL1!": 78.50,
         }
         base = base_prices.get(symbol, 100.0)
-        # Add small random movement
         import random
-        move = (random.random() - 0.5) * base * 0.002
-        price = round(base + move, config["digits"])
-        change = round(move, config["digits"])
-        change_pct = round((change / base) * 100, 3) if base else 0
+        move = (random.random() - 0.5) * base * 0.001
+        price = round(base + move, config.get("digits", 5))
+        digits = config.get("digits", 5)
 
-        data = PriceData(
+        return PriceData(
             symbol=symbol,
-            label=config["label"],
+            label=config.get("label", symbol) + " (mock)",
             price=price,
-            change=change,
-            change_percent=change_pct,
-            high=round(price + abs(move), config["digits"]),
-            low=round(price - abs(move), config["digits"]),
-            open=round(base, config["digits"]),
-            volume=int(random.random() * 1000000),
-            prev_close=round(base, config["digits"]),
+            change=round(move, digits),
+            change_percent=round((move / base) * 100, 3),
+            high=round(price + abs(move), digits),
+            low=round(price - abs(move), digits),
+            open=round(base, digits),
+            volume=0,
+            prev_close=round(base, digits),
             timestamp=now,
-            kind=config["kind"],
-            digits=config["digits"],
+            kind=config.get("kind", "unknown"),
+            digits=digits,
         )
 
-        with self._lock:
-            self.cache[symbol] = data
-            self.last_fetch[symbol] = now
-
-        return data
-
     def fetch_all_prices(self) -> Dict[str, PriceData]:
-        """Fetch prices for all configured instruments."""
+        """Fetch prices for all configured instruments in parallel."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        all_instruments = get_all_instruments()
         result = {}
-        for symbol in INSTRUMENTS:
-            data = self.fetch_price(symbol)
-            if data:
-                result[symbol] = data
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {executor.submit(self.fetch_price, sym): sym for sym in all_instruments}
+            for future in as_completed(futures):
+                sym = futures[future]
+                try:
+                    data = future.result()
+                    if data:
+                        result[sym] = data
+                except Exception as e:
+                    print(f"[PriceService] Parallel fetch failed for {sym}: {e}")
         return result
 
     def get_price(self, symbol: str) -> Optional[PriceData]:
@@ -256,7 +174,7 @@ class PriceService:
 
     def get_all_prices(self) -> Dict[str, PriceData]:
         """Get all prices from cache."""
-        return {s: self.cache[s] for s in self.cache if s in INSTRUMENTS}
+        return {s: self.cache[s] for s in self.cache if s in get_all_instruments()}
 
 
 # Global instance

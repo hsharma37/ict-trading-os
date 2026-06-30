@@ -4,7 +4,8 @@ Playground Router — Live market data, price charts, and instrument analysis.
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-from app.services.price_service import price_service, INSTRUMENTS
+from app.services.price_service import price_service
+from app.services.instrument_config import get_all_instruments, INSTRUMENTS
 
 router = APIRouter(prefix="/playground", tags=["Playground"])
 
@@ -39,6 +40,11 @@ class InstrumentInfo(BaseModel):
     pip_digits: int
     pip_val: float
     mult: int
+    leverage: int
+    contract_size: int
+    tick_size: float
+    tick_value: float
+    unit: str
 
 
 # ────────────────────────────────────────────────
@@ -98,16 +104,22 @@ def get_price(symbol: str):
 @router.get("/instruments", response_model=List[InstrumentInfo])
 def get_instruments():
     """List all available instruments with their configuration."""
+    instruments = get_all_instruments()
     return [
         InstrumentInfo(
             symbol=symbol,
-            ticker=config["ticker"],
-            label=config["label"],
-            kind=config["kind"],
-            digits=config["digits"],
-            pip_digits=config["pip_digits"],
-            pip_val=config["pip_val"],
-            mult=config["mult"],
+            ticker=config.get("ticker", ""),
+            label=config.get("label", ""),
+            kind=config.get("kind", ""),
+            digits=config.get("digits", 5),
+            pip_digits=config.get("pip_digits", 4),
+            pip_val=config.get("pip_val", 1.0),
+            mult=config.get("mult", 1),
+            leverage=config.get("leverage", 100),
+            contract_size=config.get("contract_size", 1),
+            tick_size=config.get("tick_size", 0.00001),
+            tick_value=config.get("tick_value", 1.0),
+            unit=config.get("unit", "lot"),
         )
-        for symbol, config in INSTRUMENTS.items()
+        for symbol, config in instruments.items()
     ]
