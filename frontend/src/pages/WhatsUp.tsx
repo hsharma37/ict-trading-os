@@ -121,7 +121,7 @@ export default function WhatsUp() {
       setInstruments(researchRes.data?.instruments || [])
       
       // Fetch live prices for all trade symbols
-      const symbols = [...new Set(openTrades.map((t: Trade) => t.symbol))]
+      const symbols: string[] = [...new Set(openTrades.map((t: Trade) => t.symbol))]
       if (symbols.length > 0) {
         const pricePromises = symbols.map(async (sym: string) => {
           try {
