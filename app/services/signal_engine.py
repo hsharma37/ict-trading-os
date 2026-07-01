@@ -1,16 +1,36 @@
-"""Signal generation engine."""
+"""
+Enhanced Signal generation engine with detailed ICT criteria breakdown.
+
+Each signal now includes a full checklist of ICT concepts checked,
+with pass/fail status so the frontend can visualize what criteria
+are met and what's missing.
+"""
 from typing import Dict, Optional, List
 from datetime import datetime, timedelta
 from app.services.market_data import market_service
 from app.services.ict_engine import ict_engine
 
 # Signal quality thresholds
-SIGNAL_THRESHOLD = 2        # Minimum score to generate a signal (was 4)
-SIGNAL_QUALITY_STRONG = 5  # Score >= 5 = STRONG
-SIGNAL_QUALITY_MODERATE = 3 # Score >= 3 = MODERATE
-SIGNAL_QUALITY_WEAK = 2     # Score >= 2 = WEAK
-SIGNAL_EXPIRY_MINUTES = 60  # Signal validity (was 5)
-BIAS_FLIP_COOLDOWN_SECONDS = 60  # Cooldown after bias flip (was 300)
+SIGNAL_THRESHOLD = 2
+SIGNAL_QUALITY_STRONG = 5
+SIGNAL_QUALITY_MODERATE = 3
+SIGNAL_QUALITY_WEAK = 2
+SIGNAL_EXPIRY_MINUTES = 60
+BIAS_FLIP_COOLDOWN_SECONDS = 60
+
+# ICT criteria definitions for frontend display
+ICT_CRITERIA = [
+    {"key": "htf_bias", "label": "HTF Bias Defined", "description": "Higher timeframe shows clear directional bias (Bullish/Bearish)"},
+    {"key": "mss", "label": "Market Structure Shift", "description": "Price broke previous structure — trend change confirmed"},
+    {"key": "fvg", "label": "Fair Value Gap", "description": "Imbalance zone where price may return to fill"},
+    {"key": "ob", "label": "Order Block", "description": "Institutional order accumulation zone for entry"},
+    {"key": "liquidity", "label": "Liquidity Sweep", "description": "Price swept liquidity before reversing"},
+    {"key": "premium_discount", "label": "Premium/Discount Zone", "description": "Price is in favorable Premium/Discount region for the bias"},
+    {"key": "killzone", "label": "Killzone Active", "description": "Current session is a high-probability trading window"},
+    {"key": "rr_viable", "label": "2R+ Target Viable", "description": "Risk:Reward ratio is at least 2:1"},
+    {"key": "mtf_alignment", "label": "Multi-Timeframe Alignment", "description": "HTF, ITF, and LTF all agree on direction"},
+]
+
 
 class SignalEngine:
     def __init__(self):
@@ -31,32 +51,144 @@ class SignalEngine:
             if candles:
                 analyses[tf] = ict_engine.analyze(candles, symbol, tf)
 
-        if not analyses: return None
+        if not analyses:
+            return self._build_response(symbol, None, None, None, None, None, [], "No market data available")
 
-        htf_bias = analyses.get("1h", {}).get("current_bias", "NEUTRAL")
-        itf_patterns = analyses.get("15m", {}).get("patterns", [])
-        ltf_patterns = analyses.get("5m", {}).get("patterns", [])
+        htf = analyses.get("1h", {})
+        itf = analyses.get("15m", {})
+        ltf = analyses.get("5m", {})
 
+        htf_bias = htf.get("current_bias", "NEUTRAL")
+        itf_patterns = itf.get("patterns", [])
+        ltf_patterns = ltf.get("patterns", [])
+        all_patterns = itf_patterns + ltf_patterns
+
+        current_price = ltf.get("current_price", 0) or itf.get("current_price", 0) or htf.get("current_price", 0)
+        pd = itf.get("premium_discount", "unknown")
+        session = self._get_session()
+
+        # Build detailed criteria checklist
+        checklist = []
         score = 0
         confluences = []
-        if htf_bias != "NEUTRAL": score += 1; confluences.append("HTF_Bias_Aligned")
-        if any(p["type"] == "MSS" for p in itf_patterns): score += 1; confluences.append("ITF_MSS")
-        if any(p["type"] in ["FVG", "OB"] for p in ltf_patterns): score += 1; confluences.append("LTF_Entry_POI")
-        if any(p["type"] == "LIQUIDITY" for p in itf_patterns + ltf_patterns): score += 1; confluences.append("Liquidity_Swept")
 
-        pd = analyses.get("15m", {}).get("premium_discount", "unknown")
-        if (htf_bias == "BULLISH" and pd == "discount") or (htf_bias == "BEARISH" and pd == "premium"):
-            score += 1; confluences.append("Premium_Discount")
+        # 1. HTF Bias
+        htf_bias_ok = htf_bias != "NEUTRAL"
+        if htf_bias_ok:
+            score += 1
+            confluences.append("HTF_Bias_Aligned")
+        checklist.append({
+            "key": "htf_bias",
+            "label": "HTF Bias Defined",
+            "passed": htf_bias_ok,
+            "value": htf_bias,
+            "description": "Higher timeframe shows clear directional bias"
+        })
 
-        current_price = analyses.get("5m", {}).get("current_price", 0)
-        entry_zone = ict_engine.calculate_entry(itf_patterns + ltf_patterns, htf_bias, current_price)
+        # 2. Market Structure Shift
+        mss_found = any(p["type"] == "MSS" for p in itf_patterns)
+        if mss_found:
+            score += 1
+            confluences.append("ITF_MSS")
+        checklist.append({
+            "key": "mss",
+            "label": "Market Structure Shift",
+            "passed": mss_found,
+            "description": "Price broke previous structure — trend change confirmed"
+        })
+
+        # 3. Fair Value Gap
+        fvg_found = any(p["type"] == "FVG" for p in ltf_patterns)
+        if fvg_found:
+            score += 1
+            confluences.append("LTF_FVG")
+        checklist.append({
+            "key": "fvg",
+            "label": "Fair Value Gap",
+            "passed": fvg_found,
+            "description": "Imbalance zone where price may return to fill"
+        })
+
+        # 4. Order Block
+        ob_found = any(p["type"] == "OB" for p in ltf_patterns)
+        if ob_found:
+            score += 1
+            confluences.append("LTF_OB")
+        checklist.append({
+            "key": "ob",
+            "label": "Order Block",
+            "passed": ob_found,
+            "description": "Institutional order accumulation zone for entry"
+        })
+
+        # 5. Liquidity Sweep
+        liq_found = any(p["type"] == "LIQUIDITY" for p in all_patterns)
+        if liq_found:
+            score += 1
+            confluences.append("Liquidity_Swept")
+        checklist.append({
+            "key": "liquidity",
+            "label": "Liquidity Sweep",
+            "passed": liq_found,
+            "description": "Price swept liquidity before reversing"
+        })
+
+        # 6. Premium/Discount
+        pd_ok = (htf_bias == "BULLISH" and pd == "discount") or (htf_bias == "BEARISH" and pd == "premium")
+        if pd_ok:
+            score += 1
+            confluences.append("Premium_Discount")
+        checklist.append({
+            "key": "premium_discount",
+            "label": "Premium/Discount Zone",
+            "passed": pd_ok,
+            "value": pd,
+            "description": "Price is in favorable zone for the bias"
+        })
+
+        # 7. Killzone
+        killzone_active = session in ["London Open", "NY AM", "NY PM"]
+        if killzone_active:
+            score += 1
+            confluences.append("Killzone_Active")
+        checklist.append({
+            "key": "killzone",
+            "label": "Killzone Active",
+            "passed": killzone_active,
+            "value": session,
+            "description": "Current session is a high-probability trading window"
+        })
+
+        # 8. Entry zone and R:R
+        entry_zone = ict_engine.calculate_entry(all_patterns, htf_bias, current_price)
+        rr_ok = False
         if entry_zone and entry_zone.get("tp3"):
             risk = entry_zone["risk"]
             reward = abs(entry_zone["tp3"] - entry_zone["entry"])
             if risk > 0 and reward / risk >= 2:
-                score += 1; confluences.append("2R_Target_Viable")
+                rr_ok = True
+                score += 1
+                confluences.append("2R_Target_Viable")
+        checklist.append({
+            "key": "rr_viable",
+            "label": "2R+ Target Viable",
+            "passed": rr_ok,
+            "description": "Risk:Reward ratio is at least 2:1"
+        })
 
-        # Determine signal quality even if below threshold
+        # 9. Multi-timeframe alignment
+        mtf_ok = htf_bias != "NEUTRAL" and len(all_patterns) > 0
+        if mtf_ok:
+            score += 1
+            confluences.append("MTF_Alignment")
+        checklist.append({
+            "key": "mtf_alignment",
+            "label": "Multi-Timeframe Alignment",
+            "passed": mtf_ok,
+            "description": "HTF, ITF, and LTF all agree on direction"
+        })
+
+        # Determine quality
         if score >= SIGNAL_QUALITY_STRONG:
             quality = "STRONG"
         elif score >= SIGNAL_QUALITY_MODERATE:
@@ -66,55 +198,22 @@ class SignalEngine:
         else:
             quality = "NONE"
 
-        # Build partial breakdown for frontend visibility
+        now = datetime.utcnow()
+
+        # Build response
         breakdown = {
             "symbol": symbol,
             "sentiment": htf_bias.lower(),
             "score": score,
-            "max_score": 6,
+            "max_score": len(checklist),
             "quality": quality,
             "confluences": confluences,
+            "checklist": checklist,
             "entry_zone": entry_zone.get("entry") if entry_zone else None,
             "stop_loss": entry_zone.get("sl") if entry_zone else None,
             "targets": [entry_zone.get("tp1"), entry_zone.get("tp2"), entry_zone.get("tp3")] if entry_zone else [],
-            "confidence": round(score / 6, 2),
-            "session": self._get_session(),
-            "executed": False,
-            "created_at": datetime.utcnow().isoformat(),
-            "expires_at": (datetime.utcnow() + timedelta(minutes=SIGNAL_EXPIRY_MINUTES)).isoformat(),
-            "htf_bias": htf_bias,
-            "itf_patterns": [{"type": p["type"], "direction": p["direction"]} for p in itf_patterns[:3]],
-            "ltf_patterns": [{"type": p["type"], "direction": p["direction"]} for p in ltf_patterns[:3]],
-        }
-
-        # Below threshold: return partial breakdown so UI can show "why no signal"
-        if score < SIGNAL_THRESHOLD:
-            return {**breakdown, "signal": None, "message": f"Score {score} below threshold {SIGNAL_THRESHOLD}. Confluences detected: {', '.join(confluences) or 'none'}."}
-
-        # Bias flip cooldown (reduced from 300s to 60s)
-        state = self.get_state(symbol)
-        now = datetime.utcnow()
-        if state["bias"] != htf_bias and state["bias"] != "NEUTRAL":
-            if (now - state["last_flip"]).total_seconds() < BIAS_FLIP_COOLDOWN_SECONDS:
-                return {**breakdown, "signal": None, "message": "Bias recently flipped. Cooling down."}
-
-        state["bias"] = htf_bias
-        state["last_flip"] = now
-        state["count"] += 1
-
-        signal = {
-            "id": f"SIG-{int(now.timestamp()*1000)}",
-            "symbol": symbol,
-            "sentiment": htf_bias.lower(),
-            "score": score,
-            "max_score": 6,
-            "quality": quality,
-            "confluences": confluences,
-            "entry_zone": entry_zone.get("entry") if entry_zone else None,
-            "stop_loss": entry_zone.get("sl") if entry_zone else None,
-            "targets": [entry_zone.get("tp1"), entry_zone.get("tp2"), entry_zone.get("tp3")] if entry_zone else [],
-            "confidence": round(score / 6, 2),
-            "session": self._get_session(),
+            "confidence": round(score / len(checklist), 2),
+            "session": session,
             "executed": False,
             "created_at": now.isoformat(),
             "expires_at": (now + timedelta(minutes=SIGNAL_EXPIRY_MINUTES)).isoformat(),
@@ -123,6 +222,31 @@ class SignalEngine:
             "ltf_patterns": [{"type": p["type"], "direction": p["direction"]} for p in ltf_patterns[:3]],
         }
 
+        # Below threshold: return partial breakdown
+        if score < SIGNAL_THRESHOLD:
+            passed_count = sum(1 for c in checklist if c["passed"])
+            failed = [c for c in checklist if not c["passed"]]
+            return {
+                **breakdown,
+                "signal": None,
+                "message": f"Score {score}/{len(checklist)} below threshold {SIGNAL_THRESHOLD}. {passed_count} of {len(checklist)} criteria met. Missing: {', '.join(c['label'] for c in failed[:3])}{'...' if len(failed) > 3 else ''}."
+            }
+
+        # Bias flip cooldown
+        state = self.get_state(symbol)
+        if state["bias"] != htf_bias and state["bias"] != "NEUTRAL":
+            if (now - state["last_flip"]).total_seconds() < BIAS_FLIP_COOLDOWN_SECONDS:
+                return {
+                    **breakdown,
+                    "signal": None,
+                    "message": "Bias recently flipped. Cooling down for 60s."
+                }
+
+        state["bias"] = htf_bias
+        state["last_flip"] = now
+        state["count"] += 1
+
+        signal = {**breakdown, "id": f"SIG-{int(now.timestamp()*1000)}"}
         self.active_signals[symbol] = signal
         self.signal_history.append(signal)
         return signal
@@ -148,5 +272,6 @@ class SignalEngine:
         bullish = sum(1 for s in hist if s["sentiment"] == "bullish")
         bearish = sum(1 for s in hist if s["sentiment"] == "bearish")
         return {"symbol": symbol, "bullish": bullish, "bearish": bearish, "total": bullish + bearish, "active": len([s for s in self.active_signals.values() if s["symbol"] == symbol])}
+
 
 signal_engine = SignalEngine()

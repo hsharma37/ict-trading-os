@@ -1,931 +1,762 @@
-# ICT Trading OS — Target Architecture
+# ICT Trading OS — Architecture & User Guide
 
-> **Version**: 1.0  
-> **Date**: 2026-06-26  
-> **Status**: Draft — ready for Phase 1 implementation
-
----
-
-## 1. Executive Summary
-
-The current `ict-trading-os` is a single-file HTML dashboard with mixed JavaScript logic, ad-hoc state management, and limited backend API coverage. This document defines the target architecture to transform it into a **professional, maintainable, local-first trading workstation** with a clean separation between frontend presentation, backend domain logic, and AI services.
-
-### Core Principles
-
-1. **Python owns the domain logic** — trading plans, risk rules, journal scoring, signal generation, and alerting.
-2. **Frontend is a thin client** — React + TypeScript renders forms, charts, tables, and AI panels; it does not make trading decisions.
-3. **Deterministic rules guard capital** — position sizing, stop-loss enforcement, daily lockouts, and execution safety checks are hardcoded Python rules, never delegated to AI.
-4. **AI augments decision-making** — RAG over transcripts, sentiment analysis, setup grading, and journal narrative generation are AI-powered but advisory-only.
-5. **Local-first, open-source stack** — Ollama, pgvector, Haystack, LangGraph, and FastAPI run entirely on your machine.
+> **Version:** 9.1.0 | **Last Updated:** July 2026
+>
+> *A complete trading command center built for the modern trader — powered by the ICT methodology, real-time market data, and AI-driven insights.*
 
 ---
 
-## 2. Technology Stack
+## Table of Contents
 
-### 2.1 Frontend
-
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Framework | React 18 + TypeScript | Component-based UI with strict typing |
-| Build Tool | Vite | Fast dev server, optimized production builds |
-| State (Server) | TanStack Query | Server-state caching, sync, background refetch |
-| State (Client) | Zustand | Lightweight local UI state |
-| Tables | TanStack Table / AG Grid Community | Trade grids, journal views, plan lists |
-| Charts | TradingView Lightweight Charts | Candlestick + indicator overlays |
-| Secondary Charts | Apache ECharts | Analytics, heatmaps, distribution plots |
-| Components | shadcn/ui + Radix UI | Accessible, composable UI primitives |
-| Styling | Tailwind CSS | Utility-first design system |
-| Forms | React Hook Form + Zod | Type-safe validation |
-
-> **Why Vite + React over Next.js?**  
-> Your app is a dashboard/workstation, not a public content site. SSR is unnecessary; Vite gives a simpler build pipeline and faster HMR for a SPA.
-
-### 2.2 Backend
-
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| API Framework | FastAPI | REST + WebSocket endpoints, auto-generated OpenAPI docs |
-| Data Models | SQLModel / Pydantic | Typed ORM-style schemas + validation |
-| Migrations | Alembic | Schema versioning and evolution |
-| Database | PostgreSQL 15+ | Primary relational store |
-| Vector Extension | pgvector | Embedding storage for RAG |
-| Cache + Pub/Sub | Redis 7 | Task coordination, session cache, WebSocket broadcast |
-| Background Jobs | Celery + Redis | Transcript ingestion, embedding generation, alert scans |
-| Task Results | Celery + PostgreSQL | Persistent job result store |
-| WebSocket | FastAPI native | Live price updates, order fills, alert delivery |
-| Realtime Bus | Redis pub/sub | Cross-process event broadcasting |
-
-### 2.3 AI & RAG Stack
-
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Local LLM | Ollama | macOS-optimized local model serving |
-| Inference Scale | vLLM (future) | Faster batched serving if needed |
-| Embeddings | Nomic Embed / BGE via Ollama | Local, privacy-preserving text embeddings |
-| RAG Orchestration | Haystack | Document pipelines, retrievers, QA |
-| Agent Workflows | LangGraph | Stateful routing: query → retrieve → grade → answer → self-correct |
-| Model Routing | LiteLLM | Unified OpenAI-compatible API over Ollama, vLLM, or hosted |
-| Vector Store | pgvector (primary) | Postgres-native embeddings |
-| Vector Store (future) | Qdrant | If retrieval scale or filtering grows |
-
-### 2.4 Quant & Research Stack
-
-| Tool | Use Case |
-|------|----------|
-| vectorbt | Fast exploratory research, portfolio stats, signal backtesting |
-| Backtrader | Event-driven backtesting, trade lifecycle simulation |
-| Qlib (future) | ML-driven factor research, institutional-style workflows |
-| Riskfolio-Lib | Portfolio risk experiments, CVaR, drawdown analysis |
-
-### 2.5 Infrastructure & Deployment
-
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Local Orchestration | Docker Compose | One-command local stack: Postgres, Redis, API, frontend, AI workers |
-| Reverse Proxy | Caddy / Nginx | TLS termination, WebSocket routing |
-| Process Manager | PM2 (dev) / systemd (prod) | Long-running services |
-| Future Cloud | VPS (Hetzner / DigitalOcean) | Lightweight remote hosting if needed |
+1. [What Is This Thing? (For Non-Traders)](#1-what-is-this-thing-for-non-traders)
+2. [The Big Picture: System Architecture](#2-the-big-picture-system-architecture)
+3. [ICT Methodology: The Philosophy Behind the Code](#3-ict-methodology-the-philosophy-behind-the-code)
+4. [Feature Deep Dive](#4-feature-deep-dive)
+   - 4.1 [Dashboard](#41-dashboard)
+   - 4.2 [MT5 Terminal](#42-mt5-terminal)
+   - 4.3 [Execute (Trade Entry)](#43-execute-trade-entry)
+   - 4.4 [Analytics](#44-analytics)
+   - 4.5 [Research](#45-research)
+   - 4.6 [Signals](#46-signals)
+   - 4.7 [Telegram Feed](#47-telegram-feed)
+   - 4.8 [Knowledge Base](#48-knowledge-base)
+   - 4.9 [Library](#49-library)
+   - 4.10 [What's Up](#410-whats-up)
+   - 4.11 [Settings](#411-settings)
+5. [Data Flow: The Life of a Trade](#5-data-flow-the-life-of-a-trade)
+6. [Technology Stack](#6-technology-stack)
+7. [Database Design](#7-database-design)
+8. [API Architecture](#8-api-architecture)
+9. [Screenshots & UI Walkthrough](#9-screenshots--ui-walkthrough)
+10. [Glossary of Trading Terms](#10-glossary-of-trading-terms)
 
 ---
 
-## 3. System Architecture
+## 1. What Is This Thing? (For Non-Traders)
 
-### 3.1 High-Level Diagram
+Imagine you're playing a complex strategy video game, but instead of battling dragons, you're navigating the global financial markets. The **ICT Trading OS** is your heads-up display (HUD) — a single-screen command center that tells you:
+
+- **What's happening right now** in markets (prices, news, trends)
+- **What the smart money is doing** (pattern detection, liquidity sweeps)
+- **When to make your move** (trade signals, entry zones)
+- **How well you're performing** (win rate, profit/loss, equity curve)
+- **What you can learn** (AI-powered knowledge base from trading videos)
+
+Think of it as a **fitness tracker for trading** — but instead of counting steps, it counts profits, analyzes your decision-making patterns, and helps you learn from the best traders in the world.
+
+The system is built around a specific trading philosophy called **ICT** (Inner Circle Trader), developed by Michael J. Huddleston. It's like learning to read the "footprints" that big institutional players leave behind in price charts.
+
+---
+
+## 2. The Big Picture: System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CLIENT LAYER                                    │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐              │
-│  │   Dashboard SPA │  │   Planner SPA   │  │  Journal SPA    │              │
-│  │   (React/Vite)  │  │   (React/Vite)  │  │  (React/Vite)   │              │
-│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘              │
-│           │                    │                    │                       │
-│           └────────────────────┴────────────────────┘                       │
-│                              │                                               │
-│                              ▼                                               │
-│                    ┌─────────────────┐                                      │
-│                    │  TanStack Query │  ← Server-state cache                 │
-│                    │    + Zustand    │  ← Client UI state                    │
-│                    └────────┬────────┘                                      │
-└─────────────────────────────┼───────────────────────────────────────────────┘
-                              │
-                              │ HTTPS / WebSocket
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              API GATEWAY                                     │
-│                    ┌─────────────────┐                                      │
-│                    │   FastAPI App   │                                      │
-│                    │  REST + WS Router│                                      │
-│                    └────────┬────────┘                                      │
-│                             │                                                │
-│         ┌───────────────────┼───────────────────┐                           │
-│         ▼                   ▼                   ▼                           │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                     │
-│  │   REST API  │    │  WebSocket  │    │   Webhook   │                     │
-│  │  /api/v1/*  │    │  /ws/stream │    │  /webhooks/*│                     │
-│  └─────────────┘    └─────────────┘    └─────────────┘                     │
-└─────────────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           SERVICE LAYER (Python)                             │
+│                        ICT TRADING OS — SYSTEM ARCHITECTURE                    │
+├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
-│  │  Planner    │ │  Execution  │ │    Risk     │ │   Journal   │          │
-│  │  Service    │ │  Service    │ │  Service    │ │  Service    │          │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          │
-│                                                                              │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
-│  │  Analytics  │ │  Telegram   │ │  Market     │ │  Knowledge  │          │
-│  │  Service    │ │  Service    │ │  Data Svc   │ │  Service    │          │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          │
-│                                                                              │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐                          │
-│  │   Agent     │ │  Sentiment  │ │   Alert     │                          │
-│  │  Service    │ │  Service    │ │  Service    │                          │
-│  └─────────────┘ └─────────────┘ └─────────────┘                          │
-│                                                                              │
-│  ┌─────────────────────────────────────────┐                               │
-│  │         LangGraph Orchestrator          │  ← AI workflow engine          │
-│  │  query → retrieve → grade → answer →    │  ← Self-correcting RAG         │
-│  │  self_correct → source_check            │                               │
-│  └─────────────────────────────────────────┘                               │
-│                                                                              │
-│  ┌─────────────────────────────────────────┐                               │
-│  │         Haystack Pipeline               │  ← Document ingestion,         │
-│  │  PDF/YouTube → chunk → embed → store    │  ← retrievers, QA              │
-│  └─────────────────────────────────────────┘                               │
-└─────────────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           DATA & EVENT LAYER                                 │
-│                                                                              │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
-│  │  PostgreSQL │ │   Redis     │ │  pgvector   │ │  (Qdrant)   │          │
-│  │  (Primary)  │ │  (Cache/    │ │  (Embeds)   │ │  (Future)   │          │
-│  │             │ │   Pub/Sub)  │ │             │ │             │          │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          │
-│                                                                              │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐                            │
-│  │   Celery    │ │   Redis     │ │  PostgreSQL │                            │
-│  │  (Workers)  │ │  (Broker)   │ │  (Result)   │                            │
-│  └─────────────┘ └─────────────┘ └─────────────┘                            │
-└─────────────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           EXTERNAL LAYER                                     │
-│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
-│  │   Yahoo     │ │    MT5      │ │  Telegram   │ │   Ollama    │          │
-│  │  Finance    │ │   Bridge    │ │   Bot API   │ │  (Local)    │          │
-│  │   API       │ │  (Python)   │ │             │ │             │          │
-│  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘          │
-│                                                                              │
-│  ┌─────────────┐ ┌─────────────┐                                           │
-│  │   YouTube   │ │  TradingView│                                           │
-│  │   Data API  │ │  Lightweight│                                           │
-│  │             │ │   Charts    │                                           │
-│  └─────────────┘ └─────────────┘                                           │
+│  ┌─────────────────────┐         ┌─────────────────────┐                   │
+│  │   REACT + VITE      │◄───────►│   FASTAPI BACKEND   │                   │
+│  │   (Frontend UI)     │  HTTP   │   (Python)          │                   │
+│  │   Port: 5173        │         │   Port: 8000        │                   │
+│  └─────────────────────┘         └─────────────────────┘                   │
+│            │                                │                               │
+│            │                                │                               │
+│            ▼                                ▼                               │
+│  ┌─────────────────────────────────────────────────────┐                    │
+│  │                  DATA LAYER                          │                    │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │                    │
+│  │  │  SQLite  │  │  Vector  │  │  In-Memory Cache │   │                    │
+│  │  │  (DB)    │  │  Store   │  │  (Price Data)    │   │                    │
+│  │  └──────────┘  └──────────┘  └──────────────────┘   │                    │
+│  └─────────────────────────────────────────────────────┘                    │
+│                                │                                             │
+│  ┌─────────────────────────────┼─────────────────────────────┐               │
+│  │                             ▼                             │               │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │               │
+│  │  │  Yahoo   │  │   MT5    │  │ Telegram │  │  AI/LLM  │ │               │
+│  │  │ Finance  │  │ Bridge   │  │  Bot API │  │ (Ollama) │ │               │
+│  │  │  API     │  │ (Flask)  │  │          │  │          │ │               │
+│  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘ │               │
+│  └───────────────────────────────────────────────────────────┘               │
+│           EXTERNAL SERVICES & INTEGRATIONS                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Service Definitions
+### How It All Connects
 
-| Service | Responsibility | Key Endpoints / Topics |
-|---------|-------------|----------------------|
-| **planner_service** | Daily/weekly trading plans, bias worksheets, confluence scoring | `POST /plans`, `GET /plans/{id}`, `PATCH /plans/{id}/bias` |
-| **execution_service** | Order lifecycle, MT5 bridge proxy, fill tracking | `POST /trades`, `POST /trades/{id}/close`, `GET /trades` |
-| **risk_service** | Position sizing, daily loss limits, lockouts, margin checks | `POST /risk/validate`, `GET /risk/daily-status`, `GET /risk/lot-size` |
-| **journal_service** | Trade journaling, review scoring, pattern tagging | `POST /journal/entries`, `GET /journal/stats`, `POST /journal/{id}/grade` |
-| **analytics_service** | Expectancy, session heatmaps, confluence analytics, win rate | `GET /analytics/expectancy`, `GET /analytics/sessions`, `GET /analytics/heatmap` |
-| **telegram_service** | Bot commands, alert delivery, order confirmation messages | `POST /telegram/send`, `POST /telegram/alert`, Webhook handler |
-| **market_data_service** | Price feeds, candle history, symbol metadata, calendar events | `GET /market/price/{symbol}`, `GET /market/history/{symbol}`, WS `/ws/price/{symbol}` |
-| **knowledge_service** | Transcript ingestion, chunking, embedding, search, RAG retrieval | `POST /kb/sources`, `GET /kb/search`, `POST /kb/ingest`, `POST /kb/query` |
-| **agent_service** | AI chat, setup grading, journal narrative, concept extraction | `POST /agent/chat`, `POST /agent/grade-setup`, `POST /agent/journal-review` |
-| **sentiment_service** | News sentiment, social scraping, fear/greed indicators | `POST /sentiment/analyze`, `GET /sentiment/summary` |
-| **alert_service** | Signal generation, condition monitoring, alert routing | `POST /alerts/rules`, `GET /alerts/active`, `WS /ws/alerts` |
+The frontend is a **React** single-page application that communicates with a **FastAPI** (Python) backend via REST API calls. The backend is the "brain" — it fetches market data, runs pattern detection algorithms, manages your trade history, and talks to external services like Yahoo Finance, MetaTrader 5, and Telegram.
 
 ---
 
-## 4. Database Schema (Core Entities)
+## 3. ICT Methodology: The Philosophy Behind the Code
 
-### 4.1 PostgreSQL Tables
+Before diving into features, let's understand the **ICT methodology** — the "secret sauce" that powers this platform. Think of financial markets as a giant poker game. The big players (banks, institutions, hedge funds) have more information and more money than retail traders like you and me. ICT teaches you to **watch what the big players are doing** and follow their lead.
+
+### Key ICT Concepts Used in the System
+
+| Concept | Simple Analogy | What the System Does |
+|---------|---------------|---------------------|
+| **Market Structure** | Reading the "trend" of a river | Detects if price is making higher highs (bullish) or lower lows (bearish) |
+| **Liquidity** | The "bait" that attracts big players | Finds areas where many traders placed stop-losses — these become targets for institutional moves |
+| **Fair Value Gaps (FVG)** | A "missing stair" in a price staircase | Identifies price gaps that the market often returns to fill |
+| **Order Blocks (OB)** | The "launch pads" where institutions entered | Finds strong reversal candles that indicate institutional buying/selling |
+| **Killzones** | The "rush hour" of trading | Highlights high-probability time windows (London Open, NY Open, etc.) |
+| **Premium/Discount** | Shopping "on sale" vs. "full price" | Tells you if current price is cheap (discount) or expensive (premium) relative to recent range |
+| **Inducement** | A "fake out" to trap traders | Detects moves designed to trigger retail stops before the real move |
+
+### Multi-Timeframe Analysis
+
+The system analyzes three timeframes simultaneously:
+
+```
+┌─────────────────────────────────────────────────────┐
+│         MULTI-TIMEFRAME ANALYSIS FLOW               │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  ┌──────────────┐                                   │
+│  │  HIGHER TF   │  ← 1 Hour Chart                   │
+│  │  "The Map"   │    Determines overall bias         │
+│  │  (1H)        │    (Bullish or Bearish)            │
+│  └──────┬───────┘                                   │
+│         │                                           │
+│         ▼                                           │
+│  ┌──────────────┐                                   │
+│  │  INTERMEDIATE│  ← 15 Minute Chart                │
+│  │  "The Route" │    Finds structure shifts,         │
+│  │  (15M)       │    liquidity sweeps                │
+│  └──────┬───────┘                                   │
+│         │                                           │
+│         ▼                                           │
+│  ┌──────────────┐                                   │
+│  │  LOWER TF    │  ← 5 Minute Chart                 │
+│  │  "The Entry" │    Pinpoints exact entry zones,    │
+│  │  (5M)        │    FVGs, and Order Blocks          │
+│  └──────────────┘                                   │
+│                                                     │
+│  RULE: Only trade when ALL THREE agree!             │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. Feature Deep Dive
+
+### 4.1 Dashboard
+
+**What It Looks Like:** A dark-themed command center with cards showing your account health, live prices, a news ticker, and today's biggest market movers.
+
+**What It Does:** The Dashboard is your morning briefing. It gives you a "one-glance" summary of everything that matters:
+
+- **KPI Cards:** Total trades, win rate, current profit/loss, open positions
+- **Live Price Ticker:** Real-time prices for all tracked instruments (EURUSD, Gold, Nasdaq, Bitcoin, etc.)
+- **Market News:** Curated headlines from sources like FXStreet, Reuters, and CME Group
+- **Market Movers:** Which instruments moved the most today (biggest gainers/losers)
+- **Session Clock:** Which trading session is currently active (London, New York, Asian)
+
+**Technical Details:**
+- Fetches prices every few seconds via the `/market/prices` endpoint
+- News is a curated static feed (can be expanded to RSS/API feeds)
+- Market movers are calculated by comparing current prices to previous close
+
+```
+┌────────────────────────────────────────────┐
+│  DASHBOARD SCREEN (Conceptual)             │
+├────────────────────────────────────────────┤
+│  ┌────┐ ┌────┐ ┌────┐ ┌────┐              │
+│  │Win%│ │ P&L│ │Open│ │Trades│             │
+│  │62% │ │+450│ │  3 │ │  47  │             │
+│  └────┘ └────┘ └────┘ └────┘              │
+│  ──────────────────────────────────────    │
+│  EURUSD  1.0845  ▲ +0.12%                │
+│  XAUUSD  4021.50 ▲ +1.24%  ← MOVERS      │
+│  NQ1!    22500   ▼ -0.45%                │
+│  BTCUSD  108500  ▲ +2.10%                │
+│  ──────────────────────────────────────    │
+│  📰 Gold reclaims $4,000...              │
+│  📰 US JOLTS job openings hit 2-year high │
+│  📰 NFP report on Thursday...            │
+└────────────────────────────────────────────┘
+```
+
+---
+
+### 4.2 MT5 Terminal
+
+**What It Looks Like:** A bridge panel showing your MetaTrader 5 account status, open positions, and buttons to execute trades directly on MT5.
+
+**What It Does:** MetaTrader 5 (MT5) is the industry-standard trading platform used by most brokers. The ICT Trading OS doesn't replace MT5 — it **enhances** it. The MT5 Terminal page acts as a remote control:
+
+- **Account Summary:** See your balance, equity, margin, and free margin
+- **Open Positions:** View what's currently running on MT5
+- **Trade History:** See closed trades from MT5
+- **Execute on MT5:** Send trade orders directly from the OS to MT5
+- **Manual Price Override:** Push MT5's live broker prices into the OS for more accurate lot calculations
+
+**Technical Details:**
+- Communicates with a local Flask bridge running on `localhost:5001`
+- The bridge uses Python's `MetaTrader5` library to talk to the MT5 terminal
+- Supports sending market orders with stop-loss and take-profit
+- Can close positions by ticket ID
+
+```
+┌────────────────────────────────────────────┐
+│  MT5 TERMINAL BRIDGE                        │
+├────────────────────────────────────────────┤
+│  Account: $12,450 | Equity: $12,520        │
+│  Margin: $2,100 | Free Margin: $10,420     │
+│  ──────────────────────────────────────    │
+│  Open Positions:                           │
+│  ┌────────┬──────┬───────┬────────┐       │
+│  │ Symbol │ Size │ Entry │ P&L    │       │
+│  │ EURUSD │ 0.5  │ 1.0840│ +$120  │       │
+│  │ XAUUSD │ 0.2  │ 3980  │ +$83   │       │
+│  └────────┴──────┴───────┴────────┘       │
+│  [SYNC PRICES] [CLOSE ALL] [REFRESH]       │
+└────────────────────────────────────────────┘
+```
+
+---
+
+### 4.3 Execute (Trade Entry)
+
+**What It Looks Like:** A form with dropdowns for instrument, side (Buy/Sell), stop-loss, take-profits, and an auto-calculated lot size. Plus a live P&L preview.
+
+**What It Does:** This is where you "pull the trigger" on a trade. The Execute page is designed to make trade entry fast, accurate, and risk-managed:
+
+- **Auto Lot Calculation:** Enter your account balance, risk percentage, and stop-loss — the system calculates the exact position size so you only risk what you specified (e.g., 1% of account)
+- **Live Price Fetch:** If you don't enter an entry price, it uses the current market price
+- **Three Take-Profit Levels:** Set TP1, TP2, TP3 for scaling out of positions
+- **Quick Lot Calculator:** Calculate lot size by specifying stop-loss in pips instead of price
+- **Risk Preview:** See your exact dollar risk before committing
+
+**How Auto Lot Calculation Works:**
+
+```
+┌────────────────────────────────────────────┐
+│  AUTO LOT CALCULATION FLOW                 │
+├────────────────────────────────────────────┤
+│                                             │
+│  INPUTS:                                    │
+│  • Account Balance: $10,000               │
+│  • Risk %: 1%                               │
+│  • Stop Loss: 50 pips                       │
+│  • Symbol: EURUSD                           │
+│                                             │
+│  CALCULATION:                               │
+│  Risk Amount = $10,000 × 1% = $100         │
+│  Pip Distance = 50 pips                    │
+│  Pip Value (per lot) = $10                 │
+│  Total Risk per Lot = 50 × $10 = $500     │
+│  Lot Size = $100 / $500 = 0.20 lots       │
+│                                             │
+│  OUTPUT: Trade with 0.20 lots              │
+│          If SL hits → lose exactly $100    │
+│          If TP hits → gain based on ratio  │
+│                                             │
+└────────────────────────────────────────────┘
+```
+
+**Technical Details:**
+- Uses instrument-specific pip values, contract sizes, and tick values
+- Supports Forex (EURUSD), Indices (NQ, ES), Metals (Gold), Crypto (BTC), and Commodities (Oil)
+- Leverage is displayed for information but doesn't affect lot sizing (risk-based sizing is used)
+
+---
+
+### 4.4 Analytics
+
+**What It Looks Like:** Charts, stats cards, and tables showing your trading performance over time. Think of it as a "report card" for your trading.
+
+**What It Does:** The Analytics page answers the question: **"Am I actually good at this?"**
+
+- **Summary Stats:** Total trades, win rate, total P&L, expectancy, average R-multiple
+- **Equity Curve:** A line chart showing your account balance over time
+- **Drawdown Analysis:** How much your account dropped from its peak (and for how long)
+- **Session Heatmap:** Which trading sessions (London, NY, Asian) are most profitable for you
+- **Monthly Breakdown:** P&L by month with win/loss counts
+- **Per-Symbol Performance:** Which instruments you trade best
+- **Kelly Criterion:** A mathematical formula suggesting optimal bet sizing based on your edge
+- **Win/Loss Streaks:** Your longest winning and losing streaks
+
+**Key Metrics Explained:**
+
+| Metric | What It Means | Good Value |
+|--------|--------------|------------|
+| **Win Rate** | % of trades that made money | 50-60% is solid |
+| **Expectancy** | Average profit per trade | > $0 means you're profitable |
+| **R-Multiple** | Profit expressed in "risk units" | > 1.0 means you make more than you risk |
+| **Max Drawdown** | Biggest peak-to-trough drop | < 10% is conservative, < 20% acceptable |
+| **Kelly Fraction** | Optimal risk % per trade | Usually trade "half Kelly" for safety |
+
+**Technical Details:**
+- All metrics are calculated from the SQLite `trades` collection
+- Open trades include unrealized P&L using live prices
+- R-multiple tracks how many "risk units" each trade returned
+
+---
+
+### 4.5 Research
+
+**What It Looks Like:** A technical analysis lab with charts, indicator values, and market summaries for each instrument. (Note: This page is labeled "Quant Lab" in the UI and "Research" in the navigation.)
+
+**What It Does:** Before you trade, you need to research. The Research page provides:
+
+- **Instrument Analysis:** For each symbol, see trend, volatility, support/resistance levels, SMAs, and sentiment
+- **SMA (Simple Moving Average):** 20-period and 50-period moving averages to identify trend direction
+- **ATR (Average True Range):** Measures volatility — how much the instrument typically moves per day
+- **Support & Resistance:** Key price levels where the market has historically reversed
+- **Correlation Matrix:** Shows how closely instruments move together (e.g., EURUSD and GBPUSD often move in tandem)
+- **Market Summary:** A bird's-eye view of all instruments — how many are bullish vs. bearish
+
+**Technical Details:**
+- SMA crossover: 20 SMA above 50 SMA = Bullish trend
+- ATR calculated using Wilder's method over 14 periods
+- Support/resistance found by detecting swing highs and lows
+- Correlation uses Pearson coefficient over 50 periods of returns
+
+---
+
+### 4.6 Signals
+
+**What It Looks Like:** A list of active trading signals with quality badges (STRONG, MODERATE, WEAK), entry zones, stop-losses, and targets. Plus a "Scan All" button.
+
+**What It Does:** The Signals engine is an **automated analyst** that watches the market 24/7 and tells you when a high-probability setup forms. It:
+
+- Analyzes multiple timeframes simultaneously (1H, 15M, 5M)
+- Detects ICT patterns (MSS, FVG, OB, Liquidity sweeps)
+- Scores setups on a 6-point confluence scale
+- Generates signals only when score ≥ 2 (with STRONG = 5+, MODERATE = 3+, WEAK = 2+)
+- Provides entry zone, stop-loss, and three take-profit targets
+- Checks for 2:1 reward-to-risk ratio minimum
+- Applies cooldown periods after bias flips to avoid choppy signals
+
+**Signal Quality Breakdown:**
+
+```
+┌────────────────────────────────────────────┐
+│  SIGNAL CONFLUENCE SCORING (Max 6)         │
+├────────────────────────────────────────────┤
+│  +1  HTF Bias Aligned (1H trend confirmed) │
+│  +1  ITF MSS (15M structure shift)         │
+│  +1  LTF Entry POI (5M FVG or OB found)   │
+│  +1  Liquidity Swept (stops cleared)       │
+│  +1  Premium/Discount (price in right zone)│
+│  +1  2R Target Viable (reward ≥ 2× risk) │
+│                                             │
+│  Score ≥ 2 → Signal Generated              │
+│  Score ≥ 5 → STRONG Quality                │
+│  Score ≥ 3 → MODERATE Quality              │
+│  Score ≥ 2 → WEAK Quality                  │
+└────────────────────────────────────────────┘
+```
+
+**Technical Details:**
+- Signals expire after 60 minutes (configurable)
+- Bias flip cooldown: 60 seconds after a bias change before new signals
+- Session detection: London Open (7-10 UTC), NY AM (12-15 UTC), NY PM (17-21 UTC), etc.
+
+---
+
+### 4.7 Telegram Feed
+
+**What It Looks Like:** A chat-like feed of messages from your subscribed Telegram channels, with parsed signals, acknowledge buttons, and auto-trade controls.
+
+**What It Does:** Many professional traders share signals in private Telegram channels. The Telegram Feed page:
+
+- **Polls Telegram:** Automatically fetches new messages from configured channels
+- **Parses Signals:** Extracts symbol, side (Buy/Sell), entry, stop-loss, and take-profits from message text using regex patterns
+- **Confidence Scoring:** Rates how well the message was parsed (high/medium/low)
+- **Acknowledge:** Mark signals as "seen" to manage your workflow
+- **Auto-Trade:** Convert a parsed signal directly into a trade in the system with one click
+- **Strategy Detection:** Recognizes ICT terminology (FVG, OB, MSS, Killzone, etc.) in messages
+
+**Supported Symbols:**
+EURUSD, GBPUSD, USDJPY, AUDUSD, XAUUSD (Gold), US30, NAS100, NQ, ES, BTCUSD, ETHUSD, and 30+ more.
+
+**Technical Details:**
+- Uses Telegram Bot API (`getUpdates` polling)
+- Regex patterns for entry, SL, TP, and symbol detection
+- Supports both `-100` prefixed and plain numeric channel IDs
+
+---
+
+### 4.8 Knowledge Base
+
+**What It Looks Like:** A searchable library of YouTube transcripts, an AI chat interface, and analysis summaries for each video.
+
+**What It Does:** The Knowledge Base is your **AI trading mentor**. It lets you:
+
+- **Ingest YouTube Videos:** Paste a YouTube URL (video, playlist, or channel) and the system automatically downloads the transcript
+- **AI Analysis:** Analyzes transcripts to extract key concepts, trading insights, timestamps, and sentiment
+- **Semantic Search:** Uses sentence-transformer embeddings to find relevant passages across all transcripts
+- **AI Chat (RAG):** Ask questions like "What is a Fair Value Gap?" and get answers synthesized from your ingested videos
+- **Concept Extraction:** Automatically tags content with ICT concepts (MSS, FVG, OB, Liquidity, etc.)
+
+**How It Works:**
+
+```
+YouTube URL → Transcript (yt-dlp / youtube-transcript-api)
+                    ↓
+            Text Chunking (200 words, 50 overlap)
+                    ↓
+            Vector Embedding (sentence-transformers)
+                    ↓
+            Vector Store (SQLite + cosine similarity)
+                    ↓
+            User Query → Vector Search → Top 5 Chunks → Answer
+```
+
+**Technical Details:**
+- Supports single videos, playlists, and entire channels
+- Fallback to Whisper audio transcription if captions are disabled
+- AI analysis uses Ollama (local LLM) or OpenAI API
+- Chunks are stored in `kb_chunks` collection with embeddings
+
+---
+
+### 4.9 Library
+
+**What It Looks Like:** A file/document management interface where you can upload, tag, and search trading documents, screenshots, and notes.
+
+**What It Does:** The Library is your personal **trading document archive**. It stores:
+
+- Trade screenshots and chart markings
+- PDF strategy documents
+- Personal notes and journals
+- Any file you want to associate with your trading business
+
+Documents can be tagged, searched, and linked to specific trades or strategies.
+
+---
+
+### 4.10 What's Up
+
+**What It Looks Like:** A live trade tracking dashboard showing all open positions, their current P&L, and auto-management status. It's the "mission control" for your active trades.
+
+**What It Does:** What's Up is where you **watch your trades live**. It features:
+
+- **Open Trades Table:** Symbol, entry, current price, unrealized P&L, R-multiple, stop-loss status
+- **Auto-Management:** The system automatically:
+  - Detects when TP1 is hit → closes 33% of position, moves SL to breakeven
+  - Detects SL hits → fully closes position
+  - Detects breakeven stops → closes remaining position
+- **Manual Controls:** Buttons to partial close, full close, or move SL to breakeven
+- **Live Price Updates:** Prices refresh every few seconds for real-time P&L
+- **Color Coding:** Green = profit, Red = loss, Yellow = breakeven
+
+**Auto-Management Rules:**
+
+```
+┌────────────────────────────────────────────┐
+│  AUTO-MANAGEMENT RULES                      │
+├────────────────────────────────────────────┤
+│                                             │
+│  TP1 HIT:                                   │
+│    → Close 33% of position at TP1 price     │
+│    → Move Stop Loss to Entry (Breakeven)   │
+│    → Mark TP1 as hit                        │
+│                                             │
+│  SL HIT (before BE):                        │
+│    → Close 100% of position at SL price    │
+│    → Record full loss                       │
+│                                             │
+│  SL HIT (at BE):                            │
+│    → Close 100% of remaining position        │
+│    → Record breakeven (0R)                  │
+│                                             │
+│  AFTER TP1: Manual management only          │
+│    (No auto TP2/TP3 — trader discretion)    │
+│                                             │
+└────────────────────────────────────────────┘
+```
+
+**Technical Details:**
+- `check_tp_hits()` runs automatically when `get_open_trades()` is called
+- Uses live price data from Yahoo Finance or MT5 manual override
+- Partial closes are recorded as "legs" with individual P&L and R-multiple
+
+---
+
+### 4.11 Settings
+
+**What It Looks Like:** A preferences panel with toggles for theme, default symbol, risk percentage, account balance, notifications, and layout options.
+
+**What It Does:** Settings lets you customize the OS to your preferences:
+
+- **Theme:** Dark or light mode
+- **Default Symbol:** Which instrument loads by default (e.g., EURUSD)
+- **Risk %:** Your default risk per trade (e.g., 1%)
+- **Account Balance:** Your default balance for lot calculations
+- **Auto-Trade:** Enable/disable automatic trading from Telegram signals
+- **Notifications:** Enable/disable browser/push notifications
+- **Layout:** Choose different dashboard layouts
+
+**Technical Details:**
+- Settings stored in SQLite `settings` collection with ID `global`
+- Exported as JSON via `/settings/export` endpoint
+
+---
+
+## 5. Data Flow: The Life of a Trade
+
+Here's how a trade flows through the entire system, from idea to journal entry:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                    THE LIFE OF A TRADE — DATA FLOW                             │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  PHASE 1: RESEARCH & SETUP                                                    │
+│  ───────────────────────────────────────────────────────────────────────    │
+│                                                                               │
+│  User ┌──────────────┐     ┌──────────────┐     ┌──────────────┐            │
+│  ────►│  Research    │────►│  ICT Engine  │────►│  Signal      │            │
+│       │  (SMA, ATR)  │     │  (Patterns)  │     │  Engine      │            │
+│       └──────────────┘     └──────────────┘     └──────────────┘            │
+│                                                        │                      │
+│                                                        ▼                      │
+│                                               ┌──────────────┐              │
+│                                               │  Signal      │              │
+│                                               │  Generated?  │──YES──┐     │
+│                                               │  (Score ≥2)  │       │     │
+│                                               └──────────────┘       │     │
+│                                                        NO            │     │
+│                                                        │             │     │
+│                                                        ▼             │     │
+│                                               ┌──────────────┐       │     │
+│                                               │  Wait /      │       │     │
+│                                               │  Continue    │◄──────┘     │
+│                                               │  Monitoring  │             │
+│                                               └──────────────┘             │
+│                                                                               │
+│  PHASE 2: TRADE ENTRY                                                         │
+│  ───────────────────────────────────────────────────────────────────────    │
+│                                                                               │
+│  User ┌──────────────┐     ┌──────────────┐     ┌──────────────┐            │
+│  ────►│  Execute     │────►│  Lot Calc    │────►│  Trade       │            │
+│       │  (Form)      │     │  (Auto Size) │     │  Created     │            │
+│       └──────────────┘     └──────────────┘     └──────────────┘            │
+│                                                        │                      │
+│                                                        ▼                      │
+│                                               ┌──────────────┐              │
+│                                               │  SQLite DB   │              │
+│                                               │  (trades)    │              │
+│                                               └──────────────┘              │
+│                                                                               │
+│  PHASE 3: ACTIVE MANAGEMENT (What's Up)                                       │
+│  ───────────────────────────────────────────────────────────────────────    │
+│                                                                               │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                │
+│  │  Live Prices │────►│  Check       │────►│  Action      │                │
+│  │  (Yahoo/MT5) │     │  TP/SL Hits? │     │  Taken       │                │
+│  └──────────────┘     └──────────────┘     └──────────────┘                │
+│                              │                                              │
+│                              ├── TP1 Hit ──► Partial Close (33%) + BE SL   │
+│                              ├── SL Hit  ──► Full Close (Loss)             │
+│                              ├── BE Hit  ──► Full Close (Breakeven)        │
+│                              └── Nothing ──► Continue Monitoring             │
+│                                                                               │
+│  PHASE 4: CLOSURE & JOURNALING                                                │
+│  ───────────────────────────────────────────────────────────────────────    │
+│                                                                               │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                │
+│  │  Full Close  │────►│  P&L         │────►│  Analytics   │                │
+│  │  (Manual or  │     │  Calculated  │     │  Updated     │                │
+│  │   Auto)      │     │  (R-Tracked) │     │  (Stats)     │                │
+│  └──────────────┘     └──────────────┘     └──────────────┘                │
+│                              │                      │                       │
+│                              ▼                      ▼                       │
+│                       ┌──────────────┐     ┌──────────────┐                  │
+│                       │  Trade Log   │     │  Dashboard   │                  │
+│                       │  (History)   │     │  KPIs        │                  │
+│                       └──────────────┘     └──────────────┘                  │
+│                                                                               │
+│  PHASE 5: ANALYSIS & LEARNING                                                   │
+│  ───────────────────────────────────────────────────────────────────────    │
+│                                                                               │
+│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                  │
+│  │  Analytics   │────►│  KB Chat    │────►│  Strategy    │                  │
+│  │  (Review P&L)│     │  (Why did   │     │  Refinement  │                  │
+│  │              │     │  I win/lose?)│     │              │                  │
+│  └──────────────┘     └──────────────┘     └──────────────┘                  │
+│                                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 6. Technology Stack
+
+### Backend
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Web Framework** | FastAPI (Python) | REST API endpoints, request handling, validation |
+| **Database** | SQLite | Persistent storage for trades, signals, KB, settings |
+| **Vector Search** | sentence-transformers + SQLite | Semantic search across transcripts |
+| **HTTP Client** | httpx | External API calls (Yahoo, Telegram, MT5 bridge) |
+| **Data Processing** | NumPy | Pattern detection, indicator calculations |
+| **YouTube Integration** | yt-dlp, youtube-transcript-api | Video transcript extraction |
+| **AI Analysis** | Ollama / OpenAI | Video transcript analysis and chat |
+| **Auth** | JWT (optional) | API key and token-based authentication |
+
+### Frontend
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Framework** | React 18 | UI components, state management |
+| **Build Tool** | Vite | Fast development builds and hot reload |
+| **Styling** | Tailwind CSS | Utility-first CSS framework |
+| **Routing** | React Router | Single-page app navigation |
+| **State** | Zustand / Context | Global state management |
+| **Charts** | Recharts / Lightweight Charts | Data visualization |
+| **TypeScript** | TypeScript 5 | Type-safe development |
+
+### External Services
+
+| Service | Role | Integration |
+|---------|------|-------------|
+| **Yahoo Finance API** | Free market data for prices and history | Direct HTTP calls to `query1.finance.yahoo.com` |
+| **MetaTrader 5** | Live broker execution and account data | Local Flask bridge on `localhost:5001` |
+| **Telegram Bot API** | Signal fetching from channels | `getUpdates` polling via HTTP |
+| **YouTube** | Educational video ingestion | `yt-dlp` and `youtube-transcript-api` libraries |
+
+---
+
+## 7. Database Design
+
+The ICT Trading OS uses a **single-table JSON document store** design in SQLite. Instead of rigid relational tables, data is stored in a flexible `docs` table:
 
 ```sql
--- Users (single-user mode for now, extensible)
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email TEXT UNIQUE NOT NULL,
-    name TEXT,
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Trading Plans
-CREATE TABLE trading_plans (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-    date DATE NOT NULL,
-    session TEXT CHECK (session IN ('london', 'ny', 'asia', 'combined')),
-    bias_direction TEXT CHECK (bias_direction IN ('bullish', 'bearish', 'neutral')),
-    narrative TEXT,
-    confluence_tags TEXT[],
-    killzones TEXT[],
-    max_trades INTEGER DEFAULT 3,
-    daily_loss_limit DECIMAL(12,2),
-    created_at TIMESTAMPTZ DEFAULT now(),
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Trades (executions)
-CREATE TABLE trades (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-    plan_id UUID REFERENCES trading_plans(id),
-    symbol TEXT NOT NULL,
-    direction TEXT CHECK (direction IN ('long', 'short')),
-    entry_price DECIMAL(18,8),
-    stop_loss DECIMAL(18,8),
-    take_profit_1 DECIMAL(18,8),
-    take_profit_2 DECIMAL(18,8),
-    take_profit_3 DECIMAL(18,8),
-    lot_size DECIMAL(12,6),
-    leverage INTEGER DEFAULT 1,
-    risk_amount DECIMAL(12,2),
-    status TEXT CHECK (status IN ('pending', 'open', 'closed', 'cancelled')),
-    outcome TEXT CHECK (outcome IN ('win', 'loss', 'breakeven', 'open')),
-    pnl DECIMAL(12,2),
-    pnl_pips DECIMAL(12,2),
-    exit_price DECIMAL(18,8),
-    exit_time TIMESTAMPTZ,
-    entry_time TIMESTAMPTZ DEFAULT now(),
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Journal Entries
-CREATE TABLE journal_entries (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    trade_id UUID REFERENCES trades(id),
-    user_id UUID REFERENCES users(id),
-    pre_trade_notes TEXT,
-    post_trade_notes TEXT,
-    emotion_score INTEGER CHECK (emotion_score BETWEEN 1 AND 10),
-    setup_grade INTEGER CHECK (setup_grade BETWEEN 1 AND 10),
-    execution_grade INTEGER CHECK (execution_grade BETWEEN 1 AND 10),
-    management_grade INTEGER CHECK (management_grade BETWEEN 1 AND 10),
-    tags TEXT[],
-    lessons TEXT,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Knowledge Base Sources
-CREATE TABLE kb_sources (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-    source_type TEXT CHECK (source_type IN ('youtube', 'transcript', 'pdf', 'note')),
-    title TEXT NOT NULL,
-    url TEXT,
-    content TEXT,
-    metadata JSONB,
-    chunk_count INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- KB Chunks (for pgvector)
-CREATE TABLE kb_chunks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    source_id UUID REFERENCES kb_sources(id) ON DELETE CASCADE,
-    chunk_index INTEGER NOT NULL,
-    content TEXT NOT NULL,
-    embedding VECTOR(768),  -- Nomic embed dimension
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Alerts / Signals
-CREATE TABLE alerts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-    symbol TEXT NOT NULL,
-    alert_type TEXT CHECK (alert_type IN ('price', 'ict_pattern', 'sentiment', 'risk', 'custom')),
-    condition JSONB NOT NULL,
-    message TEXT,
-    is_active BOOLEAN DEFAULT true,
-    triggered_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Daily Risk Ledger
-CREATE TABLE daily_risk_ledger (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-    date DATE NOT NULL,
-    starting_balance DECIMAL(12,2),
-    daily_loss_limit DECIMAL(12,2),
-    current_loss DECIMAL(12,2) DEFAULT 0,
-    trades_taken INTEGER DEFAULT 0,
-    max_trades INTEGER DEFAULT 3,
-    is_locked BOOLEAN DEFAULT false,
-    lock_reason TEXT,
-    UNIQUE(user_id, date)
+CREATE TABLE docs (
+    collection TEXT NOT NULL,    -- "trades", "kb_sources", "settings", etc.
+    id TEXT NOT NULL,            -- Unique document ID
+    data TEXT NOT NULL,          -- JSON-serialized document
+    created_at TEXT,             -- ISO timestamp
+    updated_at TEXT,             -- ISO timestamp
+    PRIMARY KEY (collection, id)
 );
 ```
 
-### 4.2 Redis Key Patterns
+### Collections
 
-| Pattern | Purpose | TTL |
-|---------|---------|-----|
-| `price:{symbol}` | Latest price cache | 60s |
-| `session:{user_id}` | User session data | 24h |
-| `ws:connections` | Active WebSocket connection registry | — |
-| `alerts:pending` | Pending alert queue | — |
-| `celery:task:*` | Background job metadata | — |
+| Collection | Stores | Example Documents |
+|-----------|--------|-------------------|
+| `trades` | All trade records | Open, closed, and partial trades with legs |
+| `telegram_signals` | Parsed Telegram messages | Signal data, parsed fields, acknowledge status |
+| `kb_sources` | Knowledge base entries | YouTube transcripts, analysis, metadata |
+| `kb_chunks` | Vector search chunks | Text chunks with embeddings for semantic search |
+| `settings` | User preferences | Theme, risk %, balance, layout |
+| `plans` | Trading plans | Pre-trade plans with strategy and rules |
+| `alerts` | Price alerts | Trigger conditions and notification status |
 
----
+### Why SQLite?
 
-## 5. AI / RAG Architecture
-
-### 5.1 LangGraph Workflow — Adaptive RAG for ICT Knowledge
-
-```
-User Query
-    │
-    ▼
-┌─────────────────┐
-│  Query Router   │  ← "Is this a factual ICT question?"
-│  (LLM classifier)│
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    ▼         ▼
-┌───────┐  ┌─────────┐
-│ RAG   │  │  Direct │
-│ Path  │  │  LLM    │
-└───┬───┘  └─────────┘
-    │
-    ▼
-┌─────────────────┐
-│  Document       │  ← Haystack retriever over pgvector
-│  Retrieval      │
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    ▼         ▼
-┌─────────┐  ┌─────────┐
-│ Relevant│  │ Irrelevant│
-│  Docs   │  │  Docs     │
-└────┬────┘  └────┬────┘
-     │            │
-     ▼            ▼
-┌─────────┐  ┌─────────────┐
-│  Grade  │  │  Web Search │  ← (future expansion)
-│  Check  │  │  Fallback   │
-└────┬────┘  └─────────────┘
-     │
-     ▼
-┌─────────────┐
-│  Generate   │  ← LLM synthesizes answer with sources
-│  Answer     │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│  Hallucination│  ← Check if answer is grounded in docs
-│  Check      │
-└──────┬──────┘
-       │
-  ┌────┴────┐
-  ▼         ▼
-┌──────┐  ┌─────────┐
-│ Pass │  │  Fail   │
-│      │  │  → Retry│
-└──┬───┘  └────┬────┘
-   │           │
-   ▼           ▼
-┌──────────┐  ┌─────────┐
-│  Return  │  │  Max    │
-│  Answer  │  │  Retries│
-│  + Sources│  │  → Error│
-└──────────┘  └─────────┘
-```
-
-### 5.2 Haystack Pipeline — Transcript Ingestion
-
-```
-YouTube URL / Transcript Text
-    │
-    ▼
-┌─────────────────┐
-│  Fetch / Parse  │  ← YouTube transcript extraction or PDF parsing
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Preprocess     │  ← Clean, normalize, remove timestamps
-│  (Cleaner)      │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Split / Chunk  │  ← Semantic chunking (512 tokens, 50 overlap)
-│  (DocumentSplitter)│
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Embed          │  ← Nomic Embed via Ollama
-│  (Embedder)     │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Store          │  ← pgvector upsert
-│  (DocumentStore)│
-└─────────────────┘
-```
-
-### 5.3 AI Use Cases (What AI Does / Does NOT Do)
-
-| ✅ AI Handles | ❌ AI Does NOT Handle |
-|-------------|----------------------|
-| Querying ICT transcripts & notes | Position sizing calculations |
-| Summarizing journal patterns | Loss-limit enforcement |
-| Explaining setup weaknesses/strengths | Stop/target validation |
-| Extracting concepts from videos | Daily lockout decisions |
-| Generating trader review narratives | Order execution authorization |
-| Surfacing related KB examples | Live execution safety checks |
-| Alert explanation text | Risk rule validation |
-| Sentiment analysis | Capital allocation decisions |
+- **Zero setup:** No database server to install or configure
+- **Single file:** The entire database is one `.db` file
+- **Portable:** Easy to backup, copy, or migrate
+- **Sufficient:** For a personal trading OS, SQLite handles thousands of trades effortlessly
+- **JSON flexibility:** Schema changes don't require migrations
 
 ---
 
-## 6. API Design (FastAPI)
+## 8. API Architecture
 
-### 6.1 REST Endpoints — Core v1
+### Router Structure
 
 ```
-GET    /health                    → System status
-POST   /auth/token              → JWT token (single-user for now)
-
--- Plans
-GET    /api/v1/plans            → List plans
-POST   /api/v1/plans            → Create plan
-GET    /api/v1/plans/{id}      → Get plan
-PATCH  /api/v1/plans/{id}      → Update plan
-DELETE /api/v1/plans/{id}      → Delete plan
-
--- Trades / Execution
-GET    /api/v1/trades           → List trades
-POST   /api/v1/trades           → Create trade
-GET    /api/v1/trades/{id}      → Get trade
-POST   /api/v1/trades/{id}/close → Close trade
-POST   /api/v1/trades/{id}/partial → Partial close
-
--- Risk
-POST   /api/v1/risk/validate    → Validate trade against risk rules
-GET    /api/v1/risk/daily-status → Daily risk ledger status
-POST   /api/v1/risk/lot-size    → Calculate lot size (leverage-aware)
-
--- Journal
-GET    /api/v1/journal          → Journal entries
-POST   /api/v1/journal          → Create entry
-GET    /api/v1/journal/stats    → Aggregate stats
-POST   /api/v1/journal/{id}/grade → Self-grade entry
-
--- Market Data
-GET    /api/v1/market/price/{symbol}      → Live price
-GET    /api/v1/market/history/{symbol}    → Candle history
-GET    /api/v1/market/calendar            → Economic calendar
-
--- Analytics
-GET    /api/v1/analytics/expectancy       → Expectancy metrics
-GET    /api/v1/analytics/sessions         → Session performance
-GET    /api/v1/analytics/heatmap          → Confluence heatmap
-GET    /api/v1/analytics/kelly           → Kelly criterion
-
--- Knowledge Base
-POST   /api/v1/kb/sources       → Add source
-GET    /api/v1/kb/sources       → List sources
-DELETE /api/v1/kb/sources/{id}  → Remove source
-POST   /api/v1/kb/search        → Semantic search
-POST   /api/v1/kb/query         → RAG query (AI answer)
-
--- Agent / AI
-POST   /api/v1/agent/chat       → AI chat session
-POST   /api/v1/agent/grade-setup → Setup grading
-POST   /api/v1/agent/journal-review → Journal review
-
--- Telegram
-POST   /api/v1/telegram/send    → Send message
-POST   /api/v1/telegram/alert   → Send alert
-POST   /api/v1/telegram/test    → Test connection
-
--- MT5 Bridge
-POST   /api/v1/mt5/trade        → Proxy trade to MT5
-GET    /api/v1/mt5/account      → MT5 account info
-GET    /api/v1/mt5/positions    → Open positions
-GET    /api/v1/mt5/status       → Bridge status
-
--- Alerts
-GET    /api/v1/alerts           → Active alerts
-POST   /api/v1/alerts           → Create alert rule
-DELETE /api/v1/alerts/{id}      → Delete alert
+/                    → Health check & app info
+/market              → Price data, history, instruments
+/ict                 → ICT pattern analysis (single & multi-TF)
+/signals             → Signal generation, scanning, stats
+/trades              → Full trade lifecycle (CRUD + partial/close)
+/orders              → Order entry with lot calculation
+/analytics           → Performance metrics, expectancy, heatmap
+/telegram            → Signal polling, acknowledge, auto-trade
+/mt5                 → MetaTrader 5 bridge proxy
+/kb                  → Knowledge base (sources, search, chat)
+/research            → Technical analysis, correlation, summary
+/news                → Curated market news feed
+/settings            → User preferences
+/quant               → Quant lab & backtesting tools
+/alerts              → Price alerts & notifications
+/bot                 → Trading bot engine
+/playground          → Pattern detection playground
 ```
 
-### 6.2 WebSocket Channels
+### Key API Patterns
 
-| Channel | Path | Events |
-|---------|------|--------|
-| Price Stream | `/ws/market/{symbol}` | `price_update`, `candle_close` |
-| Trade Updates | `/ws/trades` | `trade_opened`, `trade_closed`, `fill_update` |
-| Alert Stream | `/ws/alerts` | `alert_triggered`, `alert_dismissed` |
-| System Status | `/ws/system` | `heartbeat`, `service_status` |
-
-### 6.3 Pydantic Models (Example)
-
-```python
-from sqlmodel import SQLModel, Field
-from datetime import date, datetime
-from decimal import Decimal
-from typing import Optional, List, Literal
-from uuid import UUID, uuid4
-
-class TradingPlan(SQLModel, table=True):
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    user_id: UUID = Field(foreign_key="users.id")
-    date: date
-    session: Literal["london", "ny", "asia", "combined"] = "combined"
-    bias_direction: Literal["bullish", "bearish", "neutral"] = "neutral"
-    narrative: Optional[str] = None
-    confluence_tags: List[str] = Field(default_factory=list, sa_column=List[str])
-    killzones: List[str] = Field(default_factory=list, sa_column=List[str])
-    max_trades: int = 3
-    daily_loss_limit: Decimal = Field(max_digits=12, decimal_places=2)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-
-class TradeBase(SQLModel):
-    symbol: str
-    direction: Literal["long", "short"]
-    entry_price: Decimal = Field(max_digits=18, decimal_places=8)
-    stop_loss: Decimal = Field(max_digits=18, decimal_places=8)
-    take_profit_1: Optional[Decimal] = Field(max_digits=18, decimal_places=8)
-    take_profit_2: Optional[Decimal] = Field(max_digits=18, decimal_places=8)
-    take_profit_3: Optional[Decimal] = Field(max_digits=18, decimal_places=8)
-    lot_size: Decimal = Field(max_digits=12, decimal_places=6)
-    leverage: int = 1
-    risk_amount: Decimal = Field(max_digits=12, decimal_places=2)
-
-class Trade(TradeBase, table=True):
-    id: UUID = Field(default_factory=uuid4, primary_key=True)
-    user_id: UUID = Field(foreign_key="users.id")
-    plan_id: Optional[UUID] = Field(foreign_key="trading_plans.id")
-    status: Literal["pending", "open", "closed", "cancelled"] = "pending"
-    outcome: Optional[Literal["win", "loss", "breakeven"]] = None
-    pnl: Optional[Decimal] = Field(max_digits=12, decimal_places=2)
-    pnl_pips: Optional[Decimal] = Field(max_digits=12, decimal_places=2)
-    exit_price: Optional[Decimal] = Field(max_digits=18, decimal_places=8)
-    exit_time: Optional[datetime] = None
-    entry_time: datetime = Field(default_factory=datetime.utcnow)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-```
+- **RESTful design:** GET for reads, POST for creates/actions, DELETE for removal
+- **Pydantic validation:** All request bodies are validated schemas
+- **Error handling:** Consistent `{ "error": "message" }` format on failures
+- **CORS enabled:** Frontend can communicate from `localhost:5173`
+- **Optional auth:** JWT middleware can be enabled via `AUTH_ENABLED` env var
 
 ---
 
-## 7. Frontend Architecture
+## 9. Screenshots & UI Walkthrough
 
-### 7.1 Route Structure
+While this document doesn't embed actual screenshots, here is a description of what each page looks like in the running application:
 
-```
-/                       → Dashboard (overview, market, active trades)
-/plan                   → Daily Plan (bias, killzones, narrative)
-/execute                → Execution Console (order entry, MT5 status)
-/journal                → Journal (entries, stats, review flow)
-/knowledge              → Knowledge Base (sources, search, RAG chat)
-/analytics              → Analytics (expectancy, heatmaps, session stats)
-/alerts                 → Alert Manager (rules, history, active)
-/settings               → Settings (risk params, MT5 config, Telegram)
-```
+### Dashboard
+> **Dark theme with neon accents.** Top row has 4 KPI cards (win rate, P&L, open trades, total trades). Middle section shows a live price ticker with green/red change indicators. Bottom-left has a news feed with headlines. Bottom-right shows the biggest market movers with sparkline charts. The navigation sidebar is on the left with icons for each page.
 
-### 7.2 Component Hierarchy (Example)
+### Execute
+> **Clean, focused form layout.** Large dropdown for instrument selection. Side toggle (Buy/Sell) with green/red color coding. Entry price field with "Use Live Price" button. Stop loss and three take-profit fields. Account balance and risk % sliders. A "Calculate Lot" button reveals the auto-calculated position size. A preview card shows exact dollar risk and potential reward.
 
-```
-App
-├── Layout
-│   ├── Sidebar (navigation)
-│   ├── TopBar (market ticker, connection status)
-│   └── MainContent
-│       ├── DashboardPage
-│       │   ├── MarketWidget (price, mini-chart)
-│       │   ├── ActiveTradesWidget
-│       │   ├── PlanSummaryWidget
-│       │   └── AlertFeedWidget
-│       ├── PlanPage
-│       │   ├── PlanForm
-│       │   ├── BiasSelector
-│       │   ├── KillzonePicker
-│       │   └── ConfluenceChecklist
-│       ├── ExecutePage
-│       │   ├── OrderEntryForm
-│       │   ├── LotCalculator (leverage-aware)
-│       │   ├── RiskPreview
-│       │   └── MT5StatusPanel
-│       ├── JournalPage
-│       │   ├── EntryList
-│       │   ├── EntryDetail
-│       │   ├── StatsCards
-│       │   └── GradePanel
-│       ├── KnowledgePage
-│       │   ├── SourceUploader
-│       │   ├── SourceList
-│       │   ├── SearchPanel
-│       │   └── AIChatPanel
-│       ├── AnalyticsPage
-│       │   ├── ExpectancyChart
-│       │   ├── SessionHeatmap
-│       │   ├── ConfluenceMatrix
-│       │   └── KellyPanel
-│       └── SettingsPage
-│           ├── RiskConfigForm
-│           ├── MT5ConfigForm
-│           ├── TelegramConfigForm
-│           └── AIConfigForm
-```
+### What's Up
+> **Live mission control.** A table of open trades with real-time P&L updating every few seconds. Color-coded rows (green = profit, red = loss). Action buttons for each row: "Partial Close", "Move to BE", "Close All". Auto-management status indicator showing whether TP1 or SL has been hit. A summary banner at the top shows total unrealized P&L.
 
-### 7.3 State Management Strategy
+### Analytics
+> **Data-rich dashboard.** A large equity curve line chart. Session heatmap bar chart. Stats grid with win rate, expectancy, max drawdown, average R, Kelly criterion. Monthly performance table with P&L and win rate. Per-symbol breakdown table. The design uses card-based layouts with subtle borders.
 
-| State Type | Store | Example |
-|------------|-------|---------|
-| Server State | TanStack Query | Trades, plans, journal entries, market data |
-| Local UI State | Zustand | Sidebar collapse, modal open, active tab |
-| Form State | React Hook Form | Order entry form, plan form |
-| Global Cache | TanStack Query | Symbol metadata, price history |
-| WebSocket Data | Zustand + React | Live price ticks, alert triggers |
+### Knowledge Base
+> **Two-column layout.** Left side: list of ingested sources with titles, tags, and concept badges. Right side: AI chat interface with a text input at the bottom. Chat bubbles show questions and answers. Sources are cited with clickable links. An "Add Source" button opens a modal for YouTube URL input.
+
+### Telegram Feed
+> **Chat-style feed.** Messages appear in bubbles like a messaging app. Parsed signals show structured cards with symbol, side, entry, SL, TPs, and confidence badges. Acknowledge button (checkmark) on each message. Auto-trade button (lightning bolt) for high-confidence signals. A status bar at the top shows connection status and last poll time.
 
 ---
 
-## 8. Event & Messaging Architecture
+## 10. Glossary of Trading Terms
 
-### 8.1 Event Types
-
-```python
-from dataclasses import dataclass
-from datetime import datetime
-from decimal import Decimal
-from typing import Optional, Literal
-from uuid import UUID
-
-@dataclass
-class TradeOpenedEvent:
-    trade_id: UUID
-    symbol: str
-    direction: Literal["long", "short"]
-    entry_price: Decimal
-    lot_size: Decimal
-    leverage: int
-    risk_amount: Decimal
-    timestamp: datetime
-    source: Literal["manual", "mt5", "api"]
-
-@dataclass
-class TradeClosedEvent:
-    trade_id: UUID
-    exit_price: Decimal
-    pnl: Decimal
-    pnl_pips: Decimal
-    outcome: Literal["win", "loss", "breakeven"]
-    exit_time: datetime
-    timestamp: datetime
-
-@dataclass
-class AlertTriggeredEvent:
-    alert_id: UUID
-    symbol: str
-    alert_type: str
-    message: str
-    triggered_at: datetime
-    severity: Literal["info", "warning", "critical"]
-
-@dataclass
-class DailyRiskBreachedEvent:
-    user_id: UUID
-    date: datetime
-    daily_loss: Decimal
-    limit: Decimal
-    reason: str
-    timestamp: datetime
-
-@dataclass
-class PriceUpdateEvent:
-    symbol: str
-    bid: Decimal
-    ask: Decimal
-    last: Decimal
-    timestamp: datetime
-```
-
-### 8.2 Event Flow
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Trade Service │────▶│  Event Bus      │────▶│  Telegram Svc   │
-│   (execution)   │     │  (Redis pub/sub) │     │  (notification) │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                               │
-                               ├────▶┌─────────────────┐
-                               │     │  WebSocket Hub  │
-                               │     │  (broadcast)    │
-                               │     └─────────────────┘
-                               │
-                               ├────▶┌─────────────────┐
-                               │     │  Journal Svc    │
-                               │     │  (auto-log)     │
-                               │     └─────────────────┘
-                               │
-                               ├────▶┌─────────────────┐
-                               │     │  Analytics Svc  │
-                               │     │  (agg update)   │
-                               │     └─────────────────┘
-                               │
-                               └────▶┌─────────────────┐
-                                     │  Alert Svc      │
-                                     │  (cascade rules)│
-                                     └─────────────────┘
-```
+| Term | Simple Explanation |
+|------|-------------------|
+| **Pip** | The smallest price move in a forex pair (e.g., 0.0001 for EURUSD). Think of it as "one cent" for currencies. |
+| **Lot** | The size of your trade. A standard lot = 100,000 units. You can trade mini (0.1) and micro (0.01) lots. |
+| **Stop Loss (SL)** | An automatic order that closes your trade if it goes against you by a set amount. It's your "emergency exit." |
+| **Take Profit (TP)** | An automatic order that closes your trade when it reaches your target profit. |
+| **R-Multiple** | A way to measure profit in "risk units." If you risk $100 and make $300, that's a 3R trade. |
+| **Breakeven (BE)** | Moving your stop loss to your entry price so you can't lose money on the trade. |
+| **Partial Close** | Closing part of your position (e.g., 33%) to lock in some profit while letting the rest run. |
+| **Drawdown** | How much your account drops from its highest point. A 10% drawdown means you lost 10% from your peak. |
+| **Expectancy** | The average amount you expect to make (or lose) per trade over many trades. |
+| **Liquidity** | Areas where many traders have placed orders. Big players often push price to these areas to trigger them. |
+| **Support** | A price level where buying pressure has historically stopped the price from falling further. |
+| **Resistance** | A price level where selling pressure has historically stopped the price from rising further. |
+| **SMA** | Simple Moving Average — an average of past prices. The 20 SMA shows the average price over the last 20 periods. |
+| **ATR** | Average True Range — measures how much an instrument typically moves. Higher ATR = more volatile. |
+| **Kelly Criterion** | A math formula that tells you the optimal percentage of your account to risk per trade based on your edge. |
+| **FundingPips** | A prop firm that provides traders with funded accounts. The system includes their leverage settings. |
 
 ---
 
-## 9. Security & Safety
+## Closing Thoughts
 
-### 9.1 Trading Safety Rules (Hardcoded in Python)
+The ICT Trading OS is more than just software — it's a **complete trading ecosystem**. It combines:
 
-| Rule | Implementation | Layer |
-|------|---------------|-------|
-| Daily Loss Limit | `daily_risk_ledger` table + `risk_service` | API validation |
-| Max Trades Per Day | `max_trades` on plan + ledger counter | API validation |
-| Stop-Loss Required | `stop_loss` is non-nullable in `Trade` model | DB + API |
-| Leverage Cap | Max 100x, validated against account margin | `risk_service` |
-| Lockout Enforcement | `is_locked` boolean on daily ledger | `risk_service` |
-| Order Size Validation | Lot size within broker limits | `risk_service` |
-| Killzone Validation | Only trade during planned killzones | `planner_service` |
+- **Market intelligence** (live data, news, research)
+- **Pattern recognition** (ICT methodology engine)
+- **Risk management** (auto lot sizing, structured trade management)
+- **Performance tracking** (analytics, journaling, metrics)
+- **Continuous learning** (knowledge base, AI chat, video analysis)
+- **Automation** (signals, Telegram integration, MT5 bridge)
 
-### 9.2 Authentication & Authorization (Future-Ready)
+Whether you're a beginner trying to understand why the market moves, or an experienced trader looking for an edge, this system provides the tools, structure, and insights to trade with confidence.
 
-| Layer | Approach |
-|-------|----------|
-| Current (Phase 1) | Single-user, no auth (local-only) |
-| Phase 3 | JWT tokens, `users` table, role-based access |
-| API Keys | Per-service API keys for MT5 bridge, Telegram |
-| WebSocket | Token-based auth on upgrade |
+> *"Trade what you see, not what you think."* — ICT Core Principle
 
 ---
 
-## 10. Deployment & Operations
-
-### 10.1 Docker Compose (Local Development)
-
-```yaml
-# docker-compose.yml (Phase 1)
-version: "3.8"
-services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    ports: ["5432:5432"]
-    environment:
-      POSTGRES_USER: ictos
-      POSTGRES_PASSWORD: ictos
-      POSTGRES_DB: ictos
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
-
-  backend:
-    build: ./backend
-    ports: ["8000:8000"]
-    environment:
-      DATABASE_URL: postgresql://ictos:ictos@postgres:5432/ictos
-      REDIS_URL: redis://redis:6379/0
-    depends_on: [postgres, redis]
-    volumes:
-      - ./backend:/app
-
-  frontend:
-    build: ./frontend
-    ports: ["3000:3000"]
-    environment:
-      VITE_API_URL: http://localhost:8000
-    volumes:
-      - ./frontend:/app
-
-  celery-worker:
-    build: ./backend
-    command: celery -A app.jobs worker --loglevel=info
-    environment:
-      DATABASE_URL: postgresql://ictos:ictos@postgres:5432/ictos
-      REDIS_URL: redis://redis:6379/0
-    depends_on: [postgres, redis]
-
-  ollama:
-    image: ollama/ollama:latest
-    ports: ["11434:11434"]
-    volumes:
-      - ollama_data:/root/.ollama
-
-volumes:
-  postgres_data:
-  ollama_data:
-```
-
-### 10.2 Environment Variables
-
-```bash
-# .env
-DATABASE_URL=postgresql://ictos:ictos@localhost:5432/ictos
-REDIS_URL=redis://localhost:6379/0
-
-# API
-API_HOST=0.0.0.0
-API_PORT=8000
-API_SECRET_KEY=your-secret-key-here
-
-# Frontend
-VITE_API_URL=http://localhost:8000
-VITE_WS_URL=ws://localhost:8000/ws
-
-# AI
-OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama3.1:8b
-EMBEDDING_MODEL=nomic-embed-text:latest
-
-# MT5 Bridge
-MT5_BRIDGE_URL=http://localhost:5000
-
-# Telegram
-TELEGRAM_BOT_TOKEN=your-bot-token
-TELEGRAM_CHAT_ID=your-chat-id
-
-# Celery
-CELERY_BROKER_URL=redis://localhost:6379/0
-CELERY_RESULT_BACKEND=db+postgresql://ictos:ictos@localhost:5432/ictos
-```
-
----
-
-## 11. Technology Comparison: Before vs After
-
-| Aspect | Current (HTML v7) | Target (React + FastAPI) |
-|--------|-------------------|-------------------------|
-| **UI** | Single 300KB HTML file | Modular React SPA with components |
-| **State** | ad-hoc JS objects, localStorage | TanStack Query + Zustand + PostgreSQL |
-| **API** | Hand-rolled JS fetch | Typed FastAPI with OpenAPI docs |
-| **Database** | SQLite, ad-hoc schemas | PostgreSQL + Alembic migrations |
-| **Vector Search** | None | pgvector + Haystack |
-| **AI** | Embedded ad-hoc | LangGraph + Ollama + LiteLLM |
-| **Realtime** | Manual polling | WebSockets + Redis pub/sub |
-| **Background Jobs** | None | Celery + Redis |
-| **Testing** | Manual browser testing | Pytest + Vitest + CI/CD ready |
-| **Deployment** | Static file + manual server | Docker Compose + reproducible builds |
-| **Scalability** | Single file limit | Modular service expansion |
-
----
-
-## 12. References & Resources
-
-| Resource | Link |
-|----------|------|
-| FastAPI + SQLModel + Alembic | https://sqlmodel.tiangolo.com/ |
-| TanStack Query | https://tanstack.com/query/latest |
-| Zustand | https://github.com/pmndrs/zustand |
-| shadcn/ui | https://ui.shadcn.com/ |
-| TradingView Lightweight Charts | https://tradingview.github.io/lightweight-charts/ |
-| Apache ECharts | https://echarts.apache.org/ |
-| Haystack | https://haystack.deepset.ai/ |
-| LangGraph | https://langchain-ai.github.io/langgraph/ |
-| Ollama | https://ollama.com/ |
-| pgvector | https://github.com/pgvector/pgvector |
-| vectorbt | https://vectorbt.dev/ |
-| Backtrader | https://www.backtrader.com/ |
-| LiteLLM | https://docs.litellm.ai/ |
-| Celery | https://docs.celeryproject.org/ |
-
----
-
-## 13. Decision Log
-
-| Date | Decision | Rationale |
-|------|----------|-----------|
-| 2026-06-26 | Vite + React over Next.js | SPA dashboard, no SSR needs, simpler build |
-| 2026-06-26 | SQLModel over SQLAlchemy raw | Pydantic integration, cleaner FastAPI models |
-| 2026-06-26 | Haystack over LlamaIndex | Focus on QA/retrieval over multi-source connectors |
-| 2026-06-26 | pgvector over Qdrant (Phase 1) | Single DB, simpler ops, swap later if needed |
-| 2026-06-26 | Ollama over vLLM (Phase 1) | macOS native, easiest local setup |
-| 2026-06-26 | Celery over RQ | More mature ecosystem, better task result backend |
-| 2026-06-26 | No auth in Phase 1 | Single-user local app, add JWT in Phase 3 |
-
----
-
-**Next Document**: See `MIGRATION_ROADMAP.md` for the phased implementation plan.
+*Built with ❤️ by the gstack TechCEO team. Powered by FastAPI, React, and the ICT methodology.*

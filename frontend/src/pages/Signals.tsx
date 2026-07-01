@@ -5,8 +5,16 @@ import { signalsApi } from '@/api/client'
 import {
   Activity, TrendingUp, TrendingDown, Zap, RefreshCw, Loader2,
   AlertTriangle, Target, Shield, Eye, CheckCircle, XCircle,
-  ArrowRight, Signal
+  ArrowRight, Signal, Clock, Layers, BarChart3, Info
 } from 'lucide-react'
+
+interface ChecklistItem {
+  key: string
+  label: string
+  passed: boolean
+  description: string
+  value?: string
+}
 
 interface SignalData {
   id?: string
@@ -16,6 +24,7 @@ interface SignalData {
   max_score: number
   quality: string
   confluences: string[]
+  checklist?: ChecklistItem[]
   entry_zone?: number
   stop_loss?: number
   targets?: (number | null)[]
@@ -32,6 +41,14 @@ interface SignalResponse {
   signal?: SignalData | null
   symbol?: string
   message?: string
+  checklist?: ChecklistItem[]
+  score?: number
+  max_score?: number
+  quality?: string
+  confluences?: string[]
+  sentiment?: string
+  session?: string
+  htf_bias?: string
 }
 
 const SYMBOLS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
@@ -59,6 +76,67 @@ const confluenceIcon = (name: string) => {
   return <Activity className="w-3 h-3" />
 }
 
+const checklistIcon = (key: string) => {
+  if (key === 'htf_bias') return <TrendingUp className="w-3.5 h-3.5" />
+  if (key === 'mss') return <Zap className="w-3.5 h-3.5" />
+  if (key === 'fvg') return <Layers className="w-3.5 h-3.5" />
+  if (key === 'ob') return <Target className="w-3.5 h-3.5" />
+  if (key === 'liquidity') return <Shield className="w-3.5 h-3.5" />
+  if (key === 'premium_discount') return <Eye className="w-3.5 h-3.5" />
+  if (key === 'killzone') return <Clock className="w-3.5 h-3.5" />
+  if (key === 'rr_viable') return <BarChart3 className="w-3.5 h-3.5" />
+  if (key === 'mtf_alignment') return <Activity className="w-3.5 h-3.5" />
+  return <Info className="w-3.5 h-3.5" />
+}
+
+const ICTCriteriaChecklist = ({ checklist, compact = false }: { checklist?: ChecklistItem[], compact?: boolean }) => {
+  if (!checklist || checklist.length === 0) return null
+  const passed = checklist.filter(c => c.passed)
+  const failed = checklist.filter(c => !c.passed)
+
+  return (
+    <div className={`${compact ? 'space-y-1' : 'space-y-1.5'}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-xs font-semibold text-muted-foreground">ICT Criteria</span>
+        <span className="text-xs text-emerald-400">{passed.length}</span>
+        <span className="text-xs text-muted-foreground">/</span>
+        <span className="text-xs text-red-400">{failed.length}</span>
+        <span className="text-xs text-muted-foreground">of {checklist.length}</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+        {checklist.map((item) => (
+          <div
+            key={item.key}
+            className={`flex items-center gap-2 px-2 py-1 rounded-md text-xs border ${
+              item.passed
+                ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-400'
+                : 'bg-red-500/5 border-red-500/10 text-red-400/70'
+            }`}
+            title={item.description}
+          >
+            {item.passed ? (
+              <CheckCircle className="w-3 h-3 text-emerald-400 shrink-0" />
+            ) : (
+              <XCircle className="w-3 h-3 text-red-400/70 shrink-0" />
+            )}
+            {checklistIcon(item.key)}
+            <span className={`truncate ${item.passed ? 'font-medium' : 'line-through opacity-60'}`}>
+              {item.label}
+            </span>
+            {item.value && (
+              <span className={`ml-auto text-[10px] px-1 py-0.5 rounded ${
+                item.passed ? 'bg-emerald-500/10' : 'bg-red-500/10'
+              }`}>
+                {item.value}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Signals() {
   const [activeSignals, setActiveSignals] = useState<SignalData[]>([])
   const [selectedSymbol, setSelectedSymbol] = useState('EURUSD')
@@ -73,7 +151,6 @@ export default function Signals() {
       setError(null)
       const res = await signalsApi.active()
       const data = res.data?.signals || []
-      // Filter out null entries and partial signals
       setActiveSignals(data.filter((s: any) => s && s.id))
     } catch (e: any) {
       setError(e?.message || 'Failed to load active signals')
@@ -100,7 +177,6 @@ export default function Signals() {
       const res = await signalsApi.scan()
       const signals = res.data?.signals || []
       setScanResults(signals.filter((s: any) => s && s.id))
-      // Also refresh active signals
       await loadActive()
     } catch (e: any) {
       setError(e?.message || 'Scan failed')
@@ -136,6 +212,9 @@ export default function Signals() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* ICT Criteria Checklist */}
+        <ICTCriteriaChecklist checklist={sig.checklist} />
+
         {/* Confluences */}
         <div className="flex flex-wrap gap-1.5">
           {sig.confluences?.map((c) => (
@@ -189,15 +268,24 @@ export default function Signals() {
     if (!resp) return null
     const sig = resp.signal
     if (!sig) {
-      // No signal at all — show partial breakdown if available
+      const checklist = resp.checklist
+      const score = resp.score ?? 0
+      const maxScore = resp.max_score ?? 9
+      const quality = resp.quality ?? 'NONE'
       return (
         <Card className="border-amber-500/20 bg-amber-500/5">
-          <CardContent className="py-4">
+          <CardContent className="py-4 space-y-3">
             <div className="flex items-center gap-2 text-amber-400 text-sm">
               <AlertTriangle className="w-4 h-4" />
               <span className="font-semibold">No Signal — {resp.symbol}</span>
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${qualityBadge(quality)}`}>
+                {quality} ({score}/{maxScore})
+              </span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{resp.message}</p>
+            <p className="text-xs text-muted-foreground">{resp.message}</p>
+            {checklist && checklist.length > 0 && (
+              <ICTCriteriaChecklist checklist={checklist} />
+            )}
           </CardContent>
         </Card>
       )
