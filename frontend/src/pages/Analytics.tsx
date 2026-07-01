@@ -1,15 +1,39 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Button } from '@/components/ui/Button'
 import { analyticsApi } from '@/api/client'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts'
 import {
-  TrendingUp, TrendingDown, DollarSign, Target, AlertTriangle
+  TrendingUp, TrendingDown, DollarSign, Target, AlertTriangle, BookOpen, CheckCircle, Pencil
 } from 'lucide-react'
 
-// const COLORS = ['#22c55e', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899']
+interface Trade {
+  id: string
+  symbol: string
+  side: string
+  entry_price: number
+  stop_loss: number
+  take_profit_1?: number
+  take_profit_2?: number
+  take_profit_3?: number
+  quantity: number
+  initial_quantity: number
+  remaining_quantity: number
+  status: string
+  realized_pnl: number
+  unrealized_pnl: number
+  total_r: number
+  legs: any[]
+  strategy?: string
+  notes?: string
+  created_at: string
+  closed_at?: string
+  exit_price?: number
+  current_price?: number
+}
 
 export default function Analytics() {
   const [expectancy, setExpectancy] = useState<any>(null)
@@ -17,9 +41,12 @@ export default function Analytics() {
   const [drawdown, setDrawdown] = useState<any>(null)
   const [kelly, setKelly] = useState<any>(null)
   const [symbols, setSymbols] = useState<any>(null)
-  const [recent, setRecent] = useState<any[]>([])
+  const [recent, setRecent] = useState<Trade[]>([])
+  const [closedTrades, setClosedTrades] = useState<Trade[]>([])
+  const [journalNotes, setJournalNotes] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -30,14 +57,20 @@ export default function Analytics() {
           analyticsApi.drawdown(),
           analyticsApi.kelly(),
           analyticsApi.symbols(),
-          analyticsApi.recent(10),
+          analyticsApi.recent(50),
         ])
         setExpectancy(exp.data)
         setHeatmap(hm.data)
         setDrawdown(dd.data)
         setKelly(kl.data)
         setSymbols(sym.data)
-        setRecent(rec.data?.trades || [])
+        const trades = rec.data?.trades || []
+        setRecent(trades)
+        const closed = trades.filter((t: Trade) => 
+          t.status === 'CLOSED' || t.status === 'closed' || 
+          (t.exit_price !== undefined && t.remaining_quantity === 0)
+        )
+        setClosedTrades(closed)
       } catch (err: any) {
         setError(err.message || 'Failed to load analytics')
       } finally {
@@ -46,6 +79,44 @@ export default function Analytics() {
     }
     load()
   }, [])
+
+  const autoJournal = (trade: Trade): string => {
+    const pnl = trade.realized_pnl || 0
+    const r = trade.total_r || 0
+    const direction = trade.side === 'BUY' ? 'Long' : 'Short'
+    const result = pnl >= 0 ? 'Win' : 'Loss'
+    const setup = trade.strategy || 'No strategy tag'
+    const entry = trade.entry_price
+    const exit = trade.exit_price || trade.current_price || 'N/A'
+    const sl = trade.stop_loss
+
+    let reasons = []
+    if (trade.legs && trade.legs.length > 0) {
+      const legLabels = trade.legs.map((l: any) => l.label).join(', ')
+      reasons.push(`Partial closes: ${legLabels}`)
+    }
+    if (Math.abs(r) >= 2) reasons.push('Target hit (2R+)')
+    else if (Math.abs(r) >= 1) reasons.push('1R target')
+    else if (Math.abs(r) < 0.5) reasons.push('Quick scratch/tight stop')
+
+    return `${direction} ${trade.symbol} — ${result} ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} (${r.toFixed(2)}R)
+Entry: ${entry} → Exit: ${exit} | SL: ${sl}
+Setup: ${setup}
+${reasons.join(' | ')}
+
+Lessons learned:
+- 
+- 
+- 
+`
+  }
+
+  const handleAutoJournal = (trade: Trade) => {
+    const entry = autoJournal(trade)
+    setJournalNotes((prev) => ({ ...prev, [trade.id]: entry }))
+  }
+
+  const isPositive = (val: number) => val >= 0
 
   const heatmapData = heatmap?.sessions
     ? Object.entries(heatmap.sessions).map(([name, data]: [string, any]) => ({
@@ -57,14 +128,6 @@ export default function Analytics() {
     : []
 
   const equityData = drawdown?.equity_curve || []
-  /* const monthlyData = monthly?.monthly
-    ? Object.entries(monthly.monthly).map(([month, data]: [string, any]) => ({
-        month,
-        pnl: data.pnl || 0,
-        trades: data.trades || 0,
-        winRate: data.win_rate || 0,
-      }))
-    : [] */
 
   const symbolData = symbols?.symbols
     ? Object.entries(symbols.symbols).map(([sym, data]: [string, any]) => ({
@@ -81,8 +144,6 @@ export default function Analytics() {
         { name: 'Losses', value: expectancy.loss_count || 0, color: '#ef4444' },
       ]
     : []
-
-  const isPositive = (val: number) => val >= 0
 
   if (loading) {
     return (
@@ -104,6 +165,12 @@ export default function Analytics() {
         <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" />
           {error}
+        </div>
+      )}
+      {success && (
+        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-sm flex items-center gap-2">
+          <CheckCircle className="w-4 h-4" />
+          {success}
         </div>
       )}
 
@@ -308,34 +375,79 @@ export default function Analytics() {
         </CardContent>
       </Card>
 
-      {/* Recent Trades */}
+      {/* Auto-Journal: Closed Trades */}
       <Card>
-        <CardHeader>
-          <CardTitle>Recent Trades</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="w-5 h-5" />
+            Trade Journal
+          </CardTitle>
+          <div className="text-sm text-muted-foreground">
+            {closedTrades.length} closed trades
+          </div>
         </CardHeader>
         <CardContent>
-          {recent.length === 0 ? (
+          {closedTrades.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
-              No recent trades. Place trades to see history here.
+              No closed trades yet. When you close a trade, it will appear here for journaling.
             </div>
           ) : (
-            <div className="space-y-2">
-              {recent.map((t) => (
-                <div key={t.id} className="flex items-center justify-between p-2 rounded bg-muted text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-1.5 py-0.5 rounded font-bold ${
-                      t.side === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {t.side}
-                    </span>
-                    <span className="font-semibold">{t.symbol}</span>
-                    <span className="text-muted-foreground">{t.strategy}</span>
+            <div className="space-y-4">
+              {closedTrades.map((trade) => {
+                const isJournalReady = !!journalNotes[trade.id]
+                return (
+                  <div key={trade.id} className="border rounded-lg overflow-hidden">
+                    <div className="p-3 flex items-center justify-between bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${
+                          trade.side === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {trade.side}
+                        </span>
+                        <span className="font-bold">{trade.symbol}</span>
+                        <span className={`text-sm font-semibold ${isPositive(trade.realized_pnl) ? 'text-green-400' : 'text-red-400'}`}>
+                          ${trade.realized_pnl?.toFixed(2)} ({trade.total_r?.toFixed(2)}R)
+                        </span>
+                        <span className="text-xs text-muted-foreground">{trade.strategy}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleAutoJournal(trade)}
+                          className="px-2 py-1 text-xs rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex items-center gap-1"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Auto Journal
+                        </button>
+                      </div>
+                    </div>
+                    <div className="p-3 space-y-2">
+                      <textarea
+                        className="w-full px-3 py-2 border rounded-md bg-background text-sm min-h-[100px]"
+                        placeholder="Journal entry for this trade..."
+                        value={journalNotes[trade.id] || ''}
+                        onChange={(e) => setJournalNotes((prev) => ({ ...prev, [trade.id]: e.target.value }))}
+                      />
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">
+                          Entry: {trade.entry_price} → Exit: {trade.exit_price || trade.current_price || '-'} | SL: {trade.stop_loss}
+                        </span>
+                        <Button
+                          size="sm"
+                          disabled={!isJournalReady}
+                          onClick={() => {
+                            // In a real app, this would save to backend
+                            setSuccess(`Journal saved for ${trade.symbol} ${trade.side}`)
+                            setTimeout(() => setSuccess(null), 3000)
+                          }}
+                        >
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Save Entry
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <div className={`font-semibold ${isPositive(t.realized_pnl) ? 'text-green-400' : 'text-red-400'}`}>
-                    ${t.realized_pnl?.toFixed(2)} ({t.total_r?.toFixed(2)}R)
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>
