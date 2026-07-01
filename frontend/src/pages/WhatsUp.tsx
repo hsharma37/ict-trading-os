@@ -120,12 +120,12 @@ export default function WhatsUp() {
         tradesApi.open(),
         researchApi.all(),
       ])
-      const openTrades = tradesRes.data?.trades || []
+      const openTrades: Trade[] = tradesRes.data?.trades || []
       setTrades(openTrades)
       setInstruments(researchRes.data?.instruments || [])
       
       // Fetch live prices for all trade symbols
-      const symbols: string[] = [...new Set(openTrades.map((t: Trade) => t.symbol))]
+      const symbols = Array.from(new Set(openTrades.map((t: Trade) => t.symbol))) as string[]
       if (symbols.length > 0) {
         const pricePromises = symbols.map(async (sym: string) => {
           try {

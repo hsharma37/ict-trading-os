@@ -6,7 +6,7 @@ import { useKnowledgeBase } from '@/hooks/useKnowledgeBase'
 import {
   Youtube, FileText, Trash2, Search, Loader2, BookOpen,
   Tag, Clock, Eye, BarChart3, Brain, CheckCircle, AlertCircle,
-  ChevronDown, ChevronUp, ExternalLink, Activity, Hash,
+  ChevronDown, ChevronUp, ExternalLink, Hash,
   Zap, MessageSquare, X, Play, Download, GraduationCap, Filter
 } from 'lucide-react'
 
@@ -96,7 +96,6 @@ function buildAllSourcesMarkdown(sources: any[]): string {
 
 // Minimum quality thresholds for filtering "meaningful" content
 const MEANINGFUL_MIN_WORDS = 150
-const MEANINGFUL_MIN_RELEVANCE = 'medium' // high or medium
 
 function isMeaningful(source: any): boolean {
   const analysis = source.analysis || {}
@@ -124,7 +123,7 @@ export default function Knowledge() {
   const [ingestLogs, setIngestLogs] = useState<IngestLog[]>([])
   const [videoPreview, setVideoPreview] = useState<string | null>(null)
   const [showOnlyMeaningful, setShowOnlyMeaningful] = useState(false)
-  const [minWordCount, setMinWordCount] = useState(150)
+  const [minWordCount] = useState(150)
   const [relevanceFilter, setRelevanceFilter] = useState<string>('all')
 
   const logRef = useRef<HTMLDivElement>(null)

@@ -51,8 +51,9 @@ export default function TradingViewChart({ symbol, timeframe = '1h', height = 40
         color: '#26a69a',
         priceFormat: { type: 'volume' },
         priceScaleId: '',
-        scaleMargins: { top: 0.8, bottom: 0 },
       })
+      // Set volume scale margins separately
+      chart.priceScale('').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } })
     }
 
     chartRef.current = chart
