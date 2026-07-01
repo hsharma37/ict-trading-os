@@ -3,12 +3,11 @@ uvicorn==0.34.2
 python-multipart==0.0.20
 pydantic==2.11.4
 httpx==0.28.1
-aiohttp==3.11.18
 numpy==2.2.5
 python-dotenv==1.1.0
 yfinance==0.2.55
 scipy==1.15.3
-yt-dlp==2025.12.31
+yt-dlp==2026.6.9
 youtube-transcript-api>=1.2.4
 openai==1.76.2
 langchain==0.3.24
@@ -17,3 +16,4 @@ sentence-transformers==4.1.0
 faster-whisper==1.1.1
 pytest==8.3.5
 pytest-asyncio==0.25.3
+aiohttp==3.11.18

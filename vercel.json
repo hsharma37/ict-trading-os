@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "routes": [
+    { "src": "/(.*)", "dest": "/api/index" }
+  ],
+  "env": {
+    "DATABASE_PATH": ":memory:",
+    "AUTH_ENABLED": "false",
+    "CORS_ORIGINS": "*"
+  }
+}
