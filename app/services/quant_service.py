@@ -1,7 +1,13 @@
 """Quantitative analysis service."""
 import numpy as np
 from typing import List, Dict, Optional
-from scipy import stats
+
+try:
+    from scipy import stats
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+    stats = None
 
 class QuantService:
     def compute_metrics(self, trades: List[Dict]) -> Dict:
@@ -33,8 +39,8 @@ class QuantService:
         tail = sorted_r[:var_idx + 1]
         cvar_95 = np.mean(tail) if len(tail) > 0 else var_95
 
-        skew = stats.skew(returns) if n > 2 else None
-        kurt = stats.kurtosis(returns) if n > 2 else None
+        skew = stats.skew(returns) if n > 2 and HAS_SCIPY else None
+        kurt = stats.kurtosis(returns) if n > 2 and HAS_SCIPY else None
 
         return {
             "n_trades": n, "sharpe_ratio": round(sharpe, 3) if sharpe else None,
