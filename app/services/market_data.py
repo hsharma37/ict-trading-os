@@ -1,6 +1,6 @@
 """Live market data via Yahoo Finance."""
 import httpx
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime
 import random
 
@@ -11,7 +11,7 @@ from app.services.price_service import price_service
 # Kept for backward compatibility only
 SYMBOL_MAP = {
     "NQ1!": "NQ=F", "ES1!": "ES=F", "EURUSD": "EURUSD=X",
-    "GBPUSD": "GBPUSD=X", "XAUUSD": "GC=F", "USDJPY": "USDJPY=X",
+    "GBPUSD": "GBPUSD=X", "XAUUSD": "XAUUSD=X", "USDJPY": "USDJPY=X",
     "BTCUSD": "BTC-USD", "CL1!": "CL=F",
 }
 
@@ -29,6 +29,44 @@ MARKET_SPECS = {
 class MarketDataService:
     def __init__(self):
         self.price_history = {s: [] for s in SYMBOL_MAP.keys()}
+        self.manual_prices: Dict[str, Dict] = {}  # symbol -> {price, bid, ask, timestamp}
+
+    def set_manual_price(self, symbol: str, price: float, bid: float = None, ask: float = None) -> Dict:
+        """Set a manual price override (e.g., from MT5 broker feed)."""
+        from app.services.instrument_config import get_instrument
+        config = get_instrument(symbol)
+        digits = config.get("digits", 5) if config else 5
+        now = datetime.utcnow().isoformat()
+        self.manual_prices[symbol.upper()] = {
+            "price": round(price, digits),
+            "bid": round(bid, digits) if bid is not None else round(price, digits),
+            "ask": round(ask, digits) if ask is not None else round(price, digits),
+            "change": 0,
+            "change_pct": 0,
+            "volume": 0,
+            "timestamp": now,
+            "source": "manual"
+        }
+        return self.manual_prices[symbol.upper()]
+
+    def clear_manual_price(self, symbol: str) -> None:
+        """Clear manual price override and return to Yahoo Finance."""
+        self.manual_prices.pop(symbol.upper(), None)
+
+    def get_manual_price(self, symbol: str) -> Optional[Dict]:
+        """Get manual price if set and not expired (5 min)."""
+        data = self.manual_prices.get(symbol.upper())
+        if not data:
+            return None
+        # Check if expired (>5 minutes)
+        try:
+            ts = datetime.fromisoformat(data["timestamp"])
+            if (datetime.utcnow() - ts).total_seconds() > 300:
+                self.manual_prices.pop(symbol.upper(), None)
+                return None
+        except Exception:
+            pass
+        return data
 
     def _last_valid_value(self, values, default=None):
         if not values:
@@ -46,7 +84,14 @@ class MarketDataService:
         return SYMBOL_MAP.get(symbol, symbol)
 
     def get_price(self, symbol: str) -> Dict:
-        # Try price_service first (newer, cached, more reliable)
+        symbol = symbol.upper()
+        # 1. Check manual price override (MT5/broker feed)
+        manual = self.get_manual_price(symbol)
+        if manual:
+            manual["symbol"] = symbol
+            return manual
+        
+        # 2. Try price_service (cached Yahoo Finance)
         try:
             pdata = price_service.get_price(symbol)
             if pdata and not getattr(pdata, 'label', '').endswith('(mock)'):
@@ -64,7 +109,7 @@ class MarketDataService:
         except Exception:
             pass
 
-        # Fallback to direct Yahoo Finance API
+        # 3. Fallback to direct Yahoo Finance API
         yahoo_sym = self._get_yahoo_ticker(symbol)
         try:
             url = f'https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_sym}?range=1d&interval=1m'
@@ -105,7 +150,7 @@ class MarketDataService:
         except Exception:
             pass
         
-        # Final fallback: use price_service mock data
+        # 4. Final fallback: synthetic price
         try:
             pdata = price_service.get_price(symbol)
             if pdata:

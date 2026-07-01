@@ -235,10 +235,10 @@ class TradeLifecycleService:
         """Check all open trades against live prices for TP/SL hits.
         
         Auto-management rules:
-        - TP1 hit: close 30%, move SL to breakeven
-        - TP2 hit: close 50% of remaining
-        - TP3 hit: full close
         - SL hit: full close (only if SL not already at BE)
+        - TP1 hit: 33% partial close, move SL to breakeven
+        
+        After TP1, the trade is left to flow manually. No auto TP2/TP3 management.
         """
         actions = []
         open_trades = [t for t in db.get_collection("trades") if t.get("status") not in ("CLOSED", None)]
@@ -256,12 +256,8 @@ class TradeLifecycleService:
                 
             sl = trade.get("stop_loss")
             tp1 = trade.get("take_profit_1")
-            tp2 = trade.get("take_profit_2")
-            tp3 = trade.get("take_profit_3")
             
             tp1_hit = trade.get("tp1_hit", False)
-            tp2_hit = trade.get("tp2_hit", False)
-            tp3_hit = trade.get("tp3_hit", False)
             sl_at_be = trade.get("sl_at_be", False)
             
             # Determine if price has hit a level based on side
@@ -275,10 +271,10 @@ class TradeLifecycleService:
                 actions.append({"trade_id": trade["id"], "action": "SL_CLOSE", "price": current_price, "result": result})
                 continue
             
-            # TP1 hit: partial 30%, move SL to BE
+            # TP1 hit: 33% partial, move SL to BE
             if tp1 and not tp1_hit and hit(tp1):
-                result = self.partial_close(trade["id"], 0.30, current_price, "TP1")
-                actions.append({"trade_id": trade["id"], "action": "TP1_PARTIAL_30", "price": current_price, "result": result})
+                result = self.partial_close(trade["id"], 0.33, current_price, "TP1")
+                actions.append({"trade_id": trade["id"], "action": "TP1_PARTIAL_33", "price": current_price, "result": result})
                 # Move SL to BE if not already
                 if not sl_at_be and trade.get("stop_loss") != trade["entry_price"]:
                     be_result = self.move_sl_to_breakeven(trade["id"])
@@ -287,28 +283,6 @@ class TradeLifecycleService:
                 updated = db.find_one("trades", trade["id"])
                 if updated:
                     updated["tp1_hit"] = True
-                    updated["updated_at"] = datetime.utcnow().isoformat()
-                    db.update("trades", trade["id"], updated)
-                continue
-            
-            # TP2 hit: partial 50% of remaining
-            if tp2 and not tp2_hit and hit(tp2):
-                result = self.partial_close(trade["id"], 0.50, current_price, "TP2")
-                actions.append({"trade_id": trade["id"], "action": "TP2_PARTIAL_50", "price": current_price, "result": result})
-                updated = db.find_one("trades", trade["id"])
-                if updated:
-                    updated["tp2_hit"] = True
-                    updated["updated_at"] = datetime.utcnow().isoformat()
-                    db.update("trades", trade["id"], updated)
-                continue
-            
-            # TP3 hit: full close
-            if tp3 and not tp3_hit and hit(tp3):
-                result = self.full_close(trade["id"], current_price)
-                actions.append({"trade_id": trade["id"], "action": "TP3_FULL_CLOSE", "price": current_price, "result": result})
-                updated = db.find_one("trades", trade["id"])
-                if updated:
-                    updated["tp3_hit"] = True
                     updated["updated_at"] = datetime.utcnow().isoformat()
                     db.update("trades", trade["id"], updated)
                 continue

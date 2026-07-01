@@ -160,4 +160,17 @@ export const settingsApi = {
   update: (data: any) => apiClient.post('/settings', data),
 }
 
+// Market API
+export const marketApi = {
+  getPrice: (symbol: string) => apiClient.get(`/market/price/${symbol}`),
+  getPrices: (symbols?: string) => apiClient.get('/market/prices', symbols ? { params: { symbols } } : undefined),
+  setManualPrice: (symbol: string, price: number, bid?: number, ask?: number) =>
+    apiClient.post(`/market/manual-price/${symbol}`, null, { params: { price, bid, ask } }),
+  clearManualPrice: (symbol: string) => apiClient.delete(`/market/manual-price/${symbol}`),
+  getManualPrice: (symbol: string) => apiClient.get(`/market/manual-price/${symbol}`),
+  getHistory: (symbol: string, timeframe?: string, limit?: number) =>
+    apiClient.get(`/market/history/${symbol}`, { params: { timeframe, limit } }),
+  getInstruments: () => apiClient.get('/market/instruments'),
+}
+
 // Add interceptors here later (auth, error handling, etc.)
