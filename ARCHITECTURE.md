@@ -504,9 +504,9 @@ Here's how a trade flows through the entire system, from idea to journal entry:
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                    THE LIFE OF A TRADE — DATA FLOW                             │
+│                    THE LIFE OF A TRADE — DATA FLOW                           │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                               │
+│                                                                              │
 │  PHASE 1: RESEARCH & SETUP                                                    │
 │  ───────────────────────────────────────────────────────────────────────    │
 │                                                                               │
@@ -517,7 +517,7 @@ Here's how a trade flows through the entire system, from idea to journal entry:
 │                                                        │                      │
 │                                                        ▼                      │
 │                                               ┌──────────────┐              │
-│                                               │  Signal      │              │
+│                                               │  Signal      │             │
 │                                               │  Generated?  │──YES──┐     │
 │                                               │  (Score ≥2)  │       │     │
 │                                               └──────────────┘       │     │
@@ -756,7 +756,3 @@ The ICT Trading OS is more than just software — it's a **complete trading ecos
 Whether you're a beginner trying to understand why the market moves, or an experienced trader looking for an edge, this system provides the tools, structure, and insights to trade with confidence.
 
 > *"Trade what you see, not what you think."* — ICT Core Principle
-
----
-
-*Built with ❤️ by the gstack TechCEO team. Powered by FastAPI, React, and the ICT methodology.*
