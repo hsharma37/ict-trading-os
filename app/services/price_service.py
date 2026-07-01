@@ -20,6 +20,7 @@ import httpx
 import json
 import os
 from typing import Dict, Optional, Any
+from datetime import datetime
 from dataclasses import dataclass, asdict
 from app.services.instrument_config import get_instrument, get_all_instruments
 
@@ -36,7 +37,7 @@ class PriceData:
     open: float
     volume: int
     prev_close: float
-    timestamp: float
+    timestamp: str
     kind: str
     digits: int
 
@@ -107,7 +108,8 @@ class PriceService:
         if data:
             try:
                 # Check if data is not too old (6 hours)
-                age = time.time() - data.get('timestamp', 0)
+                ts = datetime.fromisoformat(data.get('timestamp', datetime.utcnow().isoformat()))
+                age = (datetime.utcnow() - ts).total_seconds()
                 if age < 21600:  # 6 hours
                     return PriceData(**data)
             except Exception:
@@ -176,7 +178,7 @@ class PriceService:
                                 open=round(open_, digits),
                                 volume=int(volume) if volume else 0,
                                 prev_close=round(prev_close, digits) if prev_close else round(current_price, digits),
-                                timestamp=now,
+                                timestamp=datetime.utcnow().isoformat(),
                                 kind=config.get("kind", "unknown"),
                                 digits=digits,
                             )
@@ -251,7 +253,7 @@ class PriceService:
                                         open=round(price, digits),
                                         volume=0,
                                         prev_close=round(price, digits),
-                                        timestamp=now,
+                                        timestamp=datetime.utcnow().isoformat(),
                                         kind=config.get("kind", "unknown"),
                                         digits=digits,
                                     )
@@ -282,7 +284,7 @@ class PriceService:
             open=round(base, digits),
             volume=0,
             prev_close=round(base, digits),
-            timestamp=now,
+            timestamp=datetime.utcnow().isoformat(),
             kind=config.get("kind", "unknown"),
             digits=digits,
         )

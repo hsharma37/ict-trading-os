@@ -1931,3 +1931,787 @@ INFO:     127.0.0.1:54324 - "GET /research/all HTTP/1.1" 200 OK
 INFO:     127.0.0.1:54327 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
 [PriceService] Using synthetic price for XAUUSD
 INFO:     127.0.0.1:55020 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55026 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55028 - "GET /research/correlation HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for connections to close. (CTRL+C to force quit)
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55026 - "GET /research/all HTTP/1.1" 200 OK
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [11477]
+/Users/hsharma5/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [11590]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[VectorStore] sentence-transformers not installed, using TF-IDF fallback
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:55070 - "GET /market/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55073 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:55077 - "GET /market/price-debug/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55082 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55086 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55091 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55095 - "GET /signals/active HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55097 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55097 - "POST /signals/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55097 - "GET /signals/active HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55132 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55136 - "GET /signals/active HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55148 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55138 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55139 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55148 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55139 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55139 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55148 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55139 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55148 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55139 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55326 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55148 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55326 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55148 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55326 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55148 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55326 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55148 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55326 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55139 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55148 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55148 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55139 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55139 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55148 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:55326 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55326 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55148 - "GET /market/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55326 - "OPTIONS /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55148 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55139 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:55326 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for EURUSD
+INFO:     127.0.0.1:55148 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:55139 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:55148 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56055 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56055 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56064 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56068 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56068 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56077 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56080 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56080 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56090 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56094 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56094 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56103 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56106 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56106 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56115 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56119 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56119 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56128 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56136 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56135 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56136 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56153 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56152 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56153 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56166 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56165 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56166 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56176 - "GET /analytics/kelly HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56178 - "GET /analytics/recent?limit=50 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56177 - "GET /analytics/symbols HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56166 - "GET /analytics/heatmap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56165 - "GET /analytics/expectancy HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56175 - "GET /analytics/drawdown HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56178 - "GET /research/correlation HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:56176 - "GET /research/all HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56218 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56222 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56228 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56233 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56240 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56240 - "GET /quant/trend/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:56246 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56253 - "GET /quant/trend/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56253 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56262 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56267 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56273 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56278 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56284 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56289 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56295 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56300 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56306 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56311 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56317 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56322 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56328 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56333 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56339 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56344 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56350 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56355 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56361 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56366 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56373 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56379 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56386 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56392 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56398 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56403 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56409 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56414 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56420 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56425 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56431 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56436 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56442 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56448 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56455 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56460 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for XAUUSD
+INFO:     127.0.0.1:56470 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK

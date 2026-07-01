@@ -103,11 +103,14 @@ class MarketDataService:
                     source = 'scraped'
                 else:
                     source = 'yahoo'
+                config = get_instrument(symbol)
+                kind = config.get("kind", "") if config else ""
+                spread = pdata.price * 0.00001 if kind == "forex" else pdata.price * 0.0001
                 return {
                     'symbol': pdata.symbol,
                     'price': round(pdata.price, 5),
-                    'bid': round(pdata.low, 5),
-                    'ask': round(pdata.high, 5),
+                    'bid': round(pdata.price - spread, 5),
+                    'ask': round(pdata.price + spread, 5),
                     'change': round(pdata.change, 5),
                     'change_pct': round(pdata.change_percent, 3),
                     'volume': int(pdata.volume),
@@ -162,11 +165,14 @@ class MarketDataService:
         try:
             pdata = price_service.get_price(symbol)
             if pdata:
+                config = get_instrument(symbol)
+                kind = config.get("kind", "") if config else ""
+                spread = pdata.price * 0.00001 if kind == "forex" else pdata.price * 0.0001
                 return {
                     'symbol': pdata.symbol,
                     'price': round(pdata.price, 5),
-                    'bid': round(pdata.low, 5),
-                    'ask': round(pdata.high, 5),
+                    'bid': round(pdata.price - spread, 5),
+                    'ask': round(pdata.price + spread, 5),
                     'change': round(pdata.change, 5),
                     'change_pct': round(pdata.change_percent, 3),
                     'volume': int(pdata.volume),

@@ -168,9 +168,11 @@ class LotCalculator:
         risk_pct: float,
         sl_pips: float,
         entry_price: Optional[float] = None,
+        side: str = "BUY",
     ) -> Dict:
         """Quick lot calculation using pip distance instead of absolute price."""
         symbol = symbol.upper()
+        side = side.upper()
         config = get_instrument(symbol)
         if not config:
             return {"symbol": symbol, "error": "Unknown symbol"}
@@ -182,7 +184,10 @@ class LotCalculator:
                 return {"symbol": symbol, "error": "Could not fetch live price"}
 
         pip_size = PIP_SIZES.get(symbol, 0.0001)
-        sl_price = entry_price - (sl_pips * pip_size)  # approximate for BUY
+        if side == "BUY":
+            sl_price = entry_price - (sl_pips * pip_size)
+        else:  # SELL
+            sl_price = entry_price + (sl_pips * pip_size)
 
         return self.calculate(symbol, entry_price, sl_price, account_balance, risk_pct)
 

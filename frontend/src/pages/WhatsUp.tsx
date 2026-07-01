@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -108,6 +108,10 @@ export default function WhatsUp() {
   const [manualSymbol, setManualSymbol] = useState('')
   const [countdown, setCountdown] = useState(10)
 
+  const selectedTradeRef = useRef<Trade | null>(null)
+  // Keep ref in sync with state
+  useEffect(() => { selectedTradeRef.current = selectedTrade }, [selectedTrade])
+
   const fetchData = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true)
     try {
@@ -139,8 +143,9 @@ export default function WhatsUp() {
         setLivePrices(priceMap)
       }
       
-      if (selectedTrade && openTrades.length > 0) {
-        const updated = openTrades.find((t: Trade) => t.id === selectedTrade.id)
+      const currentSelected = selectedTradeRef.current
+      if (currentSelected && openTrades.length > 0) {
+        const updated = openTrades.find((t: Trade) => t.id === currentSelected.id)
         if (updated) setSelectedTrade(updated)
       }
       setLastUpdate(new Date())
@@ -151,7 +156,7 @@ export default function WhatsUp() {
       setLoading(false)
       if (showRefresh) setRefreshing(false)
     }
-  }, [selectedTrade])
+  }, []) // No dependencies — stable reference
 
   useEffect(() => {
     fetchData()
@@ -159,15 +164,15 @@ export default function WhatsUp() {
       fetchData()
     }, 10000)
     return () => clearInterval(interval)
-  }, [fetchData])
+  }, []) // Empty deps — interval runs once on mount
 
-  // Countdown timer
+  // Countdown timer — independent of lastUpdate to avoid re-subscription
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown((prev) => (prev > 0 ? prev - 1 : 10))
     }, 1000)
     return () => clearInterval(timer)
-  }, [lastUpdate])
+  }, []) // Empty deps — countdown runs independently
 
   const isPositive = (val: number) => val >= 0
   const totalPnl = trades.reduce((sum, t) => sum + (t.realized_pnl || 0) + (t.unrealized_pnl || 0), 0)

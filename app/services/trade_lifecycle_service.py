@@ -40,6 +40,19 @@ class TradeLifecycleService:
         if entry_price <= 0:
             return {"error": f"Could not fetch live price for {symbol}"}
 
+        side = side.upper() if side else "BUY"
+
+        # Validate side
+        if side not in ("BUY", "SELL"):
+            return {"error": "Invalid side: must be BUY or SELL"}
+
+        # Validate stop loss direction relative to entry
+        if stop_loss > 0:
+            if side == "BUY" and stop_loss >= entry_price:
+                return {"error": "Invalid stop loss: For BUY, SL must be below entry price. For SELL, SL must be above entry price."}
+            if side == "SELL" and stop_loss <= entry_price:
+                return {"error": "Invalid stop loss: For BUY, SL must be below entry price. For SELL, SL must be above entry price."}
+
         # Auto-calculate lot size if not provided and SL is valid
         if quantity is None or quantity <= 0:
             if stop_loss > 0 and stop_loss != entry_price:
@@ -277,6 +290,14 @@ class TradeLifecycleService:
                 result = self.full_close(trade["id"], current_price)
                 actions.append({"trade_id": trade["id"], "action": "SL_CLOSE", "price": current_price, "result": result})
                 continue
+            
+            # BE stop loss hit check
+            if sl_at_be:
+                be_hit = (side == "BUY" and current_price <= trade["entry_price"]) or (side == "SELL" and current_price >= trade["entry_price"])
+                if be_hit:
+                    result = self.full_close(trade["id"], current_price)
+                    actions.append({"trade_id": trade["id"], "action": "BE_CLOSE", "price": current_price, "result": result})
+                    continue
             
             # TP1 hit: 33% partial, move SL to BE
             if tp1_hit_now and not tp1_hit:
