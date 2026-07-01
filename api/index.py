@@ -5,8 +5,11 @@ import sys
 # Add project root to path so imports work
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Use /tmp for Vercel serverless (writable filesystem)
+# CRITICAL: Set env vars BEFORE importing any app modules
+# so the db singleton picks up the correct path
 os.environ.setdefault("DATABASE_PATH", "/tmp/ictos.db")
+os.environ.setdefault("CORS_ORIGINS", "*")
+os.environ.setdefault("AUTH_ENABLED", "false")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
