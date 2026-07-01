@@ -15,6 +15,8 @@ import {
   MessageSquare,
   Monitor,
   Brain,
+  FlaskConical,
+  Zap,
 } from 'lucide-react'
 
 const navItems = [
@@ -22,6 +24,8 @@ const navItems = [
   { path: '/mt5', label: 'MT5 Terminal', icon: Monitor },
   { path: '/execute', label: 'Execute', icon: ArrowRightLeft },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { path: '/research', label: 'Research', icon: FlaskConical },
+  { path: '/signals', label: 'Signals', icon: Zap },
   { path: '/telegram', label: 'Telegram', icon: MessageSquare },
   { path: '/knowledge', label: 'Knowledge', icon: Brain },
   { path: '/library', label: 'Library', icon: Library },

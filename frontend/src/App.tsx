@@ -9,6 +9,8 @@ import Settings from './pages/Settings'
 import Library from './pages/Library'
 import WhatsUp from './pages/WhatsUp'
 import TelegramFeed from './pages/TelegramFeed'
+import QuantLab from './pages/QuantLab'
+import Signals from './pages/Signals'
 
 function App() {
   return (
@@ -18,6 +20,8 @@ function App() {
         <Route path="/mt5" element={<MT5Terminal />} />
         <Route path="/execute" element={<Execute />} />
         <Route path="/analytics" element={<Analytics />} />
+        <Route path="/research" element={<QuantLab />} />
+        <Route path="/signals" element={<Signals />} />
         <Route path="/telegram" element={<TelegramFeed />} />
         <Route path="/knowledge" element={<Knowledge />} />
         <Route path="/library" element={<Library />} />

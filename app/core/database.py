@@ -1,6 +1,7 @@
 import sqlite3
 import json
 import os
+import uuid
 from typing import Dict, List, Any
 from datetime import datetime
 
@@ -43,7 +44,7 @@ class SQLiteDB:
         return rows
 
     def insert(self, name: str, doc: Dict) -> Dict:
-        doc_id = doc.get("id") or f"{name[:3].upper()}-{int(datetime.utcnow().timestamp()*1000)}"
+        doc_id = doc.get("id") or f"{name[:3].upper()}-{int(datetime.utcnow().timestamp()*1000)}-{uuid.uuid4().hex[:6]}"
         doc["id"] = doc_id
         now = datetime.utcnow().isoformat()
         doc["created_at"] = doc.get("created_at") or now
