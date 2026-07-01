@@ -116,11 +116,20 @@ export const telegramApi = {
     apiClient.post('/telegram/configure', data),
 }
 
-// Market API
+// Market API (includes manual price override)
 export const marketApi = {
   price: (symbol: string) => apiClient.get(`/market/price/${symbol}`),
+  getPrice: (symbol: string) => apiClient.get(`/market/price/${symbol}`),
+  getPrices: (symbols?: string) => apiClient.get('/market/prices', symbols ? { params: { symbols } } : undefined),
   history: (symbol: string, timeframe?: string) => apiClient.get(`/market/history/${symbol}`, { params: { timeframe } }),
+  getHistory: (symbol: string, timeframe?: string, limit?: number) =>
+    apiClient.get(`/market/history/${symbol}`, { params: { timeframe, limit } }),
   instruments: () => apiClient.get('/market/instruments'),
+  getInstruments: () => apiClient.get('/market/instruments'),
+  setManualPrice: (symbol: string, price: number, bid?: number, ask?: number) =>
+    apiClient.post(`/market/manual-price/${symbol}`, null, { params: { price, bid, ask } }),
+  clearManualPrice: (symbol: string) => apiClient.delete(`/market/manual-price/${symbol}`),
+  getManualPrice: (symbol: string) => apiClient.get(`/market/manual-price/${symbol}`),
 }
 
 // MT5 API
@@ -158,19 +167,6 @@ export const newsApi = {
 export const settingsApi = {
   get: () => apiClient.get('/settings'),
   update: (data: any) => apiClient.post('/settings', data),
-}
-
-// Market API
-export const marketApi = {
-  getPrice: (symbol: string) => apiClient.get(`/market/price/${symbol}`),
-  getPrices: (symbols?: string) => apiClient.get('/market/prices', symbols ? { params: { symbols } } : undefined),
-  setManualPrice: (symbol: string, price: number, bid?: number, ask?: number) =>
-    apiClient.post(`/market/manual-price/${symbol}`, null, { params: { price, bid, ask } }),
-  clearManualPrice: (symbol: string) => apiClient.delete(`/market/manual-price/${symbol}`),
-  getManualPrice: (symbol: string) => apiClient.get(`/market/manual-price/${symbol}`),
-  getHistory: (symbol: string, timeframe?: string, limit?: number) =>
-    apiClient.get(`/market/history/${symbol}`, { params: { timeframe, limit } }),
-  getInstruments: () => apiClient.get('/market/instruments'),
 }
 
 // Add interceptors here later (auth, error handling, etc.)
