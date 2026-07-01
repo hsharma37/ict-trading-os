@@ -554,7 +554,6 @@ Here's how a trade flows through the entire system, from idea to journal entry:
 │                              │                                              │
 │                              ├── TP1 Hit ──► Partial Close (33%) + BE SL   │
 │                              ├── SL Hit  ──► Full Close (Loss)             │
-│                              ├── BE Hit  ──► Full Close (Breakeven)        │
 │                              └── Nothing ──► Continue Monitoring             │
 │                                                                               │
 │  PHASE 4: CLOSURE & JOURNALING                                                │

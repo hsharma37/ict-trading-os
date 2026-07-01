@@ -214,52 +214,114 @@ class PriceService:
         return self._synthetic_price(symbol, config)
 
     def _scrape_price(self, symbol: str, config: Dict) -> Optional[PriceData]:
-        """Try to scrape price from alternative sources."""
+        """Try to scrape price from multiple alternative sources."""
         now = time.time()
         digits = config.get("digits", 5)
+        import re
 
-        # Try Kitco gold scraper for XAUUSD
         if symbol == "XAUUSD":
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+            }
+
+            # Source 1: Kitco (gold spot)
             try:
-                url = "https://www.kitco.com/charts/gold.html"
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
                 with httpx.Client(timeout=10.0, headers=headers) as client:
-                    resp = client.get(url)
+                    resp = client.get("https://www.kitco.com/gold-price-today-usa/")
                     if resp.status_code == 200:
                         html = resp.text
-                        # Look for price in the page
-                        import re
-                        # Try to find the current price in various formats
+                        # Kitco shows price like: <span class="data- spot">4049.50</span>
+                        # Also: data-spot="4049.50"
                         patterns = [
-                            r'"price":\s*([\d,]+\.?\d*)',
-                            r'Gold[^\d]*(\d{3,4}\.\d{2})',
-                            r'>(\d{3,4}\.\d{2})\s*<',
+                            r'[\"\']spot[\"\'][^>]*>([\d,]+\.\d{2})<',
+                            r'["\']*spot["\']*[:\s=]+["\']?([\d,]+\.\d{2})',
+                            r'Gold[^\d]*([\d,]{3,4}\.\d{2})',
+                            r'class=["\'][^"\']*price[^"\']*["\'][^>]*>([\d,]+\.\d{2})',
                         ]
                         for pattern in patterns:
-                            match = re.search(pattern, html)
+                            match = re.search(pattern, html, re.IGNORECASE)
                             if match:
                                 price_str = match.group(1).replace(',', '')
                                 price = float(price_str)
-                                if 2000 < price < 10000:  # Sanity check for gold
+                                if 2000 < price < 10000:
                                     return PriceData(
                                         symbol=symbol,
-                                        label=config.get("label", symbol) + " (scraped)",
+                                        label=config.get("label", symbol) + " (kitco)",
                                         price=round(price, digits),
-                                        change=0.0,
-                                        change_percent=0.0,
-                                        high=round(price, digits),
-                                        low=round(price, digits),
-                                        open=round(price, digits),
-                                        volume=0,
+                                        change=0.0, change_percent=0.0,
+                                        high=round(price, digits), low=round(price, digits),
+                                        open=round(price, digits), volume=0,
                                         prev_close=round(price, digits),
                                         timestamp=datetime.utcnow().isoformat(),
-                                        kind=config.get("kind", "unknown"),
-                                        digits=digits,
+                                        kind=config.get("kind", "unknown"), digits=digits,
                                     )
             except Exception as e:
-                print(f"[PriceService] Scrape failed for {symbol}: {e}")
+                print(f"[PriceService] Kitco scrape failed: {e}")
+
+            # Source 2: gold.org (LBMA gold price)
+            try:
+                with httpx.Client(timeout=10.0, headers=headers) as client:
+                    resp = client.get("https://www.gold.org/goldhub/data/gold-prices")
+                    if resp.status_code == 200:
+                        html = resp.text
+                        # LBMA price format: "4,049.50" or "4049.50"
+                        patterns = [
+                            r'([\d,]+\.\d{2})\s*USD',
+                            r'price[^>]*>([\d,]+\.\d{2})<',
+                            r'\$([\d,]+\.\d{2})',
+                        ]
+                        for pattern in patterns:
+                            match = re.search(pattern, html, re.IGNORECASE)
+                            if match:
+                                price_str = match.group(1).replace(',', '')
+                                price = float(price_str)
+                                if 2000 < price < 10000:
+                                    return PriceData(
+                                        symbol=symbol,
+                                        label=config.get("label", symbol) + " (gold.org)",
+                                        price=round(price, digits),
+                                        change=0.0, change_percent=0.0,
+                                        high=round(price, digits), low=round(price, digits),
+                                        open=round(price, digits), volume=0,
+                                        prev_close=round(price, digits),
+                                        timestamp=datetime.utcnow().isoformat(),
+                                        kind=config.get("kind", "unknown"), digits=digits,
+                                    )
+            except Exception as e:
+                print(f"[PriceService] gold.org scrape failed: {e}")
+
+            # Source 3: investing.com (gold spot)
+            try:
+                with httpx.Client(timeout=10.0, headers=headers) as client:
+                    resp = client.get("https://www.investing.com/currencies/xau-usd")
+                    if resp.status_code == 200:
+                        html = resp.text
+                        patterns = [
+                            r'["\']last-price["\'][^>]*>([\d,]+\.\d{2})<',
+                            r'last-price[^>]*>([\d,]+\.\d{2})',
+                            r'([\d,]{3,4}\.\d{2})\s*USD',
+                        ]
+                        for pattern in patterns:
+                            match = re.search(pattern, html, re.IGNORECASE)
+                            if match:
+                                price_str = match.group(1).replace(',', '')
+                                price = float(price_str)
+                                if 2000 < price < 10000:
+                                    return PriceData(
+                                        symbol=symbol,
+                                        label=config.get("label", symbol) + " (investing.com)",
+                                        price=round(price, digits),
+                                        change=0.0, change_percent=0.0,
+                                        high=round(price, digits), low=round(price, digits),
+                                        open=round(price, digits), volume=0,
+                                        prev_close=round(price, digits),
+                                        timestamp=datetime.utcnow().isoformat(),
+                                        kind=config.get("kind", "unknown"), digits=digits,
+                                    )
+            except Exception as e:
+                print(f"[PriceService] investing.com scrape failed: {e}")
 
         return None
 
