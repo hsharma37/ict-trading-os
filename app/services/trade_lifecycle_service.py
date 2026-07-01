@@ -329,7 +329,20 @@ class TradeLifecycleService:
         closed = [t for t in trades if t.get("status") == "CLOSED"]
         open_trades = [t for t in trades if t.get("status") != "CLOSED"]
 
-        total_pnl = round(sum(t.get("realized_pnl", 0) for t in closed), 2)
+        # Update open trades with current prices for accurate stats
+        for t in open_trades:
+            if t.get("remaining_quantity", 0) > 0:
+                live = market_service.get_price(t["symbol"])
+                current_price = live.get("price", 0)
+                if current_price > 0:
+                    t["current_price"] = round(current_price, 5)
+                    t["unrealized_pnl"] = round(self._calc_pnl(t["symbol"], t["side"], t["entry_price"], current_price, t["remaining_quantity"]), 2)
+
+        # Total P&L includes both closed realized + open unrealized
+        closed_pnl = sum(t.get("realized_pnl", 0) for t in closed)
+        open_unrealized = sum(t.get("unrealized_pnl", 0) for t in open_trades)
+        total_pnl = round(closed_pnl + open_unrealized, 2)
+        
         wins = [t for t in closed if t.get("realized_pnl", 0) > 0]
         losses = [t for t in closed if t.get("realized_pnl", 0) <= 0]
         win_rate = round(len(wins) / len(closed) * 100, 1) if closed else 0

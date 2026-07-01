@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import {
-  TrendingUp, DollarSign, Activity, Target, AlertTriangle
+  TrendingUp, DollarSign, Activity, Target, AlertTriangle, Newspaper, Globe, BarChart3
 } from 'lucide-react'
-import { tradesApi, researchApi } from '@/api/client'
-import TradingViewChart from '@/components/TradingViewChart'
+import { tradesApi, researchApi, newsApi } from '@/api/client'
 
 interface TradeStats {
   total_trades: number
@@ -41,27 +40,39 @@ interface Instrument {
   sentiment: string
 }
 
+interface NewsItem {
+  headline: string
+  source: string
+  category: string
+  symbols: string[]
+  timestamp: string
+  summary: string
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<TradeStats | null>(null)
   const [movers, setMovers] = useState<MarketMover[]>([])
   const [instruments, setInstruments] = useState<Instrument[]>([])
   const [openTrades, setOpenTrades] = useState<any[]>([])
+  const [news, setNews] = useState<NewsItem[]>([])
+  const [newsFilter, setNewsFilter] = useState('All')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [chartSymbol, setChartSymbol] = useState('EURUSD')
 
   const loadData = useCallback(async () => {
     try {
       setError(null)
-      const [statsRes, researchRes, openRes] = await Promise.all([
+      const [statsRes, researchRes, openRes, newsRes] = await Promise.all([
         tradesApi.stats(),
         researchApi.summary(),
         tradesApi.open(),
+        newsApi.latest(),
       ])
       setStats(statsRes.data)
       setMovers(researchRes.data?.biggest_movers || [])
       setInstruments(researchRes.data?.instruments?.slice(0, 4) || [])
       setOpenTrades(openRes.data?.trades || [])
+      setNews(newsRes.data?.news || [])
     } catch (e: any) {
       setError(e?.message || 'Failed to load dashboard data')
     } finally {
@@ -77,6 +88,12 @@ export default function Dashboard() {
 
   const isPositive = (val: number) => val >= 0
 
+  const filteredNews = newsFilter === 'All'
+    ? news
+    : news.filter(n => n.category === newsFilter || n.symbols.includes(newsFilter))
+
+  const newsCategories = ['All', ...Array.from(new Set(news.map(n => n.category)))]
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -90,7 +107,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of your trading activity</p>
+        <p className="text-muted-foreground">Overview of your trading activity and market news</p>
       </div>
 
       {error && (
@@ -112,7 +129,7 @@ export default function Dashboard() {
               ${(stats?.total_pnl || 0).toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {stats?.closed_trades || 0} closed trades
+              {stats?.closed_trades || 0} closed + {stats?.open_trades || 0} open
             </p>
           </CardContent>
         </Card>
@@ -159,22 +176,57 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Chart Section */}
+      {/* News Feed Section */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Price Chart</CardTitle>
-          <select
-            className="px-2 py-1 text-xs border rounded-md bg-background"
-            value={chartSymbol}
-            onChange={(e) => setChartSymbol(e.target.value)}
-          >
-            {['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!'].map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Newspaper className="w-4 h-4" />
+            Market News
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <select
+              className="px-2 py-1 text-xs border rounded-md bg-background"
+              value={newsFilter}
+              onChange={(e) => setNewsFilter(e.target.value)}
+            >
+              {newsCategories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <Globe className="w-4 h-4 text-muted-foreground" />
+          </div>
         </CardHeader>
         <CardContent>
-          <TradingViewChart symbol={chartSymbol} timeframe="1h" height={350} />
+          {filteredNews.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-4">No news available</p>
+          ) : (
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              {filteredNews.map((item, i) => (
+                <div key={i} className="p-3 rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold text-primary">{item.category}</span>
+                        <span className="text-xs text-muted-foreground">{item.source}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(item.timestamp).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <h3 className="text-sm font-semibold leading-tight">{item.headline}</h3>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.summary}</p>
+                      <div className="flex gap-1 mt-1">
+                        {item.symbols.map((s) => (
+                          <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -223,7 +275,10 @@ export default function Dashboard() {
         {/* Market Movers */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Market Movers</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Market Movers
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {movers.length === 0 ? (

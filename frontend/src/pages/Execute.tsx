@@ -114,6 +114,15 @@ export default function Execute() {
     return () => clearInterval(interval)
   }, [fetchOpenTrades])
 
+  // Auto-fill SL/TP when side changes
+  useEffect(() => {
+    const ep = parseFloat(entryPrice)
+    if (ep > 0) {
+      autoFillSLTP(ep)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [side])
+
   // Auto-fetch live price when symbol changes
   useEffect(() => {
     async function fetchPrice() {

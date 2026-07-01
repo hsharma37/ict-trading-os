@@ -44,15 +44,36 @@ def get_coach():
 @router.get("/trend/{symbol}", summary="Trend analysis: SMA, momentum")
 def trend_analysis(symbol: str):
     """Return SMA crossover and momentum indicators."""
-    candles = market_service.get_history(symbol, "1h", 100)
-    if not candles:
-        raise HTTPException(status_code=404, detail="No data available")
+    try:
+        candles = market_service.get_history(symbol, "1h", 100)
+    except Exception:
+        candles = []
+    if not candles or len(candles) < 20:
+        return {
+            "symbol": symbol,
+            "trend": "NEUTRAL",
+            "sma20": None,
+            "sma50": None,
+            "momentum_10h": 0,
+            "price": None,
+            "timestamp": datetime.utcnow().isoformat(),
+            "note": "Insufficient market data",
+        }
     closes = [c["close"] for c in candles if c.get("close")]
-    if len(closes) < 50:
-        raise HTTPException(status_code=404, detail="Insufficient data")
+    if len(closes) < 20:
+        return {
+            "symbol": symbol,
+            "trend": "NEUTRAL",
+            "sma20": None,
+            "sma50": None,
+            "momentum_10h": 0,
+            "price": round(closes[-1], 5) if closes else None,
+            "timestamp": datetime.utcnow().isoformat(),
+            "note": "Insufficient close data",
+        }
     sma20 = sum(closes[-20:]) / 20
-    sma50 = sum(closes[-50:]) / 50
-    momentum = ((closes[-1] - closes[-10]) / closes[-10] * 100) if closes[-10] > 0 else 0
+    sma50 = sum(closes[-50:]) / 50 if len(closes) >= 50 else sma20
+    momentum = ((closes[-1] - closes[-10]) / closes[-10] * 100) if len(closes) >= 10 and closes[-10] > 0 else 0
     trend = "BULLISH" if sma20 > sma50 * 1.001 else "BEARISH" if sma20 < sma50 * 0.999 else "NEUTRAL"
     return {
         "symbol": symbol,
@@ -68,18 +89,46 @@ def trend_analysis(symbol: str):
 @router.get("/volatility/{symbol}", summary="Volatility analysis: ATR, Bollinger Bands")
 def volatility_analysis(symbol: str):
     """Return ATR and Bollinger Bands for a symbol."""
-    candles = market_service.get_history(symbol, "1h", 50)
-    if not candles or len(candles) < 20:
-        raise HTTPException(status_code=404, detail="No data available")
+    try:
+        candles = market_service.get_history(symbol, "1h", 50)
+    except Exception:
+        candles = []
+    if not candles or len(candles) < 10:
+        return {
+            "symbol": symbol,
+            "atr": None,
+            "sma20": None,
+            "upper_band": None,
+            "lower_band": None,
+            "current_price": None,
+            "dist_to_upper_pct": 0,
+            "dist_to_lower_pct": 0,
+            "regime": "UNKNOWN",
+            "timestamp": datetime.utcnow().isoformat(),
+            "note": "Insufficient market data",
+        }
     closes = [c["close"] for c in candles if c.get("close")]
     highs = [c["high"] for c in candles if c.get("high")]
     lows = [c["low"] for c in candles if c.get("low")]
-    if len(closes) < 20:
-        raise HTTPException(status_code=404, detail="Insufficient data")
+    if len(closes) < 10:
+        return {
+            "symbol": symbol,
+            "atr": None,
+            "sma20": None,
+            "upper_band": None,
+            "lower_band": None,
+            "current_price": round(closes[-1], 5) if closes else None,
+            "dist_to_upper_pct": 0,
+            "dist_to_lower_pct": 0,
+            "regime": "UNKNOWN",
+            "timestamp": datetime.utcnow().isoformat(),
+            "note": "Insufficient close data",
+        }
     # SMA 20
-    sma20 = sum(closes[-20:]) / 20
+    sma20 = sum(closes[-20:]) / 20 if len(closes) >= 20 else sum(closes) / len(closes)
     # Std dev
-    variance = sum((c - sma20) ** 2 for c in closes[-20:]) / 20
+    sample = closes[-20:] if len(closes) >= 20 else closes
+    variance = sum((c - sma20) ** 2 for c in sample) / len(sample)
     std = variance ** 0.5
     upper = sma20 + 2 * std
     lower = sma20 - 2 * std
@@ -91,7 +140,7 @@ def volatility_analysis(symbol: str):
         prev_close = candles[i - 1]["close"]
         tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
         trs.append(tr)
-    atr = sum(trs[-14:]) / 14 if len(trs) >= 14 else sum(trs) / len(trs)
+    atr = sum(trs[-14:]) / 14 if len(trs) >= 14 else sum(trs) / len(trs) if trs else 0
     current = closes[-1]
     dist_to_upper = round((upper - current) / current * 100, 3) if current > 0 else 0
     dist_to_lower = round((current - lower) / current * 100, 3) if current > 0 else 0
@@ -113,9 +162,23 @@ def volatility_analysis(symbol: str):
 @router.get("/levels/{symbol}", summary="Support / Resistance levels")
 def levels_analysis(symbol: str):
     """Return swing high/low based support and resistance."""
-    candles = market_service.get_history(symbol, "1h", 50)
-    if not candles or len(candles) < 20:
-        raise HTTPException(status_code=404, detail="No data available")
+    try:
+        candles = market_service.get_history(symbol, "1h", 50)
+    except Exception:
+        candles = []
+    if not candles or len(candles) < 10:
+        return {
+            "symbol": symbol,
+            "support": None,
+            "resistance": None,
+            "current_price": None,
+            "dist_to_support_pct": 0,
+            "dist_to_resistance_pct": 0,
+            "swing_highs": [],
+            "swing_lows": [],
+            "timestamp": datetime.utcnow().isoformat(),
+            "note": "Insufficient market data",
+        }
     recent = candles[-20:]
     highs = [c["high"] for c in recent]
     lows = [c["low"] for c in recent]
@@ -126,16 +189,16 @@ def levels_analysis(symbol: str):
             swing_highs.append(recent[i]["high"])
         if recent[i]["low"] < recent[i - 1]["low"] and recent[i]["low"] < recent[i + 1]["low"]:
             swing_lows.append(recent[i]["low"])
-    resistance = max(swing_highs) if swing_highs else max(highs)
-    support = min(swing_lows) if swing_lows else min(lows)
+    resistance = max(swing_highs) if swing_highs else max(highs) if highs else None
+    support = min(swing_lows) if swing_lows else min(lows) if lows else None
     current = candles[-1]["close"]
     return {
         "symbol": symbol,
-        "support": round(support, 5),
-        "resistance": round(resistance, 5),
+        "support": round(support, 5) if support is not None else None,
+        "resistance": round(resistance, 5) if resistance is not None else None,
         "current_price": round(current, 5),
-        "dist_to_support_pct": round((current - support) / current * 100, 3) if current > 0 else 0,
-        "dist_to_resistance_pct": round((resistance - current) / current * 100, 3) if current > 0 else 0,
+        "dist_to_support_pct": round((current - support) / current * 100, 3) if current and support else 0,
+        "dist_to_resistance_pct": round((resistance - current) / current * 100, 3) if current and resistance else 0,
         "swing_highs": swing_highs[:5],
         "swing_lows": swing_lows[:5],
         "timestamp": datetime.utcnow().isoformat(),

@@ -148,4 +148,16 @@ export const quantApi = {
     apiClient.get(`/quant/decision/${symbol}`, { params: { direction } }),
 }
 
+// News API
+export const newsApi = {
+  latest: () => apiClient.get('/news/latest'),
+  forSymbol: (symbol: string) => apiClient.get(`/news/symbol/${symbol}`),
+}
+
+// Settings API
+export const settingsApi = {
+  get: () => apiClient.get('/settings'),
+  update: (data: any) => apiClient.post('/settings', data),
+}
+
 // Add interceptors here later (auth, error handling, etc.)
