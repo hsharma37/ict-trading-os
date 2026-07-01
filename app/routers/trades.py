@@ -70,6 +70,33 @@ def get_open_trades():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/stats/summary")
+def get_stats():
+    """Get comprehensive trade statistics."""
+    try:
+        return trade_lifecycle_service.get_trade_stats()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/stats/kelly")
+def get_kelly():
+    """Get Kelly criterion."""
+    try:
+        return trade_lifecycle_service.get_kelly_criterion()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/recent")
+def get_recent(limit: int = 10):
+    """Get recent closed trades."""
+    try:
+        return {"trades": trade_lifecycle_service.get_recent_trades(limit)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("")
 def list_trades(status: Optional[str] = None, symbol: Optional[str] = None):
     """List all trades."""
@@ -131,32 +158,5 @@ def move_sl_to_breakeven(trade_id: str):
         return result
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/stats/summary")
-def get_stats():
-    """Get comprehensive trade statistics."""
-    try:
-        return trade_lifecycle_service.get_trade_stats()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/stats/kelly")
-def get_kelly():
-    """Get Kelly criterion."""
-    try:
-        return trade_lifecycle_service.get_kelly_criterion()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/recent")
-def get_recent(limit: int = 10):
-    """Get recent closed trades."""
-    try:
-        return {"trades": trade_lifecycle_service.get_recent_trades(limit)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
