@@ -260,19 +260,26 @@ class TradeLifecycleService:
             tp1_hit = trade.get("tp1_hit", False)
             sl_at_be = trade.get("sl_at_be", False)
             
-            # Determine if price has hit a level based on side
-            def hit_buy(level): return current_price >= level if level else False
-            def hit_sell(level): return current_price <= level if level else False
-            hit = hit_buy if side == "BUY" else hit_sell
+            # BUY: SL is below entry → hit when price drops TO or BELOW SL
+            # BUY: TP is above entry → hit when price rises TO or ABOVE TP
+            # SELL: SL is above entry → hit when price rises TO or ABOVE SL  
+            # SELL: TP is below entry → hit when price drops TO or BELOW TP
+            
+            if side == "BUY":
+                sl_hit = sl is not None and current_price <= sl
+                tp1_hit_now = tp1 is not None and current_price >= tp1
+            else:  # SELL
+                sl_hit = sl is not None and current_price >= sl
+                tp1_hit_now = tp1 is not None and current_price <= tp1
             
             # SL hit check (only if SL is NOT at BE)
-            if sl and not sl_at_be and hit(sl):
+            if sl_hit and not sl_at_be:
                 result = self.full_close(trade["id"], current_price)
                 actions.append({"trade_id": trade["id"], "action": "SL_CLOSE", "price": current_price, "result": result})
                 continue
             
             # TP1 hit: 33% partial, move SL to BE
-            if tp1 and not tp1_hit and hit(tp1):
+            if tp1_hit_now and not tp1_hit:
                 result = self.partial_close(trade["id"], 0.33, current_price, "TP1")
                 actions.append({"trade_id": trade["id"], "action": "TP1_PARTIAL_33", "price": current_price, "result": result})
                 # Move SL to BE if not already
