@@ -91,10 +91,18 @@ class MarketDataService:
             manual["symbol"] = symbol
             return manual
         
-        # 2. Try price_service (cached Yahoo Finance)
+        # 2. Try price_service (Yahoo → persistent → scraper → synthetic)
         try:
             pdata = price_service.get_price(symbol)
-            if pdata and not getattr(pdata, 'label', '').endswith('(mock)'):
+            if pdata and pdata.price > 0:
+                label = getattr(pdata, 'label', '')
+                # Determine source from label suffix
+                if label.endswith('(synthetic)'):
+                    source = 'synthetic'
+                elif label.endswith('(scraped)'):
+                    source = 'scraped'
+                else:
+                    source = 'yahoo'
                 return {
                     'symbol': pdata.symbol,
                     'price': round(pdata.price, 5),
@@ -104,7 +112,7 @@ class MarketDataService:
                     'change_pct': round(pdata.change_percent, 3),
                     'volume': int(pdata.volume),
                     'timestamp': datetime.utcnow().isoformat(),
-                    'source': 'yahoo'
+                    'source': source
                 }
         except Exception:
             pass

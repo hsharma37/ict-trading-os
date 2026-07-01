@@ -669,3 +669,373 @@ For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/St
 INFO:     127.0.0.1:52744 - "GET /research/all HTTP/1.1" 200 OK
 INFO:     127.0.0.1:52768 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
 INFO:     127.0.0.1:52768 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:52771 - "GET /research/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52787 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:52788 - "GET /research/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52787 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52810 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:52811 - "GET /research/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52826 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52826 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:52828 - "GET /research/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52849 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:52850 - "GET /research/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52849 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52866 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:52866 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52892 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:52891 - "GET /research/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52909 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52912 - "GET /news/latest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52911 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:52910 - "GET /research/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52928 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52928 - "GET /mt5/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52929 - "GET /mt5/account HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:52930 - "GET /mt5/positions HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:52931 - "GET /mt5/history HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:52929 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52928 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52930 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52931 - "OPTIONS /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52929 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:52928 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:52928 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52945 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52945 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:52947 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52947 - "GET /analytics/expectancy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52950 - "GET /analytics/drawdown HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52949 - "GET /analytics/heatmap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52951 - "GET /analytics/kelly HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52952 - "GET /analytics/symbols HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52953 - "GET /analytics/recent?limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52947 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52949 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52950 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52951 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52952 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52952 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52959 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52959 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52959 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52964 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52964 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52964 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52968 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52968 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52968 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52973 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52973 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52973 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52975 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52978 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52978 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52978 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52983 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52983 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52983 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52987 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52987 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52990 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52995 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52995 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53000 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53000 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52999 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53004 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53004 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53005 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53010 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53010 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53011 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53010 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53015 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53015 - "OPTIONS /orders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53015 - "POST /orders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53015 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53015 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53015 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53017 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53015 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53020 - "GET /analytics/expectancy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53021 - "GET /analytics/heatmap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53023 - "GET /analytics/kelly HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53022 - "GET /analytics/drawdown HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53025 - "GET /analytics/recent?limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53024 - "GET /analytics/symbols HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53020 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53021 - "GET /research/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53021 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53046 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53021 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53046 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53021 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53046 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53021 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53049 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53051 - "POST /orders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53049 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53051 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53049 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53051 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53049 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53051 - "GET /analytics/expectancy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53049 - "GET /analytics/heatmap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53057 - "GET /analytics/recent?limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53055 - "GET /analytics/kelly HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53054 - "GET /analytics/drawdown HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53056 - "GET /analytics/symbols HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53049 - "GET /research/correlation HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53051 - "GET /research/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53051 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53051 - "GET /quant/trend/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53051 - "GET /research/correlation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53051 - "GET /quant/session/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53051 - "GET /quant/volatility/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53051 - "GET /quant/levels/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53051 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53103 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53107 - "GET /research/correlation HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53107 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53118 - "GET /quant/decision/NQ1%21?direction=long HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53129 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53136 - "GET /signals/active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53144 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53136 - "POST /signals/scan HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53144 - "GET /signals/active HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53168 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53168 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /research/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53168 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53168 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "POST /orders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53168 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53168 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53169 - "GET /research/all HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53168 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53168 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /mt5/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53168 - "GET /mt5/account HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:53204 - "GET /mt5/positions HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:53205 - "GET /mt5/history HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:53205 - "GET /news/latest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53204 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53205 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53168 - "GET /research/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /analytics/expectancy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53204 - "GET /analytics/heatmap HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53205 - "GET /analytics/drawdown HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53168 - "GET /analytics/kelly HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53233 - "GET /analytics/symbols HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53234 - "GET /analytics/recent?limit=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53242 - "GET /playground/price/EURUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53239 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "POST /orders/calculate-lot HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "POST /orders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53252 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53252 - "GET /trades/open HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53252 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53257 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53260 - "GET /news/latest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53259 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53258 - "GET /research/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53281 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53288 - "GET /playground/price/NQ1%21 HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53288 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53288 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53294 - "GET /news/latest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53293 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53292 - "GET /research/summary HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53316 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53322 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53322 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53326 - "GET /news/latest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53325 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53324 - "GET /research/summary HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53348 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53353 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53353 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53357 - "GET /news/latest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53356 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53355 - "GET /research/summary HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53379 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53384 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53388 - "GET /news/latest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53387 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53386 - "GET /research/summary HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53410 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53415 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53415 - "GET /trades/stats/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53419 - "GET /news/latest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53418 - "GET /trades/open HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53417 - "GET /research/summary HTTP/1.1" 200 OK
+[PriceService] Error fetching XAUUSD (XAUUSD=X): Client error '404 Not Found' for url 'https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X?range=1d&interval=1m'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+INFO:     127.0.0.1:53442 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
