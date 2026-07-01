@@ -65,16 +65,16 @@ def _save_persistent_cache(data: Dict[str, dict]) -> None:
 class PriceService:
     """Fetches and caches live market prices with robust fallback chain."""
 
-    # Current market-level base prices (update periodically)
+    # Current market-level base prices (July 2026) — update when user reports drift
     SYNTHETIC_BASE = {
-        "NQ1!": 20400.0,
-        "ES1!": 5950.0,
-        "EURUSD": 1.1250,
-        "GBPUSD": 1.3050,
-        "XAUUSD": 4050.0,   # Updated to ~current market level
-        "USDJPY": 162.50,
-        "BTCUSD": 72000.0,
-        "CL1!": 72.50,
+        "NQ1!": 30000.0,    # E-mini Nasdaq-100 futures (user confirmed ~30k)
+        "ES1!": 7800.0,     # E-mini S&P 500 futures (proportionally ~7.8k)
+        "EURUSD": 1.1250,   # EUR/USD spot
+        "GBPUSD": 1.3050,   # GBP/USD spot
+        "XAUUSD": 4050.0,   # Gold spot (user confirmed ~4030)
+        "USDJPY": 162.50,   # USD/JPY spot
+        "BTCUSD": 135000.0, # Bitcoin (~135k in 2026)
+        "CL1!": 72.50,      # Crude Oil futures
     }
 
     def __init__(self, cache_ttl: int = 60):
