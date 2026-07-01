@@ -121,6 +121,20 @@ def full_close(trade_id: str, request: FullClose):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/{trade_id}/move-sl-be")
+def move_sl_to_breakeven(trade_id: str):
+    """Move stop loss to entry price (breakeven)."""
+    try:
+        result = trade_lifecycle_service.move_sl_to_breakeven(trade_id)
+        if result.get("error"):
+            raise HTTPException(status_code=400, detail=result.get("error"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/stats/summary")
 def get_stats():
     """Get comprehensive trade statistics."""

@@ -41,7 +41,6 @@ export default function Analytics() {
   const [drawdown, setDrawdown] = useState<any>(null)
   const [kelly, setKelly] = useState<any>(null)
   const [symbols, setSymbols] = useState<any>(null)
-  const [recent, setRecent] = useState<Trade[]>([])
   const [closedTrades, setClosedTrades] = useState<Trade[]>([])
   const [journalNotes, setJournalNotes] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
@@ -65,7 +64,6 @@ export default function Analytics() {
         setKelly(kl.data)
         setSymbols(sym.data)
         const trades = rec.data?.trades || []
-        setRecent(trades)
         const closed = trades.filter((t: Trade) => 
           t.status === 'CLOSED' || t.status === 'closed' || 
           (t.exit_price !== undefined && t.remaining_quantity === 0)
@@ -87,22 +85,34 @@ export default function Analytics() {
     const result = pnl >= 0 ? 'Win' : 'Loss'
     const setup = trade.strategy || 'No strategy tag'
     const entry = trade.entry_price
-    const exit = trade.exit_price || trade.current_price || 'N/A'
+    // Use exit_price if available, otherwise last leg's exit_price, otherwise current_price
+    const exit = trade.exit_price || (trade.legs?.length > 0 ? trade.legs[trade.legs.length - 1].exit_price : null) || trade.current_price || 'N/A'
     const sl = trade.stop_loss
 
     let reasons = []
     if (trade.legs && trade.legs.length > 0) {
-      const legLabels = trade.legs.map((l: any) => l.label).join(', ')
+      const legLabels = trade.legs.map((l: any) => `${l.label}(${Math.round(l.fraction*100)}%)`).join(', ')
       reasons.push(`Partial closes: ${legLabels}`)
     }
     if (Math.abs(r) >= 2) reasons.push('Target hit (2R+)')
-    else if (Math.abs(r) >= 1) reasons.push('1R target')
-    else if (Math.abs(r) < 0.5) reasons.push('Quick scratch/tight stop')
+    else if (Math.abs(r) >= 1) reasons.push('1R target reached')
+    else if (Math.abs(r) < 0.5) reasons.push('Quick scratch / tight stop')
+
+    // AI-like notes based on trade data
+    let aiNotes = []
+    if (pnl > 0 && r >= 1.5) aiNotes.push('Excellent trade management — good R multiple.')
+    else if (pnl > 0 && r < 1) aiNotes.push('Small win — consider holding for higher targets.')
+    else if (pnl < 0 && r > -1) aiNotes.push('Tight loss — well managed risk.')
+    else if (pnl < 0 && r <= -2) aiNotes.push('Deep stop — review entry timing and SL placement.')
+    if (trade.legs && trade.legs.length > 1) aiNotes.push('Scaled out nicely — good position management.')
 
     return `${direction} ${trade.symbol} — ${result} ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} (${r.toFixed(2)}R)
 Entry: ${entry} → Exit: ${exit} | SL: ${sl}
 Setup: ${setup}
 ${reasons.join(' | ')}
+
+AI Notes:
+${aiNotes.map(n => `- ${n}`).join('\n')}
 
 Lessons learned:
 - 

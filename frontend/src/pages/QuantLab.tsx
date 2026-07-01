@@ -140,6 +140,7 @@ export default function QuantLab() {
   }
 
   const runAgent = useCallback(async (agentKey: string, symbol: string) => {
+    if (!symbol) return
     setAgentResults((prev) => [
       ...prev.filter((r) => !(r.agent === agentKey && r.symbol === symbol)),
       { agent: agentKey, symbol, loading: true, data: null },
@@ -175,6 +176,7 @@ export default function QuantLab() {
   }, [])
 
   const runDecision = useCallback(async () => {
+    if (!decisionSymbol) return
     setDecisionLoading(true)
     try {
       const res = await quantApi.decision(decisionSymbol, decisionDirection)
@@ -186,8 +188,22 @@ export default function QuantLab() {
     }
   }, [decisionSymbol, decisionDirection])
 
+  // Default decision symbol to first instrument once loaded
+  useEffect(() => {
+    if (instruments.length > 0 && decisionSymbol === 'EURUSD') {
+      setDecisionSymbol(instruments[0].symbol)
+    }
+  }, [instruments])
+
   const selected = instruments.find((i) => i.symbol === selectedSymbol)
   const isPositive = (val: number) => val >= 0
+
+  // Default to first instrument once loaded
+  useEffect(() => {
+    if (instruments.length > 0 && !selectedSymbol) {
+      setSelectedSymbol(instruments[0].symbol)
+    }
+  }, [instruments])
 
   const kindIcons: Record<string, any> = {
     fx: <DollarSign className="w-4 h-4" />,
@@ -377,10 +393,24 @@ export default function QuantLab() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          <div className="flex items-center gap-2 mb-3">
+            <select
+              className="px-2 py-1 border rounded-md bg-background text-sm"
+              value={selectedSymbol || ''}
+              onChange={(e) => setSelectedSymbol(e.target.value)}
+            >
+              {instruments.map((inst) => (
+                <option key={inst.symbol} value={inst.symbol}>{inst.symbol} — {inst.label}</option>
+              ))}
+            </select>
+            <span className="text-xs text-muted-foreground">
+              {selected ? `${selected.trend} | ${selected.sentiment}` : 'Select instrument'}
+            </span>
+          </div>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {AGENTS.map((agent) => {
               const Icon = agent.icon
-              const result = agentResults.find((r) => r.agent === agent.key && r.symbol === (selectedSymbol || 'EURUSD'))
+              const result = agentResults.find((r) => r.agent === agent.key && r.symbol === selectedSymbol)
               return (
                 <div key={agent.key} className="border rounded-lg p-3 bg-card hover:border-primary/30 transition-colors">
                   <div className="flex items-center justify-between mb-2">
@@ -394,8 +424,8 @@ export default function QuantLab() {
                       size="sm"
                       variant="outline"
                       className="h-7 px-2 text-xs"
-                      onClick={() => runAgent(agent.key, selectedSymbol || 'EURUSD')}
-                      disabled={result?.loading}
+                      onClick={() => runAgent(agent.key, selectedSymbol || '')}
+                      disabled={result?.loading || !selectedSymbol}
                     >
                       {result?.loading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Run'}
                     </Button>
@@ -428,8 +458,8 @@ export default function QuantLab() {
               value={decisionSymbol}
               onChange={(e) => setDecisionSymbol(e.target.value)}
             >
-              {SYMBOLS.map((s) => (
-                <option key={s} value={s}>{s}</option>
+              {instruments.map((inst) => (
+                <option key={inst.symbol} value={inst.symbol}>{inst.symbol} — {inst.label}</option>
               ))}
             </select>
             <div className="flex gap-2">

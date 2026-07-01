@@ -87,15 +87,17 @@ class TradeLifecycleService:
             "created_at": datetime.utcnow().isoformat(),
             "closed_at": None,
             "updated_at": datetime.utcnow().isoformat(),
+            "tp1_hit": False,
+            "tp2_hit": False,
+            "tp3_hit": False,
+            "sl_at_be": False,
         }
         return db.insert("trades", trade)
 
-    def _calc_pnl(self, side: str, entry: float, exit: float, qty: float) -> float:
-        """Calculate PnL for a trade leg."""
-        if side == "BUY":
-            return (exit - entry) * qty
-        else:
-            return (entry - exit) * qty
+    def _calc_pnl(self, symbol: str, side: str, entry: float, exit: float, qty: float) -> float:
+        """Calculate PnL using lot_calculator for correct pip/contract sizing."""
+        result = lot_calculator.calculate_pnl(symbol, entry, exit, qty, side)
+        return result.get("pnl", 0.0)
 
     def _calc_r_multiple(self, side: str, entry: float, exit: float, sl: float) -> float:
         """Calculate R-multiple for a trade leg."""
@@ -120,7 +122,7 @@ class TradeLifecycleService:
         if close_qty <= 0:
             return {"error": "Close quantity is zero"}
 
-        pnl = self._calc_pnl(trade["side"], trade["entry_price"], exit_price, close_qty)
+        pnl = self._calc_pnl(trade["symbol"], trade["side"], trade["entry_price"], exit_price, close_qty)
         r = self._calc_r_multiple(trade["side"], trade["entry_price"], exit_price, trade.get("stop_loss", 0))
 
         leg = {
@@ -158,7 +160,7 @@ class TradeLifecycleService:
         if trade["remaining_quantity"] <= 0:
             return {"error": "No remaining quantity to close"}
 
-        pnl = self._calc_pnl(trade["side"], trade["entry_price"], exit_price, trade["remaining_quantity"])
+        pnl = self._calc_pnl(trade["symbol"], trade["side"], trade["entry_price"], exit_price, trade["remaining_quantity"])
         r = self._calc_r_multiple(trade["side"], trade["entry_price"], exit_price, trade.get("stop_loss", 0))
 
         leg = {
@@ -176,6 +178,7 @@ class TradeLifecycleService:
         trade["remaining_quantity"] = 0.0
         trade["total_r"] = round(sum(l["r_multiple"] for l in trade["legs"]), 3)
         trade["status"] = "CLOSED"
+        trade["exit_price"] = round(exit_price, 5)
         trade["closed_at"] = datetime.utcnow().isoformat()
         trade["updated_at"] = datetime.utcnow().isoformat()
         db.update("trades", trade_id, trade)
@@ -191,7 +194,7 @@ class TradeLifecycleService:
             current_price = live.get("price", 0)
             if current_price > 0:
                 trade["current_price"] = round(current_price, 5)
-                unrealized = self._calc_pnl(trade["side"], trade["entry_price"], current_price, trade["remaining_quantity"])
+                unrealized = self._calc_pnl(trade["symbol"], trade["side"], trade["entry_price"], current_price, trade["remaining_quantity"])
                 trade["unrealized_pnl"] = round(unrealized, 2)
                 # R for remaining position
                 r_unrealized = self._calc_r_multiple(trade["side"], trade["entry_price"], current_price, trade.get("stop_loss", 0))
@@ -212,11 +215,111 @@ class TradeLifecycleService:
                 current_price = live.get("price", 0)
                 if current_price > 0:
                     t["current_price"] = round(current_price, 5)
-                    t["unrealized_pnl"] = round(self._calc_pnl(t["side"], t["entry_price"], current_price, t["remaining_quantity"]), 2)
+                    t["unrealized_pnl"] = round(self._calc_pnl(t["symbol"], t["side"], t["entry_price"], current_price, t["remaining_quantity"]), 2)
         return sorted(trades, key=lambda x: x.get("created_at", ""), reverse=True)
 
+    def move_sl_to_breakeven(self, trade_id: str) -> Dict[str, Any]:
+        """Move stop loss to entry price (breakeven)."""
+        trade = db.find_one("trades", trade_id)
+        if not trade:
+            return {"error": "Trade not found"}
+        if trade["status"] == "CLOSED":
+            return {"error": "Trade already closed"}
+        trade["stop_loss"] = trade["entry_price"]
+        trade["sl_at_be"] = True
+        trade["updated_at"] = datetime.utcnow().isoformat()
+        db.update("trades", trade_id, trade)
+        return trade
+
+    def check_tp_hits(self) -> List[Dict[str, Any]]:
+        """Check all open trades against live prices for TP/SL hits.
+        
+        Auto-management rules:
+        - TP1 hit: close 30%, move SL to breakeven
+        - TP2 hit: close 50% of remaining
+        - TP3 hit: full close
+        - SL hit: full close (only if SL not already at BE)
+        """
+        actions = []
+        open_trades = [t for t in db.get_collection("trades") if t.get("status") not in ("CLOSED", None)]
+        
+        for trade in open_trades:
+            if trade.get("remaining_quantity", 0) <= 0:
+                continue
+                
+            symbol = trade["symbol"]
+            side = trade["side"]
+            current = market_service.get_price(symbol)
+            current_price = current.get("price", 0)
+            if current_price <= 0:
+                continue
+                
+            sl = trade.get("stop_loss")
+            tp1 = trade.get("take_profit_1")
+            tp2 = trade.get("take_profit_2")
+            tp3 = trade.get("take_profit_3")
+            
+            tp1_hit = trade.get("tp1_hit", False)
+            tp2_hit = trade.get("tp2_hit", False)
+            tp3_hit = trade.get("tp3_hit", False)
+            sl_at_be = trade.get("sl_at_be", False)
+            
+            # Determine if price has hit a level based on side
+            def hit_buy(level): return current_price >= level if level else False
+            def hit_sell(level): return current_price <= level if level else False
+            hit = hit_buy if side == "BUY" else hit_sell
+            
+            # SL hit check (only if SL is NOT at BE)
+            if sl and not sl_at_be and hit(sl):
+                result = self.full_close(trade["id"], current_price)
+                actions.append({"trade_id": trade["id"], "action": "SL_CLOSE", "price": current_price, "result": result})
+                continue
+            
+            # TP1 hit: partial 30%, move SL to BE
+            if tp1 and not tp1_hit and hit(tp1):
+                result = self.partial_close(trade["id"], 0.30, current_price, "TP1")
+                actions.append({"trade_id": trade["id"], "action": "TP1_PARTIAL_30", "price": current_price, "result": result})
+                # Move SL to BE if not already
+                if not sl_at_be and trade.get("stop_loss") != trade["entry_price"]:
+                    be_result = self.move_sl_to_breakeven(trade["id"])
+                    actions.append({"trade_id": trade["id"], "action": "SL_TO_BE", "result": be_result})
+                # Mark TP1 hit on the updated trade
+                updated = db.find_one("trades", trade["id"])
+                if updated:
+                    updated["tp1_hit"] = True
+                    updated["updated_at"] = datetime.utcnow().isoformat()
+                    db.update("trades", trade["id"], updated)
+                continue
+            
+            # TP2 hit: partial 50% of remaining
+            if tp2 and not tp2_hit and hit(tp2):
+                result = self.partial_close(trade["id"], 0.50, current_price, "TP2")
+                actions.append({"trade_id": trade["id"], "action": "TP2_PARTIAL_50", "price": current_price, "result": result})
+                updated = db.find_one("trades", trade["id"])
+                if updated:
+                    updated["tp2_hit"] = True
+                    updated["updated_at"] = datetime.utcnow().isoformat()
+                    db.update("trades", trade["id"], updated)
+                continue
+            
+            # TP3 hit: full close
+            if tp3 and not tp3_hit and hit(tp3):
+                result = self.full_close(trade["id"], current_price)
+                actions.append({"trade_id": trade["id"], "action": "TP3_FULL_CLOSE", "price": current_price, "result": result})
+                updated = db.find_one("trades", trade["id"])
+                if updated:
+                    updated["tp3_hit"] = True
+                    updated["updated_at"] = datetime.utcnow().isoformat()
+                    db.update("trades", trade["id"], updated)
+                continue
+        
+        return actions
+
     def get_open_trades(self) -> List[Dict[str, Any]]:
-        """Get all open trades with live unrealized PnL."""
+        """Get all open trades with live unrealized PnL. Auto-check TP/SL hits."""
+        # Run auto-management checks first
+        self.check_tp_hits()
+        # Return updated trades
         trades = self.list_trades()
         return [t for t in trades if t["status"] != "CLOSED"]
 

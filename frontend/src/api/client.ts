@@ -58,6 +58,8 @@ export const tradesApi = {
     apiClient.post(`/trades/${id}/partial`, { fraction, exit_price, label }),
   fullClose: (id: string, exit_price: number) =>
     apiClient.post(`/trades/${id}/close`, { exit_price }),
+  moveSlToBe: (id: string) =>
+    apiClient.post(`/trades/${id}/move-sl-be`),
   stats: () => apiClient.get('/trades/stats/summary'),
   kelly: () => apiClient.get('/trades/stats/kelly'),
   recent: (limit = 10) => apiClient.get('/trades/recent', { params: { limit } }),
