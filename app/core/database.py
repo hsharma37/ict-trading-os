@@ -5,7 +5,7 @@ import uuid
 from typing import Dict, List, Any
 from datetime import datetime
 
-DB_PATH = os.getenv("DATABASE_PATH", "ictos.db")
+DB_PATH = os.getenv("DATABASE_PATH", os.path.join(os.path.dirname(os.path.dirname(__file__)), "ictos.db"))
 
 class SQLiteDB:
     """SQLite-backed database that preserves the InMemoryDB interface.
