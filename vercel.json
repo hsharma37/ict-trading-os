@@ -4,7 +4,7 @@
     { "src": "/(.*)", "dest": "/api/index" }
   ],
   "env": {
-    "DATABASE_PATH": ":memory:",
+    "DATABASE_PATH": "/tmp/ictos.db",
     "AUTH_ENABLED": "false",
     "CORS_ORIGINS": "*"
   }
