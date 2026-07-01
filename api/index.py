@@ -5,8 +5,8 @@ import sys
 # Add project root to path so imports work
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Force in-memory DB for Vercel serverless (no persistent filesystem)
-os.environ.setdefault("DATABASE_PATH", ":memory:")
+# Use /tmp for Vercel serverless (writable filesystem)
+os.environ.setdefault("DATABASE_PATH", "/tmp/ictos.db")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

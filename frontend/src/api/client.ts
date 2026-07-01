@@ -1,8 +1,7 @@
 import axios from 'axios'
 
-// Workaround for import.meta.env type issues in strict TS
-const _env = (globalThis as any)?.import?.meta?.env ?? {};
-const apiUrl = _env.VITE_API_URL || 'http://localhost:8000'
+const PROD_API_URL = 'https://ict-trading-os-vercel.vercel.app'
+const apiUrl = import.meta.env.VITE_API_URL || PROD_API_URL || 'http://localhost:8000'
 
 export const apiClient = axios.create({
   baseURL: apiUrl,
