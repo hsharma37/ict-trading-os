@@ -11,7 +11,7 @@ from app.services.price_service import price_service
 # Kept for backward compatibility only
 SYMBOL_MAP = {
     "NQ1!": "NQ=F", "ES1!": "ES=F", "EURUSD": "EURUSD=X",
-    "GBPUSD": "GBPUSD=X", "XAUUSD": "XAUUSD=X", "USDJPY": "USDJPY=X",
+    "GBPUSD": "GBPUSD=X", "XAUUSD": "GC=F", "USDJPY": "USDJPY=X",
     "BTCUSD": "BTC-USD", "CL1!": "CL=F",
 }
 

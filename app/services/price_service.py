@@ -42,7 +42,8 @@ class PriceData:
     digits: int
 
 
-CACHE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "price_cache.json")
+_cache_dir = os.environ.get("PRICE_CACHE_DIR", os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+CACHE_FILE = os.path.join(_cache_dir, "price_cache.json")
 
 
 def _load_persistent_cache() -> Dict[str, dict]:
@@ -68,14 +69,14 @@ class PriceService:
 
     # Current market-level base prices (July 2026) — update when user reports drift
     SYNTHETIC_BASE = {
-        "NQ1!": 30000.0,    # E-mini Nasdaq-100 futures (user confirmed ~30k)
-        "ES1!": 7800.0,     # E-mini S&P 500 futures (proportionally ~7.8k)
-        "EURUSD": 1.1250,   # EUR/USD spot
-        "GBPUSD": 1.3050,   # GBP/USD spot
-        "XAUUSD": 4050.0,   # Gold spot (user confirmed ~4030)
-        "USDJPY": 162.50,   # USD/JPY spot
-        "BTCUSD": 135000.0, # Bitcoin (~135k in 2026)
-        "CL1!": 72.50,      # Crude Oil futures
+        "NQ1!": 30091.0,     # E-mini Nasdaq-100 futures
+        "ES1!": 7537.5,      # E-mini S&P 500 futures
+        "EURUSD": 1.1383,    # EUR/USD spot
+        "GBPUSD": 1.328,     # GBP/USD spot
+        "XAUUSD": 4050.0,    # Gold futures (GC=F)
+        "USDJPY": 162.55,    # USD/JPY spot
+        "BTCUSD": 60443.0,   # Bitcoin/USD
+        "CL1!": 68.0,        # Crude Oil futures
     }
 
     def __init__(self, cache_ttl: int = 60):
@@ -84,7 +85,7 @@ class PriceService:
         self.last_fetch: Dict[str, float] = {}
         self._lock = threading.Lock()
         self._headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/json',
         }
         # Load persistent cache into memory

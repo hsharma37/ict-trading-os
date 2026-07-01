@@ -2743,3 +2743,59 @@ INFO:     127.0.0.1:56560 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
 INFO:     127.0.0.1:56594 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
 [PriceService] Using synthetic price for XAUUSD
 INFO:     127.0.0.1:56956 - "GET /playground/price/XAUUSD HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [11590]
+/Users/hsharma5/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [13211]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[VectorStore] sentence-transformers not installed, using TF-IDF fallback
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:57117 - "GET /market/prices HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:57131 - "GET /market/price-debug/NQ1%21 HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [13211]
+/Users/hsharma5/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [13242]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[VectorStore] sentence-transformers not installed, using TF-IDF fallback
+[PriceService] Using synthetic price for NQ1!
+[PriceService] Using synthetic price for ES1!
+[PriceService] Using synthetic price for EURUSD
+[PriceService] Using synthetic price for GBPUSD
+[PriceService] Using synthetic price for XAUUSD
+[PriceService] Using synthetic price for USDJPY
+[PriceService] Using synthetic price for BTCUSD
+[PriceService] Using synthetic price for CL1!
+INFO:     127.0.0.1:57152 - "GET /market/prices HTTP/1.1" 200 OK
+[PriceService] Using synthetic price for NQ1!
+INFO:     127.0.0.1:57166 - "GET /market/price-debug/NQ1%21 HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [13242]
+/Users/hsharma5/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+INFO:     Started server process [13273]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+[VectorStore] sentence-transformers not installed, using TF-IDF fallback
+INFO:     127.0.0.1:57179 - "GET /market/prices HTTP/1.1" 200 OK

@@ -84,8 +84,8 @@ INSTRUMENTS: Dict[str, Dict[str, Any]] = {
     },
     "XAUUSD": {
         "label": "XAU/USD (Gold)",
-        "ticker": "XAUUSD=X",
-        "yahoo": "XAUUSD=X",
+        "ticker": "GC=F",
+        "yahoo": "GC=F",
         "kind": "metal",
         "digits": 2,
         "pip_digits": 2,

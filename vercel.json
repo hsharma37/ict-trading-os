@@ -5,6 +5,7 @@
   ],
   "env": {
     "DATABASE_PATH": "/tmp/ictos.db",
+    "PRICE_CACHE_DIR": "/tmp",
     "AUTH_ENABLED": "false",
     "CORS_ORIGINS": "*"
   }
