@@ -13,5 +13,21 @@ os.environ.setdefault("PRICE_CACHE_DIR", "/tmp")
 
 from app.main import app as fastapi_app
 
-# The `app` variable is what Vercel's Python runtime looks for
-app = fastapi_app
+class ApiPrefixStripper:
+    """Let Vercel expose the FastAPI app under /api without changing routes."""
+
+    def __init__(self, wrapped_app):
+        self.wrapped_app = wrapped_app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            path = scope.get("path", "")
+            if path == "/api":
+                scope["path"] = "/"
+            elif path.startswith("/api/"):
+                scope["path"] = path[4:]
+        await self.wrapped_app(scope, receive, send)
+
+
+# The `app` variable is what Vercel's Python runtime looks for.
+app = ApiPrefixStripper(fastapi_app)

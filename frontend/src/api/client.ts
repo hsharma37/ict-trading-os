@@ -1,10 +1,6 @@
 import axios from 'axios'
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
-if (!import.meta.env.DEV && !import.meta.env.VITE_API_URL) {
-  console.error('VITE_API_URL must be set for deployed frontend builds.')
-}
+const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : '/api')
 
 export const apiClient = axios.create({
   baseURL: apiUrl,

@@ -11,8 +11,8 @@ feature/* -> dev -> main
 
 ## Branches
 
-- `main`: production only. Deploys to production Vercel projects.
-- `dev`: integration/staging. Deploys to dev Vercel projects.
+- `main`: production only. Deploys to the production Vercel URL.
+- `dev`: integration/staging. Deploys to Vercel preview/dev URLs.
 - `feature/*`: short-lived branches opened into `dev`.
 
 Before merging `dev` into `main`, run:
@@ -24,27 +24,26 @@ npm --prefix frontend run build
 .venv/bin/python -m pytest -q
 ```
 
-## Recommended Vercel Projects
+## Recommended Vercel Setup
 
-Use two projects while the app is still stabilizing:
+Use one Vercel project for the app while the product is still stabilizing. The root project builds the React frontend and exposes FastAPI under `/api/*`.
 
-| Surface | Branch | Vercel project | Stable URL |
-| --- | --- | --- | --- |
-| Frontend production | `main` | `ict-trading-os-frontend-prod` | `https://app.yourdomain.com` |
-| Frontend dev | `dev` | `ict-trading-os-frontend-dev` | `https://dev.yourdomain.com` |
-| API production | `main` | `ict-trading-os-api-prod` | `https://api.yourdomain.com` |
-| API dev | `dev` | `ict-trading-os-api-dev` | `https://api-dev.yourdomain.com` |
+| Surface | Branch | URL shape |
+| --- | --- | --- |
+| Production app | `main` | `https://ict-trading-os.vercel.app` or custom domain |
+| Preview/dev app | `dev` | Vercel branch preview URL |
+| API | same deployment | `/api/*` rewrites to FastAPI |
 
-Vercel production deployments should track `main`. Preview/dev deployments should track `dev` or feature branches.
+Vercel production deployments should track `main`. Preview/dev deployments should track `dev` or feature branches. Pushing to either branch triggers CI/CD through the GitHub integration.
 
 ## Environment Separation
 
 Configure environment variables in Vercel instead of committing them in `vercel.json`.
 
-- Production API: use `.env.production.example` as the checklist.
-- Dev/API preview: use `.env.preview.example` as the checklist.
-- Frontend production: set `VITE_API_URL=https://api.yourdomain.com`.
-- Frontend dev: set `VITE_API_URL=https://api-dev.yourdomain.com`.
+- Production: use `.env.production.example` as the checklist.
+- Dev/preview: use `.env.preview.example` as the checklist.
+- Frontend production: set `VITE_API_URL=/api`, or omit it because the frontend defaults to `/api` in production.
+- Frontend dev/preview: set `VITE_API_URL=/api`, or omit it for the same-domain preview API.
 
 Use different API keys, JWT secrets, databases, storage buckets, Telegram channels, and MT5 bridge settings for dev and production.
 
@@ -64,24 +63,14 @@ The Vercel entrypoint no longer defaults the database to `/tmp`. Production, pre
 
 ## CLI Setup
 
-After logging in with `npx vercel login`, link each local checkout/project intentionally:
+After logging in with `npx vercel login`, link this checkout to the app project:
 
 ```bash
-# API production project
-npx vercel link --project ict-trading-os-api-prod
+# Production deploy from main
+npx vercel link --project ict-trading-os
 npx vercel --prod
 
-# API dev project or dev checkout
-npx vercel link --project ict-trading-os-api-dev
-npx vercel
-
-# Frontend production project
-cd frontend
-npx vercel link --project ict-trading-os-frontend-prod
-npx vercel --prod
-
-# Frontend dev project
-npx vercel link --project ict-trading-os-frontend-dev
+# Preview deploy from dev/current branch
 npx vercel
 ```
 
@@ -90,6 +79,4 @@ Add domains from the Vercel dashboard or CLI once authenticated:
 ```bash
 npx vercel domains add app.yourdomain.com
 npx vercel domains add dev.yourdomain.com
-npx vercel domains add api.yourdomain.com
-npx vercel domains add api-dev.yourdomain.com
 ```
