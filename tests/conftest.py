@@ -26,7 +26,7 @@ def client():
 
 @pytest.fixture(autouse=True)
 def clean_db():
-    collections = ["test_settings", "test_signals", "settings"]
+    collections = ["test_settings", "test_signals", "settings", "kb_sources", "kb_chunks"]
     for collection in collections:
         for doc in db.find(collection):
             db.delete(collection, doc["id"])

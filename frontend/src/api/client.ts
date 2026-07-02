@@ -1,7 +1,10 @@
 import axios from 'axios'
 
-const PROD_API_URL = 'https://ict-trading-os-vercel.vercel.app'
-const apiUrl = import.meta.env.VITE_API_URL || PROD_API_URL || 'http://localhost:8000'
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+if (!import.meta.env.DEV && !import.meta.env.VITE_API_URL) {
+  console.error('VITE_API_URL must be set for deployed frontend builds.')
+}
 
 export const apiClient = axios.create({
   baseURL: apiUrl,

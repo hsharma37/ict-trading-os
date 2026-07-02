@@ -35,12 +35,14 @@ This repository supports a local MT5 bridge that exposes real MetaTrader 5 actio
 ### Local setup
 
 ```bash
-pip install -r requirements.txt
-export MT5_BRIDGE_URL="http://localhost:5000"
-export TELEGRAM_BOT_TOKEN="<your-bot-token>"
-export TELEGRAM_CHAT_ID="<your-chat-id>"
-python mt5bridgeScript.py
-npm run dev
+uv venv --python 3.12 .venv
+uv pip install -r requirements.txt pytest
+npm --prefix frontend ci
+
+DATABASE_PATH=/tmp/tradingos/ictos-dev.db PRICE_CACHE_DIR=/tmp/tradingos AUTH_ENABLED=false \
+  .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+VITE_API_URL=http://127.0.0.1:8000 npm --prefix frontend run dev -- --host 127.0.0.1 --port 3000
 ```
 
 ### Available MT5 proxy endpoints

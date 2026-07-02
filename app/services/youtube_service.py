@@ -271,7 +271,12 @@ class YouTubeService:
     # Transcript Extraction
     # ────────────────────────────────────────────────
 
-    def fetch_video_transcript(self, video_id: str, languages: List[str] = None) -> VideoTranscript:
+    def fetch_video_transcript(
+        self,
+        video_id: str,
+        languages: List[str] = None,
+        allow_whisper: bool = True,
+    ) -> VideoTranscript:
         """
         Fetch transcript using youtube-transcript-api (latest API syntax).
         Falls back to faster-whisper audio transcription if captions are disabled.
@@ -307,10 +312,14 @@ class YouTubeService:
             )
         except (TranscriptsDisabled, NoTranscriptFound, NoTranscriptAvailable) as e:
             print(f"[Transcript] Captions unavailable for {video_id}: {e}")
+            if not allow_whisper:
+                return VideoTranscript(video_id=video_id, text='', segments=[], source='fallback')
             # Fallback to whisper audio transcription
             return self._transcribe_with_whisper(video_id, languages)
         except Exception as e:
             print(f"[Transcript] Error fetching captions for {video_id}: {e}")
+            if not allow_whisper:
+                return VideoTranscript(video_id=video_id, text='', segments=[], source='fallback')
             # Try whisper as last resort
             return self._transcribe_with_whisper(video_id, languages)
 

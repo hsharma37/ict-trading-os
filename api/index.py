@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Set defaults before importing app modules so the db singleton picks them up.
 # Production and preview values should be configured in Vercel environments.
 os.environ.setdefault("DATABASE_PATH", "/tmp/ictos.db")
+os.environ.setdefault("PRICE_CACHE_DIR", "/tmp")
 
 from app.main import app as fastapi_app
 

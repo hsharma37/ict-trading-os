@@ -48,6 +48,8 @@ Configure environment variables in Vercel instead of committing them in `vercel.
 
 Use different API keys, JWT secrets, databases, storage buckets, Telegram channels, and MT5 bridge settings for dev and production.
 
+The current frontend does not implement a private session or backend-for-frontend auth proxy. If you set `AUTH_ENABLED=true` today, normal frontend API calls will be rejected unless the client is updated to authenticate safely. Do not put a raw production API key into public Vite client code.
+
 ## Current Storage Warning
 
 The Vercel backend defaults to SQLite under `/tmp`. That is acceptable for smoke tests only. The KB and trading state will not be durable on serverless storage. Before relying on production KB memory, move state to persistent storage such as Postgres/Supabase/Neon and point both dev and prod at separate databases.

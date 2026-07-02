@@ -44,8 +44,21 @@ class KBService:
             i += chunk_words - overlap
         return chunks
 
+    def _delete_chunks_for_source(self, source_id: str) -> int:
+        chunks = db.find("kb_chunks", source_id=source_id)
+        deleted = 0
+        for chunk in chunks:
+            if db.delete("kb_chunks", chunk["id"]):
+                deleted += 1
+        return deleted
+
     def add_source(self, title: str, url: str, transcript: str = "", tags: str = "", 
                    source_type: str = "generic", analysis: Dict = None, metadata: Dict = None) -> Dict:
+        if url:
+            for existing in db.find("kb_sources", url=url):
+                self._delete_chunks_for_source(existing["id"])
+                db.delete("kb_sources", existing["id"])
+
         doc = {
             "title": title,
             "url": url,
@@ -84,11 +97,11 @@ class KBService:
         return next((item for item in db.get_collection("kb_sources") if item.get("id") == source_id), {})
 
     def remove_source(self, source_id: str) -> Dict:
-        collection = db.get_collection("kb_sources")
-        index = next((i for i, item in enumerate(collection) if item.get("id") == source_id), -1)
-        if index >= 0:
-            removed = collection.pop(index)
-            db.get_collection("kb_chunks")[:] = [chunk for chunk in db.get_collection("kb_chunks") if chunk.get("source_id") != source_id]
+        removed = db.find_one("kb_sources", source_id)
+        if removed:
+            self._delete_chunks_for_source(source_id)
+            db.delete("kb_sources", source_id)
+            removed["removed"] = True
             return removed
         return {}
 
@@ -172,8 +185,16 @@ class KBService:
                 metadata = youtube_service.fetch_video_metadata(item["url"])
                 
                 # Fetch transcript
-                transcript_result = youtube_service.fetch_video_transcript(item["id"])
+                transcript_result = youtube_service.fetch_video_transcript(
+                    item["id"],
+                    allow_whisper=use_whisper,
+                )
                 transcript = transcript_result.text
+                if not transcript.strip():
+                    raise RuntimeError(
+                        "No transcript text was available from captions"
+                        + (" or whisper" if use_whisper else "")
+                    )
                 
                 # Generate analysis (heuristic always, AI optionally)
                 base_analysis = youtube_service.analyze_transcript(transcript_result, metadata)
@@ -230,6 +251,8 @@ class KBService:
                     "title": source.get("title"),
                     "url": source.get("url"),
                     "transcript_added": bool(transcript),
+                    "chunk_count": source.get("chunk_count", 0),
+                    "source_type": source.get("source_type"),
                     "analysis": analysis,
                 })
                 analyses.append(analysis)
@@ -260,6 +283,7 @@ class KBService:
             "created": created,
             "failed": failed,
             "source_count": len(created),
+            "chunk_count": sum(item.get("chunk_count", 0) for item in created),
             "channel_analysis": channel_analysis,
             "url_type": "channel" if is_channel else "playlist" if playlist_id else "video",
         }
@@ -302,7 +326,7 @@ class KBService:
             "search_enabled": True,
             "vector_search_enabled": True,
             "ai_analysis_enabled": True,
-            "last_source": sources[-1] if sources else None,
+            "last_source": sources[0] if sources else None,
         }
 
     def chat_answer(self, query: str, use_vectors: bool = True, top_k: int = 5) -> Dict[str, Any]:

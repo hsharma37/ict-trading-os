@@ -4,7 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
+    "dev": "sh -c 'npm run dev:backend & npm run dev:frontend; wait'",
+    "dev:backend": ".venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000",
+    "dev:frontend": "npm --prefix frontend run dev -- --host 127.0.0.1 --port 3000",
+    "test:backend": ".venv/bin/python -m pytest -q",
+    "test:frontend": "npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend run build",
     "vercel:dev": "vercel dev"
   }
 }
