@@ -4,10 +4,14 @@ from app.core.database import db
 from app.services.quant_service import quant_service
 from app.services.research_service import research_service
 from app.services.market_data import market_service
-from datetime import datetime
+from datetime import datetime, timezone
 import statistics
 
 router = APIRouter(prefix="/quant", tags=["Quant Lab"])
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 @router.get("/metrics")
 def get_metrics():
@@ -37,7 +41,7 @@ def get_coach():
     return {
         "recommendations": quant_service.coach(trade_dicts),
         "summary": "Performance coaching active.",
-        "last_updated": datetime.utcnow().isoformat()
+        "last_updated": utc_now_iso()
     }
 
 
@@ -56,7 +60,7 @@ def trend_analysis(symbol: str):
             "sma50": None,
             "momentum_10h": 0,
             "price": None,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now_iso(),
             "note": "Insufficient market data",
         }
     closes = [c["close"] for c in candles if c.get("close")]
@@ -68,7 +72,7 @@ def trend_analysis(symbol: str):
             "sma50": None,
             "momentum_10h": 0,
             "price": round(closes[-1], 5) if closes else None,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now_iso(),
             "note": "Insufficient close data",
         }
     sma20 = sum(closes[-20:]) / 20
@@ -82,7 +86,7 @@ def trend_analysis(symbol: str):
         "sma50": round(sma50, 5),
         "momentum_10h": round(momentum, 3),
         "price": round(closes[-1], 5),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now_iso(),
     }
 
 
@@ -104,7 +108,7 @@ def volatility_analysis(symbol: str):
             "dist_to_upper_pct": 0,
             "dist_to_lower_pct": 0,
             "regime": "UNKNOWN",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now_iso(),
             "note": "Insufficient market data",
         }
     closes = [c["close"] for c in candles if c.get("close")]
@@ -121,7 +125,7 @@ def volatility_analysis(symbol: str):
             "dist_to_upper_pct": 0,
             "dist_to_lower_pct": 0,
             "regime": "UNKNOWN",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now_iso(),
             "note": "Insufficient close data",
         }
     # SMA 20
@@ -155,7 +159,7 @@ def volatility_analysis(symbol: str):
         "dist_to_upper_pct": dist_to_upper,
         "dist_to_lower_pct": dist_to_lower,
         "regime": regime,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now_iso(),
     }
 
 
@@ -176,7 +180,7 @@ def levels_analysis(symbol: str):
             "dist_to_resistance_pct": 0,
             "swing_highs": [],
             "swing_lows": [],
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now_iso(),
             "note": "Insufficient market data",
         }
     recent = candles[-20:]
@@ -201,7 +205,7 @@ def levels_analysis(symbol: str):
         "dist_to_resistance_pct": round((resistance - current) / current * 100, 3) if current and resistance else 0,
         "swing_highs": swing_highs[:5],
         "swing_lows": swing_lows[:5],
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now_iso(),
     }
 
 
@@ -216,7 +220,7 @@ def session_analysis(symbol: str):
         kind = "commodity"
     elif symbol == "BTCUSD":
         kind = "crypto"
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     hour = now.hour
     # Determine if in a kill zone
     in_london = 7 <= hour <= 10
@@ -240,7 +244,7 @@ def session_analysis(symbol: str):
         "in_killzone": in_killzone,
         "best_sessions": best_sessions,
         "recommendation": "OPTIMAL" if in_killzone else "CAUTION",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now_iso(),
     }
 
 
@@ -309,5 +313,5 @@ def decision_helper(symbol: str, direction: str = "long"):
         "volatility_assessment": "SAFE" if vol_safe else "ELEVATED",
         "session": sess.get("recommendation", "CAUTION"),
         "session_optimal": session_good,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": utc_now_iso(),
     }

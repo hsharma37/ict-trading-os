@@ -26,6 +26,20 @@ def test_db_update():
     db.update('test_settings', 'global', {'theme': 'light'})
     doc = db.find_one('test_settings', 'global')
     assert doc['theme'] == 'light'
+    assert doc["version"] == 2
+
+
+def test_db_update_if_version_rejects_stale_writes():
+    db.insert('test_settings', {'id': 'versioned', 'theme': 'dark'})
+    updated = db.update_if_version('test_settings', 'versioned', 1, {'theme': 'light'})
+    assert updated["theme"] == "light"
+    assert updated["version"] == 2
+
+    stale = db.update_if_version('test_settings', 'versioned', 1, {'theme': 'stale'})
+    assert stale == {}
+    doc = db.find_one('test_settings', 'versioned')
+    assert doc["theme"] == "light"
+    assert doc["version"] == 2
 
 def test_db_stats():
     stats = db.get_stats()

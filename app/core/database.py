@@ -11,7 +11,7 @@ import os
 import re
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from app.core.config import settings
@@ -34,11 +34,11 @@ SCHEMA_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _utc_now() -> str:
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def _new_doc_id(collection: str) -> str:
-    return f"{collection[:3].upper()}-{int(datetime.utcnow().timestamp() * 1000)}-{uuid.uuid4().hex[:6]}"
+    return f"{collection[:3].upper()}-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{uuid.uuid4().hex[:6]}"
 
 
 def runtime_requires_postgres(
@@ -103,6 +103,7 @@ class SQLiteDB:
         doc["id"] = doc_id
         now = _utc_now()
         doc["created_at"] = doc.get("created_at") or now
+        doc["version"] = int(doc.get("version") or 1)
         conn = sqlite3.connect(self.db_path)
         conn.execute(
             "INSERT INTO docs (collection, id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
@@ -132,6 +133,7 @@ class SQLiteDB:
             return {}
         existing.update(updates)
         existing["updated_at"] = _utc_now()
+        existing["version"] = int(existing.get("version") or 1) + 1
         conn = sqlite3.connect(self.db_path)
         conn.execute(
             "UPDATE docs SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
@@ -140,6 +142,32 @@ class SQLiteDB:
         conn.commit()
         conn.close()
         return existing
+
+    def update_if_version(self, name: str, doc_id: str, expected_version: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT data FROM docs WHERE collection = ? AND id = ?", (name, doc_id)).fetchone()
+            if not row:
+                conn.rollback()
+                return {}
+            existing = json.loads(row["data"])
+            current_version = int(existing.get("version") or 1)
+            if current_version != int(expected_version):
+                conn.rollback()
+                return {}
+            existing.update(updates)
+            existing["updated_at"] = _utc_now()
+            existing["version"] = current_version + 1
+            conn.execute(
+                "UPDATE docs SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
+                (json.dumps(existing), existing["updated_at"], name, doc_id),
+            )
+            conn.commit()
+            return existing
+        finally:
+            conn.close()
 
     def delete(self, name: str, doc_id: str) -> bool:
         conn = sqlite3.connect(self.db_path)
@@ -489,6 +517,7 @@ class PostgresDB:
         doc_id = doc.get("id") or _new_doc_id(name)
         doc["id"] = doc_id
         doc["created_at"] = doc.get("created_at") or _utc_now()
+        doc["version"] = int(doc.get("version") or 1)
         table = self._table_for(name)
         if table:
             return self._write_domain(name, doc)
@@ -528,6 +557,7 @@ class PostgresDB:
             return {}
         existing.update(updates)
         existing["updated_at"] = _utc_now()
+        existing["version"] = int(existing.get("version") or 1) + 1
 
         table = self._table_for(name)
         if table:
@@ -539,6 +569,49 @@ class PostgresDB:
                     "UPDATE app_documents SET data = %s, updated_at = %s WHERE collection = %s AND id = %s",
                     (self._jsonb(existing), existing["updated_at"], name, doc_id),
                 )
+        return existing
+
+    def update_if_version(self, name: str, doc_id: str, expected_version: int, updates: Dict[str, Any]) -> Dict[str, Any]:
+        existing = self.find_one(name, doc_id)
+        if not existing:
+            return {}
+        current_version = int(existing.get("version") or 1)
+        if current_version != int(expected_version):
+            return {}
+        existing.update(updates)
+        existing["updated_at"] = _utc_now()
+        existing["version"] = current_version + 1
+
+        table = self._table_for(name)
+        if table:
+            values = {
+                "data": self._jsonb(existing),
+                "updated_at": existing["updated_at"],
+                **self._domain_values(name, existing),
+            }
+            set_columns = list(values.keys())
+            assignments = ", ".join(f"{key} = %s" for key in set_columns)
+            params = [values[key] for key in set_columns] + [doc_id, expected_version]
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"UPDATE {table} SET {assignments} "
+                        "WHERE id = %s AND COALESCE((data->>'version')::int, 1) = %s",
+                        params,
+                    )
+                    if cur.rowcount == 0:
+                        return {}
+            return existing
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE app_documents SET data = %s, updated_at = %s "
+                    "WHERE collection = %s AND id = %s AND COALESCE((data->>'version')::int, 1) = %s",
+                    (self._jsonb(existing), existing["updated_at"], name, doc_id, expected_version),
+                )
+                if cur.rowcount == 0:
+                    return {}
         return existing
 
     def delete(self, name: str, doc_id: str) -> bool:

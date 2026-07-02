@@ -1,15 +1,102 @@
 """Trade lifecycle service with full position tracking, partial closes, and R-multiple."""
-import time
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from threading import RLock
 from typing import Dict, List, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
+import uuid
 from app.core.database import db
 from app.services.instrument_config import get_instrument
 from app.services.market_data import market_service
-from app.services.lot_calculator import lot_calculator
+from app.services.lot_calculator import PIP_SIZES, PIP_VALUES, lot_calculator
+
+
+ZERO = Decimal("0")
+
+
+def utc_now_iso() -> str:
+    """Return a timezone-aware UTC timestamp."""
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _decimal(value: Any, default: Decimal = ZERO) -> Decimal:
+    if value is None:
+        return default
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError):
+        return default
+
+
+def _quantize(value: Any, places: int) -> float:
+    quantum = Decimal("1").scaleb(-places)
+    return float(_decimal(value).quantize(quantum, rounding=ROUND_HALF_UP))
+
+
+def _money(value: Any) -> float:
+    return _quantize(value, 2)
+
+
+def _quantity(value: Any) -> float:
+    return _quantize(value, 6)
+
+
+def _price(value: Any, digits: int) -> float:
+    return _quantize(value, digits)
 
 
 class TradeLifecycleService:
     """Manages trade entry, partial closes, and full lifecycle tracking."""
+
+    def __init__(self):
+        self._trade_lock = RLock()
+
+    def _validate_stops_and_targets(
+        self,
+        side: str,
+        entry_price: float,
+        stop_loss: float,
+        take_profits: List[Optional[float]],
+    ) -> Optional[str]:
+        entry = _decimal(entry_price)
+        sl = _decimal(stop_loss)
+        if sl <= ZERO:
+            return None
+        if side == "BUY" and sl >= entry:
+            return "Invalid stop loss: For BUY, SL must be below entry price. For SELL, SL must be above entry price."
+        if side == "SELL" and sl <= entry:
+            return "Invalid stop loss: For BUY, SL must be below entry price. For SELL, SL must be above entry price."
+
+        previous = None
+        for index, take_profit in enumerate(take_profits, 1):
+            if take_profit is None:
+                continue
+            tp = _decimal(take_profit)
+            if tp <= ZERO:
+                return f"Invalid take profit {index}: price must be positive"
+            if side == "BUY":
+                if tp <= entry:
+                    return f"Invalid take profit {index}: For BUY, TP must be above entry price."
+                if previous is not None and tp <= previous:
+                    return "Invalid take profit sequence: BUY targets must increase away from entry."
+            else:
+                if tp >= entry:
+                    return f"Invalid take profit {index}: For SELL, TP must be below entry price."
+                if previous is not None and tp >= previous:
+                    return "Invalid take profit sequence: SELL targets must decrease away from entry."
+            previous = tp
+        return None
+
+    def _weighted_total_r(self, trade: Dict[str, Any]) -> float:
+        initial_quantity = _decimal(trade.get("initial_quantity"))
+        if initial_quantity <= ZERO:
+            return 0.0
+        total = ZERO
+        for leg in trade.get("legs", []):
+            if "r_contribution" in leg:
+                total += _decimal(leg.get("r_contribution"))
+            else:
+                total += _decimal(leg.get("r_multiple")) * (_decimal(leg.get("quantity")) / initial_quantity)
+        return _quantize(total, 3)
 
     def create_trade(
         self,
@@ -46,12 +133,14 @@ class TradeLifecycleService:
         if side not in ("BUY", "SELL"):
             return {"error": "Invalid side: must be BUY or SELL"}
 
-        # Validate stop loss direction relative to entry
-        if stop_loss > 0:
-            if side == "BUY" and stop_loss >= entry_price:
-                return {"error": "Invalid stop loss: For BUY, SL must be below entry price. For SELL, SL must be above entry price."}
-            if side == "SELL" and stop_loss <= entry_price:
-                return {"error": "Invalid stop loss: For BUY, SL must be below entry price. For SELL, SL must be above entry price."}
+        validation_error = self._validate_stops_and_targets(
+            side,
+            entry_price,
+            stop_loss,
+            [take_profit_1, take_profit_2, take_profit_3],
+        )
+        if validation_error:
+            return {"error": validation_error}
 
         # Auto-calculate lot size if not provided and SL is valid
         if quantity is None or quantity <= 0:
@@ -68,25 +157,27 @@ class TradeLifecycleService:
             return {"error": "Invalid quantity"}
 
         # Calculate risk amount
-        risk_amount = account_balance * (risk_pct / 100.0)
-        price_distance = abs(entry_price - stop_loss) if stop_loss > 0 else 0
+        risk_amount = _decimal(account_balance) * (_decimal(risk_pct) / Decimal("100"))
+        price_distance = abs(_decimal(entry_price) - _decimal(stop_loss)) if stop_loss > 0 else ZERO
         r_unit = price_distance if price_distance > 0 else 1.0
+        now = utc_now_iso()
+        trade_id = f"TRD-{int(datetime.now(timezone.utc).timestamp()*1000)}-{uuid.uuid4().hex[:6]}"
 
         trade = {
-            "id": f"TRD-{int(datetime.utcnow().timestamp()*1000)}",
+            "id": trade_id,
             "symbol": symbol,
             "side": side.upper(),
-            "entry_price": round(entry_price, config.get("digits", 5)),
-            "stop_loss": round(stop_loss, config.get("digits", 5)) if stop_loss > 0 else None,
-            "take_profit_1": round(take_profit_1, config.get("digits", 5)) if take_profit_1 else None,
-            "take_profit_2": round(take_profit_2, config.get("digits", 5)) if take_profit_2 else None,
-            "take_profit_3": round(take_profit_3, config.get("digits", 5)) if take_profit_3 else None,
-            "quantity": round(quantity, 6),
-            "initial_quantity": round(quantity, 6),
-            "remaining_quantity": round(quantity, 6),
+            "entry_price": _price(entry_price, config.get("digits", 5)),
+            "stop_loss": _price(stop_loss, config.get("digits", 5)) if stop_loss > 0 else None,
+            "take_profit_1": _price(take_profit_1, config.get("digits", 5)) if take_profit_1 else None,
+            "take_profit_2": _price(take_profit_2, config.get("digits", 5)) if take_profit_2 else None,
+            "take_profit_3": _price(take_profit_3, config.get("digits", 5)) if take_profit_3 else None,
+            "quantity": _quantity(quantity),
+            "initial_quantity": _quantity(quantity),
+            "remaining_quantity": _quantity(quantity),
             "account_balance": account_balance,
             "risk_pct": risk_pct,
-            "risk_amount": round(risk_amount, 2),
+            "risk_amount": _money(risk_amount),
             "strategy": strategy,
             "notes": notes,
             "plan_id": plan_id,
@@ -95,11 +186,11 @@ class TradeLifecycleService:
             "realized_pnl": 0.0,
             "unrealized_pnl": 0.0,
             "total_r": 0.0,
-            "r_unit": round(r_unit, 5),
-            "current_price": round(entry_price, config.get("digits", 5)),
-            "created_at": datetime.utcnow().isoformat(),
+            "r_unit": _price(r_unit, 5),
+            "current_price": _price(entry_price, config.get("digits", 5)),
+            "created_at": now,
             "closed_at": None,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": now,
             "tp1_hit": False,
             "tp2_hit": False,
             "tp3_hit": False,
@@ -108,94 +199,130 @@ class TradeLifecycleService:
         return db.insert("trades", trade)
 
     def _calc_pnl(self, symbol: str, side: str, entry: float, exit: float, qty: float) -> float:
-        """Calculate PnL using lot_calculator for correct pip/contract sizing."""
-        result = lot_calculator.calculate_pnl(symbol, entry, exit, qty, side)
-        return result.get("pnl", 0.0)
+        """Calculate PnL using instrument pip/contract sizing."""
+        symbol = symbol.upper()
+        pip_size = _decimal(PIP_SIZES.get(symbol, 0.0001))
+        pip_value = _decimal(PIP_VALUES.get(symbol, 10.0))
+        entry_d = _decimal(entry)
+        exit_d = _decimal(exit)
+        qty_d = _decimal(qty)
+        price_diff = exit_d - entry_d if side.upper() == "BUY" else entry_d - exit_d
+        pip_diff = price_diff / pip_size if pip_size > ZERO else price_diff
+        return _money(pip_diff * pip_value * qty_d)
 
     def _calc_r_multiple(self, side: str, entry: float, exit: float, sl: float) -> float:
         """Calculate R-multiple for a trade leg."""
-        r_distance = abs(entry - sl) if sl and sl > 0 else 1.0
+        r_distance = abs(_decimal(entry) - _decimal(sl)) if sl and sl > 0 else Decimal("1")
         if side == "BUY":
-            return (exit - entry) / r_distance if r_distance > 0 else 0
+            value = (_decimal(exit) - _decimal(entry)) / r_distance if r_distance > 0 else ZERO
         else:
-            return (entry - exit) / r_distance if r_distance > 0 else 0
+            value = (_decimal(entry) - _decimal(exit)) / r_distance if r_distance > 0 else ZERO
+        return _quantize(value, 3)
 
     def partial_close(self, trade_id: str, fraction: float, exit_price: float, label: str = "TP") -> Dict[str, Any]:
         """Close a fraction of the trade (e.g., 0.3 at TP1)."""
-        trade = db.find_one("trades", trade_id)
-        if not trade:
-            return {"error": "Trade not found"}
-        if trade["status"] == "CLOSED":
-            return {"error": "Trade already closed"}
-        if trade["remaining_quantity"] <= 0:
-            return {"error": "No remaining quantity to close"}
+        with self._trade_lock:
+            trade = db.find_one("trades", trade_id)
+            if not trade:
+                return {"error": "Trade not found"}
+            if trade["status"] == "CLOSED":
+                return {"error": "Trade already closed"}
+            remaining = _decimal(trade.get("remaining_quantity"))
+            if remaining <= ZERO:
+                return {"error": "No remaining quantity to close"}
 
-        fraction = max(0.0, min(1.0, fraction))
-        close_qty = round(trade["remaining_quantity"] * fraction, 6)
-        if close_qty <= 0:
-            return {"error": "Close quantity is zero"}
+            fraction_d = _decimal(fraction)
+            if fraction_d <= ZERO or fraction_d > Decimal("1"):
+                return {"error": "Close fraction must be greater than 0 and less than or equal to 1"}
 
-        pnl = self._calc_pnl(trade["symbol"], trade["side"], trade["entry_price"], exit_price, close_qty)
-        r = self._calc_r_multiple(trade["side"], trade["entry_price"], exit_price, trade.get("stop_loss", 0))
+            close_qty_d = (remaining * fraction_d).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+            if close_qty_d <= ZERO:
+                return {"error": "Close quantity is zero"}
+            if close_qty_d > remaining:
+                return {"error": "Close quantity exceeds remaining quantity"}
 
-        leg = {
-            "fraction": round(fraction, 4),
-            "exit_price": round(exit_price, 5),
-            "quantity": close_qty,
-            "pnl": round(pnl, 2),
-            "r_multiple": round(r, 3),
-            "closed_at": datetime.utcnow().isoformat(),
-            "label": label,
-        }
+            close_qty = _quantity(close_qty_d)
+            pnl = self._calc_pnl(trade["symbol"], trade["side"], trade["entry_price"], exit_price, close_qty)
+            r = self._calc_r_multiple(trade["side"], trade["entry_price"], exit_price, trade.get("stop_loss", 0))
+            digits = get_instrument(trade["symbol"]).get("digits", 5)
+            now = utc_now_iso()
+            initial_quantity = _decimal(trade.get("initial_quantity"))
+            r_contribution = _decimal(r) * (close_qty_d / initial_quantity) if initial_quantity > ZERO else ZERO
 
-        trade["legs"].append(leg)
-        trade["realized_pnl"] = round(trade.get("realized_pnl", 0) + pnl, 2)
-        trade["remaining_quantity"] = round(trade["remaining_quantity"] - close_qty, 6)
-        trade["total_r"] = round(sum(l["r_multiple"] for l in trade["legs"]), 3)
+            leg = {
+                "fraction": _quantize(fraction_d, 4),
+                "exit_price": _price(exit_price, digits),
+                "quantity": close_qty,
+                "pnl": _money(pnl),
+                "r_multiple": _quantize(r, 3),
+                "r_contribution": _quantize(r_contribution, 3),
+                "closed_at": now,
+                "label": label,
+            }
 
-        if trade["remaining_quantity"] <= 0.0001:
-            trade["status"] = "CLOSED"
-            trade["closed_at"] = datetime.utcnow().isoformat()
-        else:
-            trade["status"] = f"PARTIAL_{len(trade['legs'])}"
+            trade["legs"].append(leg)
+            trade["realized_pnl"] = _money(_decimal(trade.get("realized_pnl", 0)) + _decimal(pnl))
+            trade["remaining_quantity"] = _quantity(remaining - close_qty_d)
+            trade["total_r"] = self._weighted_total_r(trade)
 
-        trade["updated_at"] = datetime.utcnow().isoformat()
-        db.update("trades", trade_id, trade)
-        return trade
+            if _decimal(trade["remaining_quantity"]) <= Decimal("0.0001"):
+                trade["remaining_quantity"] = 0.0
+                trade["status"] = "CLOSED"
+                trade["closed_at"] = now
+            else:
+                trade["status"] = f"PARTIAL_{len(trade['legs'])}"
+
+            trade["updated_at"] = now
+            expected_version = int(trade.get("version") or 1)
+            saved = db.update_if_version("trades", trade_id, expected_version, trade)
+            if not saved:
+                return {"error": "Trade was modified concurrently; retry close"}
+            return saved
 
     def full_close(self, trade_id: str, exit_price: float) -> Dict[str, Any]:
         """Close all remaining position."""
-        trade = db.find_one("trades", trade_id)
-        if not trade:
-            return {"error": "Trade not found"}
-        if trade["status"] == "CLOSED":
-            return {"error": "Trade already closed"}
-        if trade["remaining_quantity"] <= 0:
-            return {"error": "No remaining quantity to close"}
+        with self._trade_lock:
+            trade = db.find_one("trades", trade_id)
+            if not trade:
+                return {"error": "Trade not found"}
+            if trade["status"] == "CLOSED":
+                return {"error": "Trade already closed"}
+            remaining = _decimal(trade.get("remaining_quantity"))
+            if remaining <= ZERO:
+                return {"error": "No remaining quantity to close"}
 
-        pnl = self._calc_pnl(trade["symbol"], trade["side"], trade["entry_price"], exit_price, trade["remaining_quantity"])
-        r = self._calc_r_multiple(trade["side"], trade["entry_price"], exit_price, trade.get("stop_loss", 0))
+            close_qty = _quantity(remaining)
+            pnl = self._calc_pnl(trade["symbol"], trade["side"], trade["entry_price"], exit_price, close_qty)
+            r = self._calc_r_multiple(trade["side"], trade["entry_price"], exit_price, trade.get("stop_loss", 0))
+            initial = _decimal(trade.get("initial_quantity"))
+            digits = get_instrument(trade["symbol"]).get("digits", 5)
+            now = utc_now_iso()
+            r_contribution = _decimal(r) * (remaining / initial) if initial > ZERO else ZERO
 
-        leg = {
-            "fraction": round(trade["remaining_quantity"] / trade["initial_quantity"], 4) if trade["initial_quantity"] > 0 else 1.0,
-            "exit_price": round(exit_price, 5),
-            "quantity": trade["remaining_quantity"],
-            "pnl": round(pnl, 2),
-            "r_multiple": round(r, 3),
-            "closed_at": datetime.utcnow().isoformat(),
-            "label": "CLOSE",
-        }
+            leg = {
+                "fraction": _quantize(remaining / initial, 4) if initial > ZERO else 1.0,
+                "exit_price": _price(exit_price, digits),
+                "quantity": close_qty,
+                "pnl": _money(pnl),
+                "r_multiple": _quantize(r, 3),
+                "r_contribution": _quantize(r_contribution, 3),
+                "closed_at": now,
+                "label": "CLOSE",
+            }
 
-        trade["legs"].append(leg)
-        trade["realized_pnl"] = round(trade.get("realized_pnl", 0) + pnl, 2)
-        trade["remaining_quantity"] = 0.0
-        trade["total_r"] = round(sum(l["r_multiple"] for l in trade["legs"]), 3)
-        trade["status"] = "CLOSED"
-        trade["exit_price"] = round(exit_price, 5)
-        trade["closed_at"] = datetime.utcnow().isoformat()
-        trade["updated_at"] = datetime.utcnow().isoformat()
-        db.update("trades", trade_id, trade)
-        return trade
+            trade["legs"].append(leg)
+            trade["realized_pnl"] = _money(_decimal(trade.get("realized_pnl", 0)) + _decimal(pnl))
+            trade["remaining_quantity"] = 0.0
+            trade["total_r"] = self._weighted_total_r(trade)
+            trade["status"] = "CLOSED"
+            trade["exit_price"] = _price(exit_price, digits)
+            trade["closed_at"] = now
+            trade["updated_at"] = now
+            expected_version = int(trade.get("version") or 1)
+            saved = db.update_if_version("trades", trade_id, expected_version, trade)
+            if not saved:
+                return {"error": "Trade was modified concurrently; retry close"}
+            return saved
 
     def get_trade(self, trade_id: str) -> Dict[str, Any]:
         """Get a single trade with updated unrealized PnL."""
@@ -208,10 +335,13 @@ class TradeLifecycleService:
             if current_price > 0:
                 trade["current_price"] = round(current_price, 5)
                 unrealized = self._calc_pnl(trade["symbol"], trade["side"], trade["entry_price"], current_price, trade["remaining_quantity"])
-                trade["unrealized_pnl"] = round(unrealized, 2)
+                trade["unrealized_pnl"] = _money(unrealized)
                 # R for remaining position
                 r_unrealized = self._calc_r_multiple(trade["side"], trade["entry_price"], current_price, trade.get("stop_loss", 0))
-                trade["total_r"] = round(sum(l["r_multiple"] for l in trade["legs"]) + r_unrealized, 3)
+                initial = _decimal(trade.get("initial_quantity"))
+                remaining = _decimal(trade.get("remaining_quantity"))
+                weighted_open_r = _decimal(r_unrealized) * (remaining / initial) if initial > ZERO else ZERO
+                trade["total_r"] = _quantize(_decimal(self._weighted_total_r(trade)) + weighted_open_r, 3)
         return trade
 
     def list_trades(self, status: Optional[str] = None, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -228,7 +358,7 @@ class TradeLifecycleService:
                 current_price = live.get("price", 0)
                 if current_price > 0:
                     t["current_price"] = round(current_price, 5)
-                    t["unrealized_pnl"] = round(self._calc_pnl(t["symbol"], t["side"], t["entry_price"], current_price, t["remaining_quantity"]), 2)
+                    t["unrealized_pnl"] = _money(self._calc_pnl(t["symbol"], t["side"], t["entry_price"], current_price, t["remaining_quantity"]))
         return sorted(trades, key=lambda x: x.get("created_at", ""), reverse=True)
 
     def move_sl_to_breakeven(self, trade_id: str) -> Dict[str, Any]:
@@ -240,9 +370,12 @@ class TradeLifecycleService:
             return {"error": "Trade already closed"}
         trade["stop_loss"] = trade["entry_price"]
         trade["sl_at_be"] = True
-        trade["updated_at"] = datetime.utcnow().isoformat()
-        db.update("trades", trade_id, trade)
-        return trade
+        trade["updated_at"] = utc_now_iso()
+        expected_version = int(trade.get("version") or 1)
+        saved = db.update_if_version("trades", trade_id, expected_version, trade)
+        if not saved:
+            return {"error": "Trade was modified concurrently; retry close"}
+        return saved
 
     def check_tp_hits(self) -> List[Dict[str, Any]]:
         """Check all open trades against live prices for TP/SL hits.
@@ -300,11 +433,11 @@ class TradeLifecycleService:
                     be_result = self.move_sl_to_breakeven(trade["id"])
                     actions.append({"trade_id": trade["id"], "action": "SL_TO_BE", "result": be_result})
                 # Mark TP1 hit on the updated trade
-                updated = db.find_one("trades", trade["id"])
-                if updated:
+                    updated = db.find_one("trades", trade["id"])
+                if updated and updated.get("status") != "CLOSED":
                     updated["tp1_hit"] = True
-                    updated["updated_at"] = datetime.utcnow().isoformat()
-                    db.update("trades", trade["id"], updated)
+                    updated["updated_at"] = utc_now_iso()
+                    db.update_if_version("trades", trade["id"], int(updated.get("version") or 1), updated)
                 continue
         
         return actions
@@ -330,7 +463,7 @@ class TradeLifecycleService:
                 current_price = live.get("price", 0)
                 if current_price > 0:
                     t["current_price"] = round(current_price, 5)
-                    t["unrealized_pnl"] = round(self._calc_pnl(t["symbol"], t["side"], t["entry_price"], current_price, t["remaining_quantity"]), 2)
+                    t["unrealized_pnl"] = _money(self._calc_pnl(t["symbol"], t["side"], t["entry_price"], current_price, t["remaining_quantity"]))
 
         # Total P&L includes both closed realized + open unrealized
         closed_pnl = sum(t.get("realized_pnl", 0) for t in closed)
@@ -516,29 +649,12 @@ class TradeLifecycleService:
         """Calculate Kelly Criterion from trade history."""
         trades = db.get_collection("trades")
         closed = [t for t in trades if t.get("status") == "CLOSED"]
-        if not closed:
-            return {"win_rate": 0, "avg_win": 0, "avg_loss": 0, "kelly_fraction": 0, "kelly_half": 0}
+        from app.services.quant_service import quant_service
 
-        wins = [t for t in closed if t.get("realized_pnl", 0) > 0]
-        losses = [t for t in closed if t.get("realized_pnl", 0) <= 0]
-        win_rate = len(wins) / len(closed) if closed else 0
-        avg_win = sum(t.get("realized_pnl", 0) for t in wins) / len(wins) if wins else 0
-        avg_loss = abs(sum(t.get("realized_pnl", 0) for t in losses) / len(losses)) if losses else 0
-
-        # Kelly: f = (bp - q) / b where b = avg_win/avg_loss, p = win_rate, q = 1-p
-        b = avg_win / avg_loss if avg_loss > 0 else 0
-        p = win_rate
-        q = 1 - p
-        kelly = (b * p - q) / b if b > 0 else 0
-        kelly = max(0, min(1, kelly))
-
-        return {
-            "win_rate": round(win_rate, 4),
-            "avg_win": round(avg_win, 2),
-            "avg_loss": round(-avg_loss, 2),
-            "kelly_fraction": round(kelly, 4),
-            "kelly_half": round(kelly / 2, 4),
-        }
+        kelly = quant_service.calculate_kelly([t.get("realized_pnl", 0) for t in closed])
+        # Preserve the historical lifecycle sign convention for avg_loss.
+        kelly["avg_loss"] = -abs(kelly["avg_loss"])
+        return kelly
 
     def get_recent_trades(self, limit: int = 10) -> List[Dict]:
         """Get recent closed trades."""
