@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "routes": [
+    { "src": "/(.*)", "dest": "/api/index" }
+  ],
+  "env": {
+    "DATABASE_PATH": "/tmp/ictos.db",
+    "PRICE_CACHE_DIR": "/tmp",
+    "AUTH_ENABLED": "false",
+    "CORS_ORIGINS": "*"
+  }
+}

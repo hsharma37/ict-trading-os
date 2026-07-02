@@ -34,11 +34,11 @@ except ImportError:
 # ────────────────────────────────────────────────
 try:
     from youtube_transcript_api import YouTubeTranscriptApi
-    from youtube_transcript_api._errors import (
-        TranscriptsDisabled,
-        NoTranscriptFound,
-        NoTranscriptAvailable,
-    )
+    from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
+    try:
+        from youtube_transcript_api._errors import NoTranscriptAvailable
+    except ImportError:
+        NoTranscriptAvailable = NoTranscriptFound
 except ImportError:
     YouTubeTranscriptApi = None
     TranscriptsDisabled = NoTranscriptFound = NoTranscriptAvailable = Exception

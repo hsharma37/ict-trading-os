@@ -1,9 +1,14 @@
 """Live market data via Yahoo Finance."""
 import httpx
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime
 import random
 
+from app.services.instrument_config import get_instrument
+from app.services.price_service import price_service
+
+# Deprecated hardcoded map — now using instrument_config for all ticker lookups
+# Kept for backward compatibility only
 SYMBOL_MAP = {
     "NQ1!": "NQ=F", "ES1!": "ES=F", "EURUSD": "EURUSD=X",
     "GBPUSD": "GBPUSD=X", "XAUUSD": "GC=F", "USDJPY": "USDJPY=X",
@@ -21,15 +26,47 @@ MARKET_SPECS = {
     "CL1!": {"point_value": 100.0, "unit": "contract", "min_qty": 0.01, "qty_step": 0.01},
 }
 
-BASE_PRICES = {
-    "NQ1!": 18445.25, "ES1!": 5523.75, "EURUSD": 1.08342,
-    "GBPUSD": 1.26581, "XAUUSD": 2382.40, "USDJPY": 157.423,
-    "BTCUSD": 64820, "CL1!": 82.34
-}
-
 class MarketDataService:
     def __init__(self):
         self.price_history = {s: [] for s in SYMBOL_MAP.keys()}
+        self.manual_prices: Dict[str, Dict] = {}  # symbol -> {price, bid, ask, timestamp}
+
+    def set_manual_price(self, symbol: str, price: float, bid: float = None, ask: float = None) -> Dict:
+        """Set a manual price override (e.g., from MT5 broker feed)."""
+        from app.services.instrument_config import get_instrument
+        config = get_instrument(symbol)
+        digits = config.get("digits", 5) if config else 5
+        now = datetime.utcnow().isoformat()
+        self.manual_prices[symbol.upper()] = {
+            "price": round(price, digits),
+            "bid": round(bid, digits) if bid is not None else round(price, digits),
+            "ask": round(ask, digits) if ask is not None else round(price, digits),
+            "change": 0,
+            "change_pct": 0,
+            "volume": 0,
+            "timestamp": now,
+            "source": "manual"
+        }
+        return self.manual_prices[symbol.upper()]
+
+    def clear_manual_price(self, symbol: str) -> None:
+        """Clear manual price override and return to Yahoo Finance."""
+        self.manual_prices.pop(symbol.upper(), None)
+
+    def get_manual_price(self, symbol: str) -> Optional[Dict]:
+        """Get manual price if set and not expired (5 min)."""
+        data = self.manual_prices.get(symbol.upper())
+        if not data:
+            return None
+        # Check if expired (>5 minutes)
+        try:
+            ts = datetime.fromisoformat(data["timestamp"])
+            if (datetime.utcnow() - ts).total_seconds() > 300:
+                self.manual_prices.pop(symbol.upper(), None)
+                return None
+        except Exception:
+            pass
+        return data
 
     def _last_valid_value(self, values, default=None):
         if not values:
@@ -39,8 +76,52 @@ class MarketDataService:
                 return v
         return default
 
+    def _get_yahoo_ticker(self, symbol: str) -> str:
+        """Resolve symbol to Yahoo Finance ticker using instrument_config."""
+        config = get_instrument(symbol)
+        if config:
+            return config.get("yahoo", config.get("ticker", symbol))
+        return SYMBOL_MAP.get(symbol, symbol)
+
     def get_price(self, symbol: str) -> Dict:
-        yahoo_sym = SYMBOL_MAP.get(symbol, symbol)
+        symbol = symbol.upper()
+        # 1. Check manual price override (MT5/broker feed)
+        manual = self.get_manual_price(symbol)
+        if manual:
+            manual["symbol"] = symbol
+            return manual
+        
+        # 2. Try price_service (Yahoo → persistent → scraper → synthetic)
+        try:
+            pdata = price_service.get_price(symbol)
+            if pdata and pdata.price > 0:
+                label = getattr(pdata, 'label', '')
+                # Determine source from label suffix
+                if label.endswith('(synthetic)'):
+                    source = 'synthetic'
+                elif label.endswith('(scraped)'):
+                    source = 'scraped'
+                else:
+                    source = 'yahoo'
+                config = get_instrument(symbol)
+                kind = config.get("kind", "") if config else ""
+                spread = pdata.price * 0.00001 if kind == "forex" else pdata.price * 0.0001
+                return {
+                    'symbol': pdata.symbol,
+                    'price': round(pdata.price, 5),
+                    'bid': round(pdata.price - spread, 5),
+                    'ask': round(pdata.price + spread, 5),
+                    'change': round(pdata.change, 5),
+                    'change_pct': round(pdata.change_percent, 3),
+                    'volume': int(pdata.volume),
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': source
+                }
+        except Exception:
+            pass
+
+        # 3. Fallback to direct Yahoo Finance API
+        yahoo_sym = self._get_yahoo_ticker(symbol)
         try:
             url = f'https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_sym}?range=1d&interval=1m'
             headers = {'User-Agent': 'Mozilla/5.0'}
@@ -79,14 +160,37 @@ class MarketDataService:
                         }
         except Exception:
             pass
-        base = BASE_PRICES.get(symbol, 100.0)
-        price = base + (random.random() - 0.5) * base * 0.001
-        return {'symbol': symbol, 'price': round(price, 5), 'timestamp': datetime.utcnow().isoformat(), 'source': 'synthetic'}
+        
+        # 4. Final fallback: synthetic price
+        try:
+            pdata = price_service.get_price(symbol)
+            if pdata:
+                config = get_instrument(symbol)
+                kind = config.get("kind", "") if config else ""
+                spread = pdata.price * 0.00001 if kind == "forex" else pdata.price * 0.0001
+                return {
+                    'symbol': pdata.symbol,
+                    'price': round(pdata.price, 5),
+                    'bid': round(pdata.price - spread, 5),
+                    'ask': round(pdata.price + spread, 5),
+                    'change': round(pdata.change, 5),
+                    'change_pct': round(pdata.change_percent, 3),
+                    'volume': int(pdata.volume),
+                    'timestamp': datetime.utcnow().isoformat(),
+                    'source': 'synthetic'
+                }
+        except Exception:
+            pass
+        
+        return {'symbol': symbol, 'price': 0, 'timestamp': datetime.utcnow().isoformat(), 'source': 'unavailable'}
 
     def get_history(self, symbol: str, timeframe: str = "1h", limit: int = 200) -> List[Dict]:
-        yahoo_sym = SYMBOL_MAP.get(symbol, symbol)
-        tf_map = {"1m": ("1d", "1m"), "5m": ("5d", "5m"), "15m": ("5d", "15m"),
-                  "1h": ("1mo", "1h"), "4h": ("3mo", "1h"), "1d": ("6mo", "1d")}
+        yahoo_sym = self._get_yahoo_ticker(symbol)
+        tf_map = {
+            "1m": ("1d", "1m"), "5m": ("5d", "5m"), "15m": ("5d", "15m"),
+            "1h": ("1mo", "1h"), "4h": ("3mo", "1h"),  # 4h uses 1h data (Yahoo limitation)
+            "1d": ("6mo", "1d")
+        }
         period, interval = tf_map.get(timeframe, ("1mo", "1h"))
 
         try:
@@ -131,7 +235,12 @@ class MarketDataService:
         return self._synthetic_history(symbol, limit)
 
     def _synthetic_history(self, symbol: str, limit: int) -> List[Dict]:
-        base = BASE_PRICES.get(symbol, 100.0)
+        # Use price_service for a realistic base price
+        try:
+            pdata = price_service.get_price(symbol)
+            base = pdata.price if pdata else 100.0
+        except Exception:
+            base = 100.0
         candles = []
         price = base
         for i in range(limit):
@@ -143,5 +252,6 @@ class MarketDataService:
                            "open": round(o, 5), "high": round(h, 5), "low": round(l, 5), "close": round(c, 5)})
             price = c
         return candles
+
 
 market_service = MarketDataService()

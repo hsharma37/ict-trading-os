@@ -5,14 +5,5 @@ pydantic==2.11.4
 httpx==0.28.1
 numpy==2.2.5
 python-dotenv==1.1.0
-Flask==3.1.0
-Flask-Cors==5.0.0
-MetaTrader5==5.0.81
-scipy==1.15.3
-yt-dlp==2025.12.31
-youtube-transcript-api==1.0.3
-openai==1.76.2
-langchain==0.3.24
-langchain-community==0.3.22
-sentence-transformers==4.1.0
-faster-whisper==1.1.1
+yfinance==0.2.55
+youtube-transcript-api>=1.2.4

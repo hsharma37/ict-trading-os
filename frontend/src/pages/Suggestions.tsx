@@ -1,91 +1,137 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { apiClient } from '@/api/client'
+import { Button } from '@/components/ui/Button'
+import { signalsApi } from '@/api/client'
+import {
+  Zap, Activity, AlertTriangle, ArrowUpRight, ArrowDownRight, RefreshCw
+} from 'lucide-react'
 
-interface SuggestionItem {
+interface Signal {
   id: string
   symbol: string
-  direction: string
-  setup_type: string
-  setup_score: number
-  confluence_score: number
+  sentiment: string
+  score: number
+  max_score: number
+  confluences: string[]
+  entry_zone: number | null
+  stop_loss: number | null
+  targets: (number | null)[]
   confidence: number
-  suggested_entry: number | null
-  suggested_stop: number | null
-  suggested_target: number | null
-  suggested_lot_size: number | null
-  risk_amount: number | null
-  expected_r: number | null
-  ai_narrative: string | null
-  status: string
-  paper_trade: boolean
+  session: string
+  executed: boolean
   created_at: string
+  expires_at: string
 }
 
+const INSTRUMENTS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
+
 export default function Suggestions() {
-  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [signals, setSignals] = useState<Signal[]>([])
+  const [activeSignals, setActiveSignals] = useState<Signal[]>([])
+  const [scanning, setScanning] = useState(false)
+  const [selectedSymbol, setSelectedSymbol] = useState('EURUSD')
   const [error, setError] = useState<string | null>(null)
-  const [actionInProgress, setActionInProgress] = useState<string | null>(null)
+  const [lastScan, setLastScan] = useState<Date | null>(null)
 
-  const userId = '00000000-0000-0000-0000-000000000000'
-
-  async function load() {
+  const fetchSignals = useCallback(async () => {
     try {
-      const res = await apiClient.get(`/api/v1/suggestions/pending?user_id=${userId}`)
-      setSuggestions(res.data || [])
-    } catch (err: any) {
-      setError(err.message || 'Failed to load suggestions')
+      const res = await signalsApi.active()
+      const active = res.data?.signals || []
+      setActiveSignals(active.filter((s: any) => s))
+    } catch (e) {
+      console.error('Failed to fetch active signals', e)
+    }
+  }, [])
+
+  const scan = async () => {
+    setScanning(true)
+    setError(null)
+    try {
+      const res = await signalsApi.scan()
+      const found = res.data?.signals || []
+      setSignals(prev => [...found, ...prev].slice(0, 50))
+      setLastScan(new Date())
+      fetchSignals()
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Scan failed')
     } finally {
-      setLoading(false)
+      setScanning(false)
+    }
+  }
+
+  const analyzeOne = async () => {
+    setScanning(true)
+    setError(null)
+    try {
+      const res = await signalsApi.analyze(selectedSymbol)
+      const sig = res.data?.signal
+      if (sig) {
+        setSignals(prev => [sig, ...prev].slice(0, 50))
+      } else {
+        setError(`No valid signal for ${selectedSymbol}. Setup below confluence threshold.`)
+      }
+      fetchSignals()
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Analysis failed')
+    } finally {
+      setScanning(false)
     }
   }
 
   useEffect(() => {
-    load()
-  }, [])
+    fetchSignals()
+  }, [fetchSignals])
 
-  async function handleApprove(id: string) {
-    setActionInProgress(id)
-    try {
-      await apiClient.post(`/api/v1/suggestions/${id}/approve`)
-      await load()
-    } catch (err: any) {
-      setError(err.message || 'Approval failed')
-    } finally {
-      setActionInProgress(null)
-    }
-  }
+  const renderSignal = (signal: Signal, isActive: boolean = false) => {
+    const bullish = signal.sentiment === 'bullish'
+    const scorePct = (signal.score / signal.max_score) * 100
 
-  async function handleExecute(id: string) {
-    setActionInProgress(id)
-    try {
-      await apiClient.post(`/api/v1/suggestions/${id}/execute`)
-      await load()
-    } catch (err: any) {
-      setError(err.message || 'Execution failed')
-    } finally {
-      setActionInProgress(null)
-    }
-  }
-
-  async function handleReject(id: string) {
-    setActionInProgress(id)
-    try {
-      await apiClient.post(`/api/v1/suggestions/${id}/reject?reason=User rejected`)
-      await load()
-    } catch (err: any) {
-      setError(err.message || 'Rejection failed')
-    } finally {
-      setActionInProgress(null)
-    }
-  }
-
-  if (loading) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold tracking-tight">Signals</h1>
-        <p>Loading...</p>
+      <div key={signal.id} className={`p-4 rounded-xl border ${isActive ? 'border-primary bg-primary/5' : 'border-border bg-card'}`}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <span className={`text-xs px-2 py-1 rounded font-bold ${
+              bullish ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            }`}>
+              {bullish ? <ArrowUpRight className="w-3 h-3 inline mr-1" /> : <ArrowDownRight className="w-3 h-3 inline mr-1" />}
+              {signal.sentiment.toUpperCase()}
+            </span>
+            <span className="font-bold text-lg">{signal.symbol}</span>
+            <span className="text-xs text-muted-foreground">{signal.session}</span>
+          </div>
+          <div className="text-sm font-bold">
+            Score: {signal.score}/{signal.max_score} ({scorePct.toFixed(0)}%)
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-xs mb-3">
+          <div className="p-2 rounded bg-muted">
+            <div className="text-muted-foreground">Entry</div>
+            <div className="font-mono font-semibold">{signal.entry_zone?.toFixed(5) || '-'}</div>
+          </div>
+          <div className="p-2 rounded bg-muted">
+            <div className="text-muted-foreground">SL</div>
+            <div className="font-mono font-semibold text-red-400">{signal.stop_loss?.toFixed(5) || '-'}</div>
+          </div>
+          {signal.targets?.filter(Boolean).map((t, i) => (
+            <div key={i} className="p-2 rounded bg-muted">
+              <div className="text-muted-foreground">TP{i + 1}</div>
+              <div className="font-mono font-semibold text-green-400">{t?.toFixed(5) || '-'}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-1 flex-wrap mb-2">
+          {signal.confluences?.map((c, i) => (
+            <span key={i} className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
+              {c.replace(/_/g, ' ')}
+            </span>
+          ))}
+        </div>
+
+        <div className="text-xs text-muted-foreground">
+          Confidence: {(signal.confidence * 100).toFixed(1)}% | Expires: {new Date(signal.expires_at).toLocaleTimeString()}
+        </div>
       </div>
     )
   }
@@ -94,166 +140,119 @@ export default function Suggestions() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Signals</h1>
-        <p className="text-muted-foreground">AI and rule-based trade suggestions awaiting approval</p>
+        <p className="text-muted-foreground">ICT-based pattern detection and trade suggestions</p>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4" />
           {error}
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Controls */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-3 items-center">
+            <select
+              value={selectedSymbol}
+              onChange={(e) => setSelectedSymbol(e.target.value)}
+              className="px-3 py-2 border rounded-md bg-background text-sm"
+            >
+              {INSTRUMENTS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <Button
+              onClick={analyzeOne}
+              disabled={scanning}
+              variant="outline"
+              className="text-sm"
+            >
+              <Activity className="w-4 h-4 mr-2" />
+              {scanning ? 'Analyzing...' : `Analyze ${selectedSymbol}`}
+            </Button>
+            <Button
+              onClick={scan}
+              disabled={scanning}
+              className="text-sm"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${scanning ? 'animate-spin' : ''}`} />
+              {scanning ? 'Scanning...' : 'Scan All'}
+            </Button>
+            {lastScan && (
+              <span className="text-xs text-muted-foreground">
+                Last scan: {lastScan.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Pending</CardTitle>
+            <CardTitle className="text-sm">Active</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {suggestions.filter((s) => s.status === 'pending').length}
+            <div className="text-2xl font-bold">{activeSignals.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Bullish</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-400">
+              {activeSignals.filter(s => s.sentiment === 'bullish').length}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Approved</CardTitle>
+            <CardTitle className="text-sm">Bearish</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {suggestions.filter((s) => s.status === 'approved').length}
+            <div className="text-2xl font-bold text-red-400">
+              {activeSignals.filter(s => s.sentiment === 'bearish').length}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Executed</CardTitle>
+            <CardTitle className="text-sm">History</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {suggestions.filter((s) => s.status === 'executed').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Paper Trades</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {suggestions.filter((s) => s.paper_trade).length}
-            </div>
+            <div className="text-2xl font-bold">{signals.length}</div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid gap-4">
-        {suggestions.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              No pending suggestions. Signals will appear here when AI or rules generate them.
-            </CardContent>
-          </Card>
-        ) : (
-          suggestions.map((s) => (
-            <Card key={s.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle>
-                    {s.symbol} {s.direction.toUpperCase()}
-                    {s.paper_trade && (
-                      <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">
-                        Paper
-                      </span>
-                    )}
-                  </CardTitle>
-                  <span
-                    className={`px-2 py-0.5 text-xs rounded-full ${
-                      s.status === 'pending'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : s.status === 'approved'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}
-                  >
-                    {s.status}
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Setup</span>
-                    <span className="font-medium">{s.setup_type || 'N/A'} (score: {s.setup_score})</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Confluence</span>
-                    <span className="font-medium">{s.confluence_score}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Confidence</span>
-                    <span className="font-medium">{(s.confidence * 100).toFixed(1)}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Entry</span>
-                    <span className="font-medium">{s.suggested_entry?.toFixed(5) ?? 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Stop</span>
-                    <span className="font-medium">{s.suggested_stop?.toFixed(5) ?? 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Target</span>
-                    <span className="font-medium">{s.suggested_target?.toFixed(5) ?? 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Risk</span>
-                    <span className="font-medium">${s.risk_amount?.toFixed(2) ?? 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Expected R</span>
-                    <span className="font-medium">{s.expected_r?.toFixed(2) ?? 'N/A'}</span>
-                  </div>
-                  {s.ai_narrative && (
-                    <div className="mt-2 p-2 bg-gray-50 rounded text-xs text-muted-foreground">
-                      {s.ai_narrative}
-                    </div>
-                  )}
-                </div>
+      {/* Active Signals */}
+      {activeSignals.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Active Signals</h2>
+          {activeSignals.map(s => renderSignal(s, true))}
+        </div>
+      )}
 
-                <div className="flex gap-2 mt-4">
-                  {s.status === 'pending' && (
-                    <>
-                      <button
-                        onClick={() => handleApprove(s.id)}
-                        disabled={actionInProgress === s.id}
-                        className="px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
-                      >
-                        {actionInProgress === s.id ? '...' : 'Approve'}
-                      </button>
-                      <button
-                        onClick={() => handleReject(s.id)}
-                        disabled={actionInProgress === s.id}
-                        className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        Reject
-                      </button>
-                    </>
-                  )}
-                  {s.status === 'approved' && (
-                    <button
-                      onClick={() => handleExecute(s.id)}
-                      disabled={actionInProgress === s.id}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50"
-                    >
-                      {actionInProgress === s.id ? '...' : 'Execute Trade'}
-                    </button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+      {/* Signal History */}
+      {signals.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Recent Signals</h2>
+          <div className="space-y-3">
+            {signals.slice(0, 10).map(s => renderSignal(s))}
+          </div>
+        </div>
+      )}
+
+      {activeSignals.length === 0 && signals.length === 0 && (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            <Zap className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No signals detected yet. Click "Scan All" or "Analyze" to find ICT patterns.</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

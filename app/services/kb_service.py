@@ -191,11 +191,13 @@ class KBService:
                 if use_ai_analysis:
                     try:
                         import asyncio
-                        # Use existing event loop or create new one
-                        loop = asyncio.get_event_loop()
+                        # Create new event loop for this thread
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
                         ai_analysis = loop.run_until_complete(
                             video_analysis_agent.analyze_video(transcript_result, metadata)
                         )
+                        loop.close()
                         # Merge AI analysis into base
                         analysis.update(ai_analysis)
                         analysis["ai_enhanced"] = True

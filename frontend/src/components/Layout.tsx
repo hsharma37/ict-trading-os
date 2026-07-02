@@ -1,33 +1,39 @@
 import { Link, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { playgroundApi } from '@/api/client'
 import {
   LayoutDashboard,
-  ClipboardList,
   ArrowRightLeft,
-  BookOpen,
   BarChart3,
-  FlaskConical,
-  Brain,
   Settings,
-  Bell,
-  Zap,
   Menu,
   X,
   TrendingUp,
+  Library,
+  Activity,
+  Eye,
+  MessageSquare,
+  Monitor,
+  Brain,
+  FlaskConical,
+  Zap,
 } from 'lucide-react'
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/plan', label: 'Plan', icon: ClipboardList },
+  { path: '/mt5', label: 'MT5 Terminal', icon: Monitor },
   { path: '/execute', label: 'Execute', icon: ArrowRightLeft },
-  { path: '/journal', label: 'Journal', icon: BookOpen },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   { path: '/research', label: 'Research', icon: FlaskConical },
-  { path: '/suggestions', label: 'Signals', icon: Zap },
-  { path: '/alerts', label: 'Alerts', icon: Bell },
+  { path: '/signals', label: 'Signals', icon: Zap },
+  { path: '/telegram', label: 'Telegram', icon: MessageSquare },
   { path: '/knowledge', label: 'Knowledge', icon: Brain },
+  { path: '/library', label: 'Library', icon: Library },
+  { path: '/whatsup', label: "What's Up?", icon: Eye },
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
+
+const INSTRUMENTS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
 
 interface LayoutProps {
   children: React.ReactNode
@@ -36,6 +42,39 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
+  const [selectedInstrument, setSelectedInstrument] = useState('EURUSD')
+  const [livePrice, setLivePrice] = useState<{ symbol: string; price: number; change: number; change_percent: number; digits: number } | null>(null)
+  const [priceLoading, setPriceLoading] = useState(false)
+  const [showDropdown, setShowDropdown] = useState(false)
+
+  const fetchLivePrice = useCallback(async () => {
+    try {
+      setPriceLoading(true)
+      const response = await playgroundApi.getPrice(selectedInstrument)
+      const p = response.data
+      if (p) {
+        setLivePrice({
+          symbol: p.symbol,
+          price: p.price,
+          change: p.change,
+          change_percent: p.change_percent,
+          digits: p.digits,
+        })
+      }
+    } catch (e) {
+      console.error('Live price fetch failed:', e)
+    } finally {
+      setPriceLoading(false)
+    }
+  }, [selectedInstrument])
+
+  useEffect(() => {
+    fetchLivePrice()
+    const interval = setInterval(fetchLivePrice, 15000)
+    return () => clearInterval(interval)
+  }, [fetchLivePrice])
+
+  const isPositive = (livePrice?.change ?? 0) >= 0
 
   return (
     <div className="flex h-screen bg-background text-foreground">
@@ -102,14 +141,67 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center gap-4">
             <span className="text-sm font-semibold">ICT Trading OS</span>
             <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-              v1.0.0
+              v9.1.0
             </span>
           </div>
           <div className="flex-1" />
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span>Price: ...</span>
+          <div className="flex items-center gap-4 text-sm">
+            {/* Instrument Selector + Live Price */}
+            <div className="relative flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border">
+              <Activity className="w-4 h-4 text-muted-foreground" />
+              
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="flex items-center gap-1 font-semibold text-sm hover:text-primary transition-colors"
+              >
+                {selectedInstrument}
+              </button>
+              
+              {showDropdown && (
+                <div className="absolute top-full left-0 mt-1 w-32 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+                  {INSTRUMENTS.map((inst) => (
+                    <button
+                      key={inst}
+                      onClick={() => {
+                        setSelectedInstrument(inst)
+                        setShowDropdown(false)
+                      }}
+                      className={`w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors ${
+                        inst === selectedInstrument ? 'bg-primary/10 text-primary font-semibold' : ''
+                      }`}
+                    >
+                      {inst}
+                    </button>
+                  ))}
+                </div>
+              )}
+              
+              <div className="w-px h-4 bg-border mx-1" />
+              
+              {priceLoading ? (
+                <span className="text-muted-foreground text-xs">Loading...</span>
+              ) : livePrice ? (
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold">
+                    {livePrice.price.toFixed(livePrice.digits)}
+                  </span>
+                  <span
+                    className={`flex items-center gap-0.5 text-xs font-medium ${
+                      isPositive ? 'text-green-400' : 'text-red-400'
+                    }`}
+                  >
+                    {isPositive ? '+' : ''}
+                    {livePrice.change.toFixed(livePrice.digits)} ({isPositive ? '+' : ''}
+                    {livePrice.change_percent.toFixed(2)}%)
+                  </span>
+                </div>
+              ) : (
+                <span className="text-muted-foreground text-xs">No data</span>
+              )}
+            </div>
+            
             <span className="w-2 h-2 rounded-full bg-green-500" />
-            <span>Connected</span>
+            <span className="text-muted-foreground">Connected</span>
           </div>
         </header>
 
