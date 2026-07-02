@@ -27,6 +27,8 @@ export const kbApi = {
   listIngestionJobs: (limit: number = 20) =>
     apiClient.get('/kb/ingestion-jobs', { params: { limit } }),
   getIngestionJob: (id: string) => apiClient.get(`/kb/ingestion-jobs/${id}`),
+  evaluateRetrieval: (top_k: number = 5) =>
+    apiClient.get('/kb/eval', { params: { top_k } }),
   chat: (query: string, use_vectors?: boolean, top_k?: number) =>
     apiClient.post('/kb/chat', { query, use_vectors, top_k }),
   status: () => apiClient.get('/kb/status'),

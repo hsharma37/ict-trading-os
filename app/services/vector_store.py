@@ -4,6 +4,7 @@ Vector Store — Semantic search with sentence-transformer embeddings.
 Upgrades from simple TF-IDF to real dense embeddings using sentence-transformers.
 Falls back to TF-IDF if sentence-transformers is not installed.
 """
+import hashlib
 import math
 import re
 from typing import Dict, List, Any, Optional
@@ -64,6 +65,19 @@ class SimpleVectorStore:
             vec[token] = vec.get(token, 0) + 1
         return vec
 
+    def _hash_embedding(self, text: str, dimensions: int = 384) -> List[float]:
+        vector = [0.0] * dimensions
+        tokens = self._normalize(text)
+        if not tokens:
+            return vector
+        for token in tokens:
+            digest = hashlib.sha256(token.encode("utf-8")).digest()
+            index = int.from_bytes(digest[:4], "big") % dimensions
+            sign = 1.0 if digest[4] % 2 == 0 else -1.0
+            vector[index] += sign
+        norm = math.sqrt(sum(value * value for value in vector))
+        return [value / norm for value in vector] if norm else vector
+
     def _cosine_similarity(self, a: Dict[str, int], b: Dict[str, int]) -> float:
         if not a or not b:
             return 0.0
@@ -82,19 +96,25 @@ class SimpleVectorStore:
         return dot / (norm_a * norm_b) if norm_a and norm_b else 0.0
 
     def _embed_text(self, text: str) -> List[float]:
-        """Generate dense embedding using sentence-transformers."""
-        if _EMBEDDING_MODEL is None:
-            return []
+        """Generate provider-agnostic embeddings with deterministic local fallback."""
         try:
-            return _EMBEDDING_MODEL.encode(text, convert_to_numpy=True).tolist()
-        except Exception as e:
-            print(f"[VectorStore] Embedding failed: {e}")
-            return []
+            if _EMBEDDING_MODEL is not None:
+                return _EMBEDDING_MODEL.encode(text, convert_to_numpy=True).tolist()
+        except Exception:
+            return self._hash_embedding(text)
+        return self._hash_embedding(text)
+
+    def embedding_info(self) -> Dict[str, Any]:
+        return {
+            "provider": "sentence-transformers" if _EMBEDDING_MODEL is not None else "deterministic-hash",
+            "dimensions": 384,
+            "pgvector_enabled": bool(getattr(db, "pgvector_enabled", False)),
+        }
 
     def add_chunk(self, source_id: str, text: str, chunk_index: int = 0, metadata: Optional[Dict[str, Any]] = None) -> Dict:
         tokens = self._normalize(text)
         vector = self._vectorize(tokens)
-        embedding = self._embed_text(text) if _EMBEDDING_MODEL else []
+        embedding = self._embed_text(text)
 
         chunk_doc = {
             "source_id": source_id,
@@ -111,9 +131,8 @@ class SimpleVectorStore:
 
     def search(self, query: str, top_k: int = 5) -> List[Dict]:
         """Search chunks using embeddings if available, else TF-IDF."""
-        if _EMBEDDING_MODEL:
-            return self._search_embeddings(query, top_k)
-        return self._search_tfidf(query, top_k)
+        hits = self._search_embeddings(query, top_k)
+        return hits or self._search_tfidf(query, top_k)
 
     def _search_embeddings(self, query: str, top_k: int) -> List[Dict]:
         query_emb = self._embed_text(query)
@@ -131,7 +150,7 @@ class SimpleVectorStore:
             chunk_emb = chunk.get("embedding", [])
             if chunk_emb and len(chunk_emb) == len(query_emb):
                 score = self._embedding_similarity(query_emb, chunk_emb)
-                if score > 0.3:  # Embedding threshold
+                if score > 0.05:
                     scores.append({"chunk": chunk, "score": score})
 
         scores.sort(key=lambda hit: hit["score"], reverse=True)

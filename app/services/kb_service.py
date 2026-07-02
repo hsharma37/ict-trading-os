@@ -33,6 +33,10 @@ class KBService:
         "time": ["timeframe", "daily bias", "weekly bias", "monthly bias", "higher timeframe"],
         "trade_management": ["risk management", "lot sizing", "position sizing", "money management", "risk reward", "1:2", "1:3"],
     }
+    EXECUTION_TERMS = {
+        "buy", "sell", "long", "short", "entry", "enter", "execute", "trade now",
+        "stop loss", "take profit", "target", "lot", "position size", "risk",
+    }
 
     def normalize_tags(self, tags: Optional[str]) -> List[str]:
         if not tags:
@@ -42,6 +46,14 @@ class KBService:
     def _content_hash(self, text: str) -> str:
         normalized = re.sub(r"\s+", " ", text or "").strip().lower()
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+    def _query_terms(self, text: str) -> set[str]:
+        terms = set(re.findall(r"\b[a-z][a-z0-9_]{2,}\b", (text or "").lower()))
+        return {term for term in terms if term not in {"what", "when", "where", "which", "should", "would", "could", "about"}}
+
+    def _is_execution_sensitive(self, query: str) -> bool:
+        lower = (query or "").lower()
+        return any(term in lower for term in self.EXECUTION_TERMS)
 
     def _canonical_url(self, url: str, video_id: Optional[str] = None) -> str:
         if not url:
@@ -383,8 +395,63 @@ class KBService:
                 },
                 "concept_tags": chunk.get("concept_tags") or source.get("concepts", []),
                 "chunk_score": hit.get("score", 0),
+                "match_reason": self._match_reason(query, chunk, source),
             })
         return results
+
+    def _match_reason(self, query: str, chunk: Dict[str, Any], source: Dict[str, Any]) -> str:
+        query_terms = self._query_terms(query)
+        haystack_terms = self._query_terms(" ".join([
+            chunk.get("chunk_text", ""),
+            " ".join(chunk.get("concept_tags", [])),
+            source.get("title", ""),
+        ]))
+        overlap = sorted(query_terms & haystack_terms)
+        if overlap:
+            return "matched terms: " + ", ".join(overlap[:6])
+        if chunk.get("concept_tags"):
+            return "matched nearby concept tags"
+        return "matched embedding similarity"
+
+    def _citation_from_hit(self, hit: Dict[str, Any]) -> Dict[str, Any]:
+        chunk = hit.get("chunk", {})
+        source = self.find_source(chunk.get("source_id", ""))
+        citation = chunk.get("citation") or {}
+        return {
+            "source_id": source.get("id") or chunk.get("source_id"),
+            "title": citation.get("title") or source.get("title", ""),
+            "url": citation.get("url") or source.get("url", ""),
+            "timestamp": citation.get("timestamp") or chunk.get("timestamp"),
+            "span": citation.get("span") or chunk.get("span"),
+            "chunk_index": chunk.get("chunk_index", 0),
+            "score": hit.get("score", 0),
+            "concept_tags": chunk.get("concept_tags") or source.get("concepts", []),
+        }
+
+    def _hit_has_query_support(self, query: str, hit: Dict[str, Any]) -> bool:
+        chunk = hit.get("chunk", {})
+        source = self.find_source(chunk.get("source_id", ""))
+        query_terms = self._query_terms(query)
+        if not query_terms:
+            return False
+        supported_terms = self._query_terms(" ".join([
+            chunk.get("chunk_text", ""),
+            " ".join(chunk.get("concept_tags", [])),
+            source.get("title", ""),
+            source.get("analysis", {}).get("summary", ""),
+        ]))
+        return bool(query_terms & supported_terms)
+
+    def _confidence_from_hits(self, hits: List[Dict[str, Any]], supported: bool) -> str:
+        if not hits or not supported:
+            return "low"
+        top_score = max(float(hit.get("score", 0) or 0) for hit in hits)
+        citation_count = sum(1 for hit in hits if self._citation_from_hit(hit).get("url"))
+        if top_score >= 0.45 and citation_count >= 2:
+            return "high"
+        if top_score >= 0.12 and citation_count >= 1:
+            return "medium"
+        return "low"
 
     def enqueue_auto_transcribe(
         self,
@@ -653,6 +720,7 @@ class KBService:
             "transcript_enabled": youtube_service is not None,
             "search_enabled": True,
             "vector_search_enabled": True,
+            "embedding": vector_store.embedding_info(),
             "ai_analysis_enabled": True,
             "last_source": sources[0] if sources else None,
         }
@@ -674,11 +742,31 @@ class KBService:
                     "score": 1.0,
                 })
 
-        if not hits:
+        supported_hits = [hit for hit in hits if self._hit_has_query_support(query, hit)]
+        supported = bool(supported_hits)
+        execution_sensitive = self._is_execution_sensitive(query)
+        citations = [self._citation_from_hit(hit) for hit in hits[:top_k]]
+        confidence = self._confidence_from_hits(hits, supported)
+        safety_disclaimer = (
+            "Educational only. Do not treat retrieved notes as live trade instructions; validate bias, risk, invalidation, and execution context yourself."
+            if execution_sensitive else ""
+        )
+
+        if not hits or not supported:
+            missing_context = [
+                "No retrieved chunk directly supports the question.",
+                "Ingest or cite source material that covers this setup before using it for planning.",
+            ]
             return {
-                "answer": "I don't have any relevant sources in the knowledge base to answer this question. Try adding some YouTube videos or transcripts first!",
+                "answer": "I do not have enough cited knowledge-base context to answer that reliably.",
                 "sources": [],
-                "context_chunks": 0,
+                "citations": citations,
+                "confidence": "low",
+                "missing_context": missing_context,
+                "refused": True,
+                "safety_disclaimer": safety_disclaimer,
+                "context_chunks": len(hits),
+                "query": query,
             }
 
         # Build context
@@ -687,8 +775,9 @@ class KBService:
         for i, hit in enumerate(hits, 1):
             chunk = hit.get("chunk", {})
             source = self.find_source(chunk.get("source_id", ""))
+            citation = self._citation_from_hit(hit)
             context_parts.append(
-                f"[{i}] {source.get('title', 'Unknown')} ({source.get('source_type', 'unknown')}):\n"
+                f"[{i}] {source.get('title', 'Unknown')} {citation.get('span') or citation.get('timestamp') or ''}:\n"
                 f"{chunk.get('chunk_text', '')}"
             )
             sources.append({
@@ -696,13 +785,15 @@ class KBService:
                 "title": source.get("title"),
                 "url": source.get("url"),
                 "score": hit.get("score", 0),
+                "timestamp": citation.get("timestamp"),
+                "span": citation.get("span"),
             })
 
         context_text = "\n\n".join(context_parts)
 
         # Build prompt for simple answer (without LLM dependency for basic operation)
         # For production, this should call an LLM. Here we provide a structured retrieval.
-        answer = f"""Based on the knowledge base sources, here is what I found:
+        answer = f"""Based on the cited knowledge-base passages, here is what I found:
 
 {context_text}
 
@@ -722,10 +813,23 @@ I found {len(hits)} relevant passages. The top sources are:
             # Extract first sentence or first 200 chars
             first_sentence = chunk_text.split(".")[0] if "." in chunk_text else chunk_text[:200]
             answer += f"\n{i}. {first_sentence}..."
+        if safety_disclaimer:
+            answer += f"\n\nSafety note: {safety_disclaimer}"
+
+        missing_context = []
+        if confidence != "high":
+            missing_context.append("Retrieved evidence is useful but not exhaustive; add more source-backed examples for higher confidence.")
+        if execution_sensitive:
+            missing_context.append("Live market state, account risk, and current invalidation are outside the KB retrieval context.")
 
         return {
             "answer": answer,
             "sources": sources,
+            "citations": citations,
+            "confidence": confidence,
+            "missing_context": missing_context,
+            "refused": False,
+            "safety_disclaimer": safety_disclaimer,
             "context_chunks": len(hits),
             "query": query,
         }
