@@ -21,14 +21,14 @@ class PriceResponse(BaseModel):
     open: float
     volume: int
     prev_close: float
-    timestamp: float
+    timestamp: str
     kind: str
     digits: int
 
 
 class AllPricesResponse(BaseModel):
     prices: List[PriceResponse]
-    timestamp: float
+    timestamp: str
 
 
 class InstrumentInfo(BaseModel):
