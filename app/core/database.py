@@ -201,18 +201,22 @@ class PostgresDB:
             with conn.cursor() as cur:
                 try:
                     cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-                    self.pgvector_enabled = True
+                    cur.execute("SELECT to_regtype('vector') IS NOT NULL AS available")
+                    self.pgvector_enabled = bool(cur.fetchone()["available"])
                 except Exception:
                     self.pgvector_enabled = False
                 self._create_tables(cur)
                 if self.pgvector_enabled:
-                    cur.execute(
-                        f"ALTER TABLE kb_chunks ADD COLUMN IF NOT EXISTS embedding vector({PGVECTOR_DIMENSIONS})"
-                    )
-                    cur.execute(
-                        "CREATE INDEX IF NOT EXISTS idx_kb_chunks_embedding "
-                        "ON kb_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
-                    )
+                    try:
+                        cur.execute(
+                            f"ALTER TABLE kb_chunks ADD COLUMN IF NOT EXISTS embedding vector({PGVECTOR_DIMENSIONS})"
+                        )
+                        cur.execute(
+                            "CREATE INDEX IF NOT EXISTS idx_kb_chunks_embedding "
+                            "ON kb_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
+                        )
+                    except Exception:
+                        self.pgvector_enabled = False
 
     def _create_tables(self, cur) -> None:
         cur.execute("""

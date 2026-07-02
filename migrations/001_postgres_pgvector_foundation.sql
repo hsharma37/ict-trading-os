@@ -60,9 +60,11 @@ CREATE INDEX IF NOT EXISTS idx_kb_chunks_data_gin ON kb_chunks USING gin(data);
 
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+    IF to_regtype('vector') IS NOT NULL THEN
         EXECUTE 'ALTER TABLE kb_chunks ADD COLUMN IF NOT EXISTS embedding vector(384)';
         EXECUTE 'CREATE INDEX IF NOT EXISTS idx_kb_chunks_embedding ON kb_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)';
+    ELSE
+        RAISE NOTICE 'pgvector type is not visible on this search_path; using embedding_json fallback.';
     END IF;
 END
 $$;
