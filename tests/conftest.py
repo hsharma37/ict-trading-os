@@ -32,6 +32,7 @@ def clean_db():
         "settings",
         "kb_sources",
         "kb_chunks",
+        "kb_ingestion_jobs",
         "plans",
         "trades",
         "journal_entries",

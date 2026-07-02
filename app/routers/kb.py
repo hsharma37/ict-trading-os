@@ -25,6 +25,12 @@ class AutoTranscribeRequest(BaseModel):
     use_ai_analysis: Optional[bool] = True
     use_whisper: Optional[bool] = True
 
+class IngestionJobRequest(BaseModel):
+    url: str = Field(..., description="YouTube video, playlist, or channel URL")
+    tags: Optional[str] = ""
+    use_ai_analysis: Optional[bool] = True
+    use_whisper: Optional[bool] = True
+
 class ChatRequest(BaseModel):
     query: str = Field(..., description="Question to ask the knowledge base")
     use_vectors: Optional[bool] = True
@@ -83,6 +89,32 @@ def auto_transcribe(request: AutoTranscribeRequest):
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+
+@router.post("/ingestion-jobs")
+def create_ingestion_job(request: IngestionJobRequest):
+    """
+    Queue a durable YouTube ingestion job and return its status document.
+    """
+    try:
+        return kb_service.enqueue_auto_transcribe(
+            url=request.url,
+            tags=request.tags,
+            use_ai_analysis=request.use_ai_analysis,
+            use_whisper=request.use_whisper,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/ingestion-jobs")
+def list_ingestion_jobs(limit: int = 20):
+    return kb_service.list_ingestion_jobs(limit=limit)
+
+@router.get("/ingestion-jobs/{job_id}")
+def get_ingestion_job(job_id: str):
+    job = kb_service.get_ingestion_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Ingestion job not found")
+    return job
 
 @router.post("/chat")
 def chat(request: ChatRequest):

@@ -1,14 +1,18 @@
 from app.services.kb_service import kb_service
 from app.services.vector_store import SimpleVectorStore
 from app.services.youtube_service import VideoAnalysis, VideoMetadata, VideoTranscript
+from app.core.database import db
+import time
 
 
 def test_youtube_auto_transcribe_persists_chunks_and_is_idempotent(monkeypatch):
     video_url = "https://youtu.be/pq9WuZ9q4Bg?si=test"
     video_id = "pq9WuZ9q4Bg"
     transcript = (
-        "Fair value gap and liquidity sweep setup. "
-        "Order block mitigation with risk management. "
+        "Fair value gap and liquidity sweep setup creates the setup model. "
+        "Order block mitigation gives the trigger after displacement. "
+        "Invalidation is beyond the swept liquidity and risk management controls the trade. "
+        "Management takes partials at opposing liquidity. "
     ) * 80
 
     metadata = VideoMetadata(
@@ -31,8 +35,10 @@ def test_youtube_auto_transcribe_persists_chunks_and_is_idempotent(monkeypatch):
             video_id=video_id,
             text=transcript,
             segments=[
-                {"text": "Fair value gap and liquidity sweep setup.", "start": 12, "duration": 4},
-                {"text": "Order block mitigation with risk management.", "start": 45, "duration": 5},
+                {"text": "Fair value gap and liquidity sweep setup creates the setup model.", "start": 12, "duration": 4},
+                {"text": "Order block mitigation gives the trigger after displacement.", "start": 45, "duration": 5},
+                {"text": "Invalidation is beyond the swept liquidity and risk management controls the trade.", "start": 90, "duration": 8},
+                {"text": "Management takes partials at opposing liquidity.", "start": 130, "duration": 6},
             ],
             source="caption",
         )
@@ -75,21 +81,117 @@ def test_youtube_auto_transcribe_persists_chunks_and_is_idempotent(monkeypatch):
     assert status["source_count"] == 1
     assert status["youtube_source_count"] == 1
     assert status["chunk_count"] == second["chunk_count"]
-    assert status["last_source"]["url"] == video_url
+    assert status["last_source"]["url"] == f"https://www.youtube.com/watch?v={video_id}"
+    assert status["last_source"]["original_url"] == video_url
     assert status["last_source"]["chunk_count"] == second["chunk_count"]
+    assert status["concept_count"] >= 3
+    assert status["last_source"]["content_hash"]
+    assert status["last_source"]["analysis_artifacts"]["playbook_rules"]
 
-    hits = kb_service.search_vectors("liquidity sweep fair value gap", top_k=3)
+    chunks = db.find("kb_chunks", source_id=status["last_source"]["id"])
+    assert chunks
+    assert all(chunk.get("citation", {}).get("url") == f"https://www.youtube.com/watch?v={video_id}" for chunk in chunks)
+    assert all(chunk.get("timestamp") or chunk.get("span") for chunk in chunks)
+    assert all(350 <= chunk.get("token_count", 0) <= 512 for chunk in chunks[:-1])
+
+    hits = kb_service.search_vectors("liquidity sweep fair value gap invalidation management", top_k=3)
     assert hits
     assert hits[0]["source_title"] == "ICT short setup"
+    assert hits[0]["source_url"] == f"https://www.youtube.com/watch?v={video_id}"
+    assert hits[0]["citation"]["timestamp"]
+    assert hits[0]["chunk_score"] == hits[0]["score"]
+    assert "FVG" in hits[0]["concept_tags"]
 
-    answer = kb_service.chat_answer("What setup does the video describe?", top_k=2)
+    answer = kb_service.chat_answer("What setup, trigger, invalidation, and management does the video describe?", top_k=2)
     assert answer["context_chunks"] > 0
-    assert answer["sources"][0]["url"] == video_url
+    assert answer["sources"][0]["url"] == f"https://www.youtube.com/watch?v={video_id}"
 
     removed = kb_service.remove_source(status["last_source"]["id"])
     assert removed["removed"] is True
     assert kb_service.status()["source_count"] == 0
     assert kb_service.status()["chunk_count"] == 0
+
+
+def test_manual_source_upsert_refreshes_chunks_with_citations():
+    source = kb_service.add_source(
+        title="Manual ICT playbook",
+        url="https://example.com/playbook?utm_source=noise",
+        transcript="Liquidity sweep into fair value gap. Invalidation is above the high. " * 260,
+        tags="manual,ict",
+        source_type="manual",
+    )
+    updated = kb_service.add_source(
+        title="Manual ICT playbook updated",
+        url="https://example.com/playbook",
+        transcript="Liquidity sweep into fair value gap with management at opposing liquidity. " * 260,
+        tags="manual,ict",
+        source_type="manual",
+    )
+
+    assert updated["id"] == source["id"]
+    assert kb_service.status()["source_count"] == 1
+    chunks = db.find("kb_chunks", source_id=source["id"])
+    assert chunks
+    assert all(chunk.get("source_content_hash") == updated["content_hash"] for chunk in chunks)
+    assert all(chunk.get("citation", {}).get("title") == "Manual ICT playbook updated" for chunk in chunks)
+
+
+def test_async_ingestion_job_persists_status(monkeypatch):
+    video_url = "https://youtu.be/pq9WuZ9q4Bg?si=job"
+    video_id = "pq9WuZ9q4Bg"
+    transcript = "Liquidity sweep setup trigger invalidation management. " * 520
+
+    metadata = VideoMetadata(
+        video_id=video_id,
+        title="ICT job source",
+        channel="ICT Test",
+        duration=600,
+        view_count=1000,
+        upload_date="2026-07-01",
+        url=video_url,
+    )
+
+    monkeypatch.setattr("app.services.kb_service.youtube_service.fetch_video_metadata", lambda url: metadata)
+    monkeypatch.setattr(
+        "app.services.kb_service.youtube_service.fetch_video_transcript",
+        lambda requested_video_id, languages=None, allow_whisper=True: VideoTranscript(
+            video_id=video_id,
+            text=transcript,
+            segments=[
+                {"text": "Liquidity sweep setup trigger invalidation management.", "start": 30, "duration": 5},
+            ] * 520,
+            source="caption",
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.kb_service.youtube_service.analyze_transcript",
+        lambda transcript_result, meta: VideoAnalysis(
+            video_id=video_id,
+            title=meta.title,
+            summary="Async extraction",
+            key_concepts=["liquidity", "risk management"],
+            timestamps=[{"time": "0:30", "concept": "liquidity", "text": "Liquidity sweep"}],
+            ict_relevance="high",
+            trading_insights="Manage risk.",
+            sentiment="neutral",
+            word_count=len(transcript_result.text.split()),
+        ),
+    )
+
+    job = kb_service.enqueue_auto_transcribe(video_url, tags="job", use_ai_analysis=False, use_whisper=False)
+    assert job["status"] == "QUEUED"
+
+    saved = {}
+    for _ in range(50):
+        saved = kb_service.get_ingestion_job(job["id"])
+        if saved.get("status") in {"SUCCEEDED", "FAILED"}:
+            break
+        time.sleep(0.05)
+
+    assert saved["status"] == "SUCCEEDED"
+    assert saved["result"]["source_count"] == 1
+    assert saved["result"]["created"][0]["url"] == f"https://www.youtube.com/watch?v={video_id}"
+    assert kb_service.status()["latest_ingestion_job"]["id"] == job["id"]
 
 
 def test_vector_store_delegates_to_pgvector_backend(monkeypatch):

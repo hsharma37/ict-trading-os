@@ -14,6 +14,7 @@ PROTECTED_PREFIXES = (
     "/bot",
     "/kb/sources",
     "/kb/auto-transcribe",
+    "/kb/ingestion-jobs",
     "/kb/support",
     "/market/manual-price",
     "/mt5",
