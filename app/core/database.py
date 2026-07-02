@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import uuid
 from datetime import datetime
@@ -29,6 +30,7 @@ POSTGRES_COLLECTION_TABLES = {
 }
 
 PGVECTOR_DIMENSIONS = 384
+SCHEMA_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _utc_now() -> str:
@@ -190,11 +192,17 @@ class PostgresDB:
         self._init_db()
 
     def _connect(self):
-        return self._psycopg.connect(
+        conn = self._psycopg.connect(
             self.database_url,
             autocommit=True,
             row_factory=self._dict_row,
         )
+        if settings.DATABASE_SCHEMA:
+            if not SCHEMA_NAME_RE.match(settings.DATABASE_SCHEMA):
+                raise RuntimeError("DATABASE_SCHEMA must be a simple Postgres identifier")
+            with conn.cursor() as cur:
+                cur.execute(f"SET search_path TO {settings.DATABASE_SCHEMA}, extensions, public")
+        return conn
 
     def _init_db(self) -> None:
         with self._connect() as conn:

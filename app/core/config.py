@@ -14,6 +14,7 @@ class Settings:
     TELEGRAM_CHANNEL_ID: str = os.getenv("TELEGRAM_CHANNEL_ID", "")
     MT5_BRIDGE_URL: str = os.getenv("MT5_BRIDGE_URL", "http://localhost:5001")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    DATABASE_SCHEMA: str = os.getenv("DATABASE_SCHEMA", "")
     DATABASE_PATH: str = os.getenv(
         "DATABASE_PATH",
         str(Path(__file__).resolve().parents[2] / "ictos.db"),
