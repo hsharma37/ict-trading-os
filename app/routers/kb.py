@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from app.services.kb_service import kb_service
+from app.services.retrieval_eval_service import retrieval_eval_service
 
 router = APIRouter(prefix="/kb", tags=["Knowledge Base"])
 
@@ -127,6 +128,10 @@ def chat(request: ChatRequest):
         use_vectors=request.use_vectors,
         top_k=request.top_k,
     )
+
+@router.get("/eval")
+def run_retrieval_quality(top_k: int = 5):
+    return retrieval_eval_service.evaluate(top_k=top_k)
 
 @router.get("/recommend")
 def recommend(query: str):
