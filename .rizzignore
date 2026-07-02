@@ -1,0 +1,15 @@
+.venv/
+.pytest_cache/
+node_modules/
+frontend/node_modules/
+frontend/dist/
+.vercel/
+downloads/
+logs/
+*.pyc
+*.so
+*.dylib
+*.db
+*.sqlite
+*.sqlite3
+price_cache.json
