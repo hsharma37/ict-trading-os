@@ -22,6 +22,11 @@ export const kbApi = {
     apiClient.get('/kb/search-embeddings', { params: { query, top_k } }),
   autoTranscribe: (url: string, tags?: string, use_ai_analysis?: boolean, use_whisper?: boolean) =>
     apiClient.post('/kb/auto-transcribe', { url, tags, use_ai_analysis, use_whisper }),
+  createIngestionJob: (url: string, tags?: string, use_ai_analysis?: boolean, use_whisper?: boolean) =>
+    apiClient.post('/kb/ingestion-jobs', { url, tags, use_ai_analysis, use_whisper }),
+  listIngestionJobs: (limit: number = 20) =>
+    apiClient.get('/kb/ingestion-jobs', { params: { limit } }),
+  getIngestionJob: (id: string) => apiClient.get(`/kb/ingestion-jobs/${id}`),
   chat: (query: string, use_vectors?: boolean, top_k?: number) =>
     apiClient.post('/kb/chat', { query, use_vectors, top_k }),
   status: () => apiClient.get('/kb/status'),

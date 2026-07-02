@@ -1,6 +1,7 @@
 """Quantitative analysis service."""
 import numpy as np
 from typing import List, Dict, Optional
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 try:
     from scipy import stats
@@ -10,6 +11,55 @@ except ImportError:
     stats = None
 
 class QuantService:
+    def _decimal(self, value) -> Decimal:
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, ValueError):
+            return Decimal("0")
+
+    def calculate_kelly(self, returns: List[float]) -> Dict:
+        n = len(returns)
+        if n == 0:
+            return {
+                "n": 0,
+                "win_rate": 0,
+                "win_pct": 0,
+                "loss_pct": 0,
+                "avg_win": 0,
+                "avg_loss": 0,
+                "payoff_ratio": 0,
+                "kelly_fraction": 0,
+                "kelly_pct": 0,
+                "kelly_half": 0,
+                "half_kelly": 0,
+                "quarter_kelly": 0,
+            }
+        values = [self._decimal(value) for value in returns]
+        wins = [value for value in values if value > 0]
+        losses = [value for value in values if value < 0]
+        win_rate = Decimal(len(wins)) / Decimal(n)
+        avg_win = sum(wins, Decimal("0")) / Decimal(len(wins)) if wins else Decimal("0")
+        avg_loss_abs = abs(sum(losses, Decimal("0")) / Decimal(len(losses))) if losses else Decimal("0")
+        payoff = avg_win / avg_loss_abs if avg_loss_abs > 0 else Decimal("0")
+        kelly = win_rate - ((Decimal("1") - win_rate) / payoff) if payoff > 0 else Decimal("0")
+        kelly = max(Decimal("0"), min(Decimal("1"), kelly))
+        q4 = Decimal("0.0001")
+        q2 = Decimal("0.01")
+        return {
+            "n": n,
+            "win_rate": float(win_rate.quantize(q4, rounding=ROUND_HALF_UP)),
+            "win_pct": float((win_rate * 100).quantize(q2, rounding=ROUND_HALF_UP)),
+            "loss_pct": float(((Decimal("1") - win_rate) * 100).quantize(q2, rounding=ROUND_HALF_UP)),
+            "avg_win": float(avg_win.quantize(q2, rounding=ROUND_HALF_UP)),
+            "avg_loss": float(avg_loss_abs.quantize(q2, rounding=ROUND_HALF_UP)),
+            "payoff_ratio": float(payoff.quantize(q2, rounding=ROUND_HALF_UP)) if payoff > 0 else 0,
+            "kelly_fraction": float(kelly.quantize(q4, rounding=ROUND_HALF_UP)),
+            "kelly_pct": float((kelly * 100).quantize(q2, rounding=ROUND_HALF_UP)),
+            "kelly_half": float((kelly / 2).quantize(q4, rounding=ROUND_HALF_UP)),
+            "half_kelly": float((kelly * 50).quantize(q2, rounding=ROUND_HALF_UP)),
+            "quarter_kelly": float((kelly * 25).quantize(q2, rounding=ROUND_HALF_UP)),
+        }
+
     def compute_metrics(self, trades: List[Dict]) -> Dict:
         if len(trades) < 2:
             return {"n_trades": len(trades), "message": "Need at least 2 closed trades"}
@@ -57,21 +107,10 @@ class QuantService:
     def compute_kelly(self, trades: List[Dict]) -> Optional[Dict]:
         if len(trades) < 5: return None
         returns = [t.get("realized_pnl", 0) for t in trades]
-        wins = [r for r in returns if r > 0]
-        losses = [r for r in returns if r <= 0]
-        if not wins or not losses: return None
-        n = len(returns)
-        win_pct = len(wins) / n
-        avg_win = np.mean(wins)
-        avg_loss = abs(np.mean(losses))
-        payoff = avg_win / avg_loss if avg_loss > 0 else 0
-        kelly = win_pct - ((1 - win_pct) / payoff) if payoff > 0 else 0
-        return {
-            "win_pct": round(win_pct * 100, 1), "loss_pct": round((1 - win_pct) * 100, 1),
-            "avg_win": round(avg_win, 2), "avg_loss": round(avg_loss, 2),
-            "payoff_ratio": round(payoff, 2), "kelly_pct": round(kelly * 100, 2),
-            "half_kelly": round(kelly * 50, 2), "quarter_kelly": round(kelly * 25, 2), "n": n
-        }
+        kelly = self.calculate_kelly(returns)
+        if not kelly["avg_win"] or not kelly["avg_loss"]:
+            return None
+        return kelly
 
     def monte_carlo(self, trades: List[Dict], n_sims: int = 1000, n_trades: int = 100) -> Dict:
         if len(trades) < 5: return {"error": "Need 5+ trades"}

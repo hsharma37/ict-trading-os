@@ -6,7 +6,7 @@ class Settings:
     """Application settings from environment variables."""
     APP_NAME = os.getenv("APP_NAME", "ICT Trading OS API")
     APP_VERSION = os.getenv("APP_VERSION", "9.1.0")
-    APP_ENV = os.getenv("APP_ENV") or os.getenv("PYTHON_ENV") or os.getenv("VERCEL_ENV") or "development"
+    APP_ENV = (os.getenv("APP_ENV") or os.getenv("PYTHON_ENV") or os.getenv("VERCEL_ENV") or "development").lower()
     STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "auto").lower()
     CORS_ORIGINS = os.getenv("CORS_ORIGINS", "*")
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
@@ -23,13 +23,48 @@ class Settings:
         os.getenv("VERCEL", "").lower() in {"1", "true"}
         or os.getenv("TRADINGOS_RUNTIME", "").lower() == "vercel"
     )
+    PRODUCTION_LIKE: bool = APP_ENV in {"production", "preview"} or IS_VERCEL
     ALLOW_SQLITE_RUNTIME: bool = os.getenv("ALLOW_SQLITE_RUNTIME", "false").lower() == "true"
     REQUIRE_POSTGRES: bool = (
         os.getenv("REQUIRE_POSTGRES", "false").lower() == "true"
-        or ((APP_ENV in {"production", "preview"} or IS_VERCEL) and not ALLOW_SQLITE_RUNTIME)
+        or (PRODUCTION_LIKE and not ALLOW_SQLITE_RUNTIME)
     )
     AUTH_ENABLED: bool = os.getenv("AUTH_ENABLED", "false").lower() == "true"
+    REQUIRE_API_AUTH: bool = os.getenv(
+        "REQUIRE_API_AUTH",
+        "true" if PRODUCTION_LIKE else "false",
+    ).lower() == "true"
+    ALLOW_PUBLIC_API_MUTATIONS: bool = os.getenv("ALLOW_PUBLIC_API_MUTATIONS", "false").lower() == "true"
     API_KEY: str = os.getenv("API_KEY", "")
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "ict-os-dev-secret-key")
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "" if PRODUCTION_LIKE else "ict-os-dev-secret-key")
+
+    def auth_required(self) -> bool:
+        """Whether private/sensitive API routes require API-key auth."""
+        if self.ALLOW_PUBLIC_API_MUTATIONS:
+            return False
+        return self.AUTH_ENABLED or self.REQUIRE_API_AUTH or self.PRODUCTION_LIKE
+
+    def validate_runtime_security(self) -> None:
+        """Fail fast when required auth secrets are absent or still defaults."""
+        if not self.auth_required():
+            return
+        default_api_keys = {
+            "change-me",
+            "change-me-in-production",
+            "replace-with-production-64-char-random-api-key",
+            "replace-with-production-api-key",
+            "replace-with-preview-64-char-random-api-key",
+            "replace-with-preview-api-key",
+        }
+        default_jwt_secrets = {
+            "ict-os-dev-secret-key",
+            "change-me-in-production-64-char-random-string",
+            "replace-with-production-random-secret",
+            "replace-with-preview-random-secret",
+        }
+        if not self.API_KEY or self.API_KEY in default_api_keys:
+            raise RuntimeError("API_KEY must be set to a non-default value when API auth is required")
+        if not self.JWT_SECRET or self.JWT_SECRET in default_jwt_secrets:
+            raise RuntimeError("JWT_SECRET must be set to a non-default value when API auth is required")
 
 settings = Settings()

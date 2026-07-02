@@ -4,13 +4,21 @@ Knowledge Base Service — Ingestion, analysis, and retrieval with AI-powered ch
 Uses modern YouTube transcription (yt-dlp + youtube-transcript-api + whisper fallback),
 agent-based video analysis, and sentence-transformer embeddings for semantic search.
 """
+import hashlib
 import re
+import threading
+import uuid
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from app.core.database import db
 from app.services.vector_store import vector_store
 from app.services.youtube_service import youtube_service, VideoAnalysis
 from app.services.video_analysis_agent import video_analysis_agent
+
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 class KBService:
@@ -31,18 +39,192 @@ class KBService:
             return []
         return [t.strip().lower() for t in tags.split(",") if t.strip()]
 
-    def _chunk_text(self, text: str, chunk_words: int = 200, overlap: int = 50) -> List[str]:
-        """Chunk text with overlap for better semantic continuity."""
-        if not text:
+    def _content_hash(self, text: str) -> str:
+        normalized = re.sub(r"\s+", " ", text or "").strip().lower()
+        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+    def _canonical_url(self, url: str, video_id: Optional[str] = None) -> str:
+        if not url:
+            return ""
+        video_id = video_id or youtube_service.extract_video_id(url)
+        if video_id:
+            return f"https://www.youtube.com/watch?v={video_id}"
+
+        parsed = urlparse(url.strip())
+        keep_params = {}
+        for key, value in parse_qs(parsed.query).items():
+            if key not in {"si", "feature", "t", "utm_source", "utm_medium", "utm_campaign"}:
+                keep_params[key] = value[-1]
+        return urlunparse((
+            parsed.scheme or "https",
+            parsed.netloc.lower(),
+            parsed.path.rstrip("/"),
+            "",
+            urlencode(keep_params),
+            "",
+        ))
+
+    def _format_timestamp(self, seconds: Optional[float]) -> Optional[str]:
+        if seconds is None:
+            return None
+        total = max(0, int(seconds))
+        return f"{total // 60}:{total % 60:02d}"
+
+    def _normalize_segments(self, text: str, segments: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+        normalized = []
+        for index, segment in enumerate(segments or []):
+            segment_text = re.sub(r"\s+", " ", str(segment.get("text", ""))).strip()
+            if not segment_text:
+                continue
+            start = segment.get("start")
+            duration = segment.get("duration") or 0
+            try:
+                start_seconds = float(start) if start is not None else None
+                end_seconds = start_seconds + float(duration or 0) if start_seconds is not None else None
+            except (TypeError, ValueError):
+                start_seconds = None
+                end_seconds = None
+            normalized.append({
+                "index": index,
+                "text": segment_text,
+                "start_seconds": start_seconds,
+                "end_seconds": end_seconds,
+                "timestamp": self._format_timestamp(start_seconds),
+            })
+
+        if normalized:
+            return normalized
+
+        words = re.findall(r"\S+", text or "")
+        fallback = []
+        for index in range(0, len(words), 120):
+            fallback.append({
+                "index": len(fallback),
+                "text": " ".join(words[index:index + 120]),
+                "start_seconds": None,
+                "end_seconds": None,
+                "timestamp": None,
+            })
+        return fallback
+
+    def _chunk_segments(
+        self,
+        segments: List[Dict[str, Any]],
+        target_tokens: int = 450,
+        overlap_tokens: int = 64,
+    ) -> List[Dict[str, Any]]:
+        """Chunk normalized transcript segments into cited 350-512-ish token windows."""
+        word_records = []
+        for segment in segments:
+            for word in re.findall(r"\S+", segment.get("text", "")):
+                word_records.append({
+                    "word": word,
+                    "start_seconds": segment.get("start_seconds"),
+                    "end_seconds": segment.get("end_seconds"),
+                })
+        if not word_records:
             return []
-        words = re.findall(r"\S+", text)
+
         chunks = []
-        i = 0
-        while i < len(words):
-            chunk = words[i:i + chunk_words]
-            chunks.append(" ".join(chunk))
-            i += chunk_words - overlap
+        start = 0
+        step = max(1, target_tokens - overlap_tokens)
+        while start < len(word_records):
+            window = word_records[start:start + target_tokens]
+            text = " ".join(item["word"] for item in window)
+            starts = [item["start_seconds"] for item in window if item.get("start_seconds") is not None]
+            ends = [item["end_seconds"] for item in window if item.get("end_seconds") is not None]
+            start_seconds = starts[0] if starts else None
+            end_seconds = ends[-1] if ends else None
+            timestamp = self._format_timestamp(start_seconds)
+            end_timestamp = self._format_timestamp(end_seconds)
+            chunks.append({
+                "text": text,
+                "token_count": len(window),
+                "start_seconds": start_seconds,
+                "end_seconds": end_seconds,
+                "timestamp": timestamp,
+                "end_timestamp": end_timestamp,
+                "span": f"{timestamp or 'transcript'}-{end_timestamp}" if timestamp and end_timestamp else timestamp,
+            })
+            if start + target_tokens >= len(word_records):
+                break
+            start += step
         return chunks
+
+    def _find_existing_source(self, canonical_url: str, video_id: Optional[str]) -> Dict:
+        if canonical_url:
+            matches = db.find("kb_sources", url=canonical_url)
+            if matches:
+                return matches[0]
+            matches = db.find("kb_sources", canonical_url=canonical_url)
+            if matches:
+                return matches[0]
+        if video_id:
+            for source in db.get_collection("kb_sources"):
+                metadata = source.get("metadata", {})
+                if metadata.get("video_id") == video_id:
+                    return source
+        return {}
+
+    def _build_analysis_artifacts(
+        self,
+        transcript: str,
+        analysis: Optional[Dict[str, Any]],
+        segments: List[Dict[str, Any]],
+        transcript_source: str = "",
+    ) -> Dict[str, Any]:
+        analysis = analysis or {}
+        concepts = sorted(set(self._extract_concepts(transcript) + [
+            str(concept).strip() for concept in analysis.get("key_concepts", []) if str(concept).strip()
+        ]))
+        lower_concepts = {concept.lower() for concept in concepts}
+        playbook_rules = []
+        if {"fvg", "liquidity"} & lower_concepts:
+            playbook_rules.append({
+                "type": "setup",
+                "rule": "Look for liquidity being taken before displacement into a fair value gap.",
+                "evidence": ["liquidity", "FVG"],
+            })
+        if "ob" in lower_concepts:
+            playbook_rules.append({
+                "type": "trigger",
+                "rule": "Use order block or mitigation reaction as confirmation, not as a standalone signal.",
+                "evidence": ["OB"],
+            })
+        if {"risk management", "trade_management"} & lower_concepts or "risk" in (transcript or "").lower():
+            playbook_rules.append({
+                "type": "management",
+                "rule": "Define invalidation before entry and manage exits from the cited setup context.",
+                "evidence": ["risk"],
+            })
+
+        evidence_spans = []
+        for item in analysis.get("timestamps", [])[:8]:
+            evidence_spans.append({
+                "timestamp": item.get("time") or item.get("timestamp"),
+                "concept": item.get("concept"),
+                "text": item.get("text", ""),
+            })
+        for segment in segments[:5]:
+            evidence_spans.append({
+                "timestamp": segment.get("timestamp"),
+                "start_seconds": segment.get("start_seconds"),
+                "end_seconds": segment.get("end_seconds"),
+                "text": segment.get("text", "")[:220],
+            })
+
+        uncertainty = []
+        if transcript_source in {"fallback", "whisper"}:
+            uncertainty.append(f"Transcript source is {transcript_source}; verify exact wording before trading decisions.")
+        if not evidence_spans:
+            uncertainty.append("No timestamped evidence spans were available.")
+
+        return {
+            "concepts": concepts,
+            "playbook_rules": playbook_rules,
+            "uncertainty": uncertainty,
+            "evidence_spans": evidence_spans,
+        }
 
     def _delete_chunks_for_source(self, source_id: str) -> int:
         chunks = db.find("kb_chunks", source_id=source_id)
@@ -52,30 +234,87 @@ class KBService:
                 deleted += 1
         return deleted
 
-    def add_source(self, title: str, url: str, transcript: str = "", tags: str = "", 
-                   source_type: str = "generic", analysis: Dict = None, metadata: Dict = None) -> Dict:
-        if url:
-            for existing in db.find("kb_sources", url=url):
-                self._delete_chunks_for_source(existing["id"])
-                db.delete("kb_sources", existing["id"])
+    def add_source(
+        self,
+        title: str,
+        url: str,
+        transcript: str = "",
+        tags: str = "",
+        source_type: str = "generic",
+        analysis: Dict = None,
+        metadata: Dict = None,
+        transcript_segments: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict:
+        metadata = metadata or {}
+        video_id = metadata.get("video_id") or youtube_service.extract_video_id(url)
+        canonical_url = self._canonical_url(url, video_id)
+        existing = self._find_existing_source(canonical_url, video_id)
+        if existing:
+            self._delete_chunks_for_source(existing["id"])
 
+        normalized_segments = self._normalize_segments(transcript, transcript_segments)
+        content_hash = self._content_hash(transcript)
+        analysis_artifacts = self._build_analysis_artifacts(
+            transcript,
+            analysis,
+            normalized_segments,
+            (analysis or {}).get("transcript_source", ""),
+        )
+        now = utc_now_iso()
         doc = {
+            "id": existing.get("id") if existing else None,
             "title": title,
-            "url": url,
+            "url": canonical_url or url,
+            "canonical_url": canonical_url or url,
+            "original_url": url,
             "source_type": source_type,
             "transcript": transcript,
             "tags": self.normalize_tags(tags),
-            "concepts": self._extract_concepts(title + " " + transcript + " " + tags),
+            "concepts": analysis_artifacts["concepts"] or self._extract_concepts(title + " " + transcript + " " + tags),
             "analysis": analysis or {},
+            "analysis_artifacts": analysis_artifacts,
             "metadata": metadata or {},
+            "transcript_segments": normalized_segments,
+            "content_hash": content_hash,
             "chunk_count": 0,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": existing.get("created_at") or now,
+            "updated_at": now,
         }
-        source = db.insert("kb_sources", doc)
+
+        if existing:
+            source = db.update("kb_sources", existing["id"], {k: v for k, v in doc.items() if k != "id"})
+        else:
+            doc = {k: v for k, v in doc.items() if v is not None}
+            source = db.insert("kb_sources", doc)
+
         if transcript:
-            chunks = self._chunk_text(transcript, 200, 50)
-            for idx, chunk_text in enumerate(chunks):
-                vector_store.add_chunk(source_id=source["id"], text=chunk_text, chunk_index=idx)
+            chunks = self._chunk_segments(normalized_segments)
+            for idx, chunk in enumerate(chunks):
+                chunk_concepts = self._extract_concepts(chunk["text"] + " " + " ".join(source.get("tags", [])))
+                vector_store.add_chunk(
+                    source_id=source["id"],
+                    text=chunk["text"],
+                    chunk_index=idx,
+                    metadata={
+                        "source_url": source.get("url"),
+                        "source_title": source.get("title"),
+                        "concept_tags": sorted(set(chunk_concepts + source.get("concepts", []))),
+                        "content_hash": self._content_hash(chunk["text"]),
+                        "source_content_hash": content_hash,
+                        "token_count": chunk.get("token_count"),
+                        "start_seconds": chunk.get("start_seconds"),
+                        "end_seconds": chunk.get("end_seconds"),
+                        "timestamp": chunk.get("timestamp"),
+                        "span": chunk.get("span"),
+                        "citation": {
+                            "source_id": source["id"],
+                            "url": source.get("url"),
+                            "title": source.get("title"),
+                            "timestamp": chunk.get("timestamp"),
+                            "span": chunk.get("span"),
+                        },
+                    },
+                )
             source["chunk_count"] = len(chunks)
             db.update("kb_sources", source["id"], {"chunk_count": len(chunks)})
         return source
@@ -133,8 +372,91 @@ class KBService:
                 "source_title": source.get("title", ""),
                 "source_url": source.get("url", ""),
                 "source_type": source.get("source_type", ""),
+                "timestamp": chunk.get("timestamp"),
+                "span": chunk.get("span"),
+                "citation": chunk.get("citation") or {
+                    "source_id": source.get("id"),
+                    "url": source.get("url", ""),
+                    "title": source.get("title", ""),
+                    "timestamp": chunk.get("timestamp"),
+                    "span": chunk.get("span"),
+                },
+                "concept_tags": chunk.get("concept_tags") or source.get("concepts", []),
+                "chunk_score": hit.get("score", 0),
             })
         return results
+
+    def enqueue_auto_transcribe(
+        self,
+        url: str,
+        tags: str = "",
+        use_ai_analysis: bool = True,
+        use_whisper: bool = True,
+    ) -> Dict:
+        if not url:
+            raise ValueError("URL is required")
+        video_id = youtube_service.extract_video_id(url)
+        canonical_url = self._canonical_url(url, video_id)
+        now = utc_now_iso()
+        job = db.insert("kb_ingestion_jobs", {
+            "id": f"KBJ-{uuid.uuid4().hex[:12]}",
+            "status": "QUEUED",
+            "url": url,
+            "canonical_url": canonical_url,
+            "tags": tags,
+            "use_ai_analysis": use_ai_analysis,
+            "use_whisper": use_whisper,
+            "progress": {"stage": "queued", "completed": 0, "total": 0},
+            "result": None,
+            "error": None,
+            "created_at": now,
+            "updated_at": now,
+        })
+
+        thread = threading.Thread(target=self._run_ingestion_job, args=(job["id"],), daemon=True)
+        thread.start()
+        return job
+
+    def _run_ingestion_job(self, job_id: str) -> None:
+        job = db.find_one("kb_ingestion_jobs", job_id)
+        if not job:
+            return
+        db.update("kb_ingestion_jobs", job_id, {
+            "status": "RUNNING",
+            "progress": {"stage": "transcribing", "completed": 0, "total": 1},
+            "started_at": utc_now_iso(),
+        })
+        try:
+            result = self.auto_transcribe(
+                url=job.get("url", ""),
+                tags=job.get("tags", ""),
+                use_ai_analysis=bool(job.get("use_ai_analysis", True)),
+                use_whisper=bool(job.get("use_whisper", True)),
+            )
+            db.update("kb_ingestion_jobs", job_id, {
+                "status": "SUCCEEDED",
+                "progress": {
+                    "stage": "complete",
+                    "completed": result.get("source_count", 0),
+                    "total": result.get("source_count", 0) + len(result.get("failed", [])),
+                },
+                "result": result,
+                "error": None,
+                "finished_at": utc_now_iso(),
+            })
+        except Exception as exc:
+            db.update("kb_ingestion_jobs", job_id, {
+                "status": "FAILED",
+                "progress": {"stage": "failed", "completed": 0, "total": 1},
+                "error": str(exc),
+                "finished_at": utc_now_iso(),
+            })
+
+    def get_ingestion_job(self, job_id: str) -> Dict:
+        return db.find_one("kb_ingestion_jobs", job_id)
+
+    def list_ingestion_jobs(self, limit: int = 20) -> List[Dict]:
+        return db.get_collection("kb_ingestion_jobs")[:limit]
 
     def auto_transcribe(self, url: str, tags: str = "", use_ai_analysis: bool = True, 
                         use_whisper: bool = True) -> Dict:
@@ -244,7 +566,8 @@ class KBService:
                         "duration": metadata.duration if metadata else 0,
                         "view_count": metadata.view_count if metadata else 0,
                         "upload_date": metadata.upload_date if metadata else "",
-                    }
+                    },
+                    transcript_segments=transcript_result.segments,
                 )
                 created.append({
                     "id": source.get("id"),
@@ -317,11 +640,16 @@ class KBService:
     def status(self) -> Dict:
         sources = db.get_collection("kb_sources")
         chunks = db.get_collection("kb_chunks")
+        jobs = db.get_collection("kb_ingestion_jobs")
         youtube_sources = [s for s in sources if s.get("source_type") == "youtube"]
+        concept_count = len({concept for source in sources for concept in source.get("concepts", [])})
         return {
             "source_count": len(sources),
             "chunk_count": len(chunks),
             "youtube_source_count": len(youtube_sources),
+            "concept_count": concept_count,
+            "ingestion_job_count": len(jobs),
+            "latest_ingestion_job": jobs[0] if jobs else None,
             "transcript_enabled": youtube_service is not None,
             "search_enabled": True,
             "vector_search_enabled": True,

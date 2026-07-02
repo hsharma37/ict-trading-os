@@ -1,8 +1,7 @@
 """Analytics service for trade performance metrics."""
 from typing import Dict, List
-from datetime import datetime
 from app.core.database import db
-from app.services.trade_lifecycle_service import trade_lifecycle_service
+from app.services.trade_lifecycle_service import trade_lifecycle_service, utc_now_iso
 
 
 class AnalyticsService:
@@ -15,7 +14,7 @@ class AnalyticsService:
         return {
             "summary": stats,
             "kelly": kelly,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": utc_now_iso(),
         }
 
     def get_expectancy(self) -> Dict:

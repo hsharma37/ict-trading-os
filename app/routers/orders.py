@@ -2,9 +2,9 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
 from app.services.lot_calculator import lot_calculator
 from app.services.trade_lifecycle_service import trade_lifecycle_service
+from app.services.trade_lifecycle_service import utc_now_iso
 from app.services.market_data import market_service
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -164,7 +164,7 @@ def delete_order(order_id: str):
             raise HTTPException(status_code=404, detail="Order not found")
         # Mark as cancelled in DB
         from app.core.database import db
-        db.update("trades", order_id, {"status": "CANCELLED", "updated_at": datetime.utcnow().isoformat()})
+        db.update("trades", order_id, {"status": "CANCELLED", "updated_at": utc_now_iso()})
         return {"deleted": True, "id": order_id}
     except HTTPException:
         raise

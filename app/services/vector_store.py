@@ -6,7 +6,7 @@ Falls back to TF-IDF if sentence-transformers is not installed.
 """
 import math
 import re
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from app.core.database import db
 
 STOPWORDS = {
@@ -91,7 +91,7 @@ class SimpleVectorStore:
             print(f"[VectorStore] Embedding failed: {e}")
             return []
 
-    def add_chunk(self, source_id: str, text: str, chunk_index: int = 0) -> Dict:
+    def add_chunk(self, source_id: str, text: str, chunk_index: int = 0, metadata: Optional[Dict[str, Any]] = None) -> Dict:
         tokens = self._normalize(text)
         vector = self._vectorize(tokens)
         embedding = self._embed_text(text) if _EMBEDDING_MODEL else []
@@ -104,6 +104,8 @@ class SimpleVectorStore:
             "embedding": embedding,
             "tokens": tokens,
         }
+        if metadata:
+            chunk_doc.update(metadata)
         doc = db.insert("kb_chunks", chunk_doc)
         return doc
 

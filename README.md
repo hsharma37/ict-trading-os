@@ -39,16 +39,18 @@ uv venv --python 3.12 .venv
 uv pip install -r requirements.txt pytest
 npm --prefix frontend ci
 
-export DATABASE_URL=postgresql://ictos:ictos@localhost:5432/ictos_dev
+export DATABASE_URL=postgresql://localhost:5432/ictos_dev
 psql "$DATABASE_URL" -f migrations/001_postgres_pgvector_foundation.sql
 
-PRICE_CACHE_DIR=/tmp/tradingos AUTH_ENABLED=false \
+PRICE_CACHE_DIR=/tmp/tradingos \
   .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 VITE_API_URL=http://127.0.0.1:8000 npm --prefix frontend run dev -- --host 127.0.0.1 --port 3000
 ```
 
 For throwaway local tests only, leave `DATABASE_URL` empty and set `ALLOW_SQLITE_RUNTIME=true DATABASE_PATH=ictos.db`.
+
+Preview and production protect private/mutating API routes by default. Owner/admin API calls need `X-Api-Key`; do not put that key into public Vite frontend variables.
 
 ### Available MT5 proxy endpoints
 
