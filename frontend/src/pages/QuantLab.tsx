@@ -193,7 +193,7 @@ export default function QuantLab() {
     if (instruments.length > 0 && decisionSymbol === 'EURUSD') {
       setDecisionSymbol(instruments[0].symbol)
     }
-  }, [instruments])
+  }, [instruments, decisionSymbol])
 
   const selected = instruments.find((i) => i.symbol === selectedSymbol)
   const isPositive = (val: number) => val >= 0
@@ -203,7 +203,7 @@ export default function QuantLab() {
     if (instruments.length > 0 && !selectedSymbol) {
       setSelectedSymbol(instruments[0].symbol)
     }
-  }, [instruments])
+  }, [instruments, selectedSymbol])
 
   const kindIcons: Record<string, any> = {
     fx: <DollarSign className="w-4 h-4" />,

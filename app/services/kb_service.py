@@ -64,6 +64,7 @@ class KBService:
             for idx, chunk_text in enumerate(chunks):
                 vector_store.add_chunk(source_id=source["id"], text=chunk_text, chunk_index=idx)
             source["chunk_count"] = len(chunks)
+            db.update("kb_sources", source["id"], {"chunk_count": len(chunks)})
         return source
 
     def _extract_concepts(self, text: str) -> List[str]:

@@ -2,6 +2,10 @@
 
 Live API for market data, ICT pattern detection, trading signals, and quantitative analytics.
 
+## Deployment
+
+Use `main` for production and `dev` for integration/staging. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the dev/prod Vercel project split, stable URL plan, environment separation, and storage warning for the KB.
+
 ## API Endpoints
 
 | Endpoint | Description |
@@ -49,4 +53,3 @@ npm run dev
 | `GET /api/mt5/status` | Check bridge connectivity |
 
 The app proxy forwards `/api/mt5/*` to the local bridge, and executed trades can be relayed to Telegram automatically.
-

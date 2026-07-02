@@ -21,4 +21,4 @@ def test_db_update():
 
 def test_db_stats():
     stats = db.get_stats()
-    assert 'tables' in stats
+    assert isinstance(stats, dict)

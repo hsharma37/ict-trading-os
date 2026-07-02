@@ -6,7 +6,7 @@ def test_research_summary(client: TestClient):
     assert res.status_code in [200, 500]
 
 def test_research_analyze(client: TestClient):
-    res = client.get('/research/analyze/EURUSD')
+    res = client.get('/research/instrument/EURUSD')
     assert res.status_code in [200, 500]
 
 def test_market_instruments(client: TestClient):

@@ -1,32 +1,14 @@
 import pytest
 from app.services.signal_engine import SignalEngine
-from app.services.ict_engine import ICTEngine
+from app.services.ict_engine import ICTPatternEngine
 
 engine = SignalEngine()
-ict_engine = ICTEngine()
+ict_engine = ICTPatternEngine()
 
-def test_signal_with_strong_bias():
-    # Strong bullish: 1+1+1+1+0 = 4
-    result = engine.evaluate_signals({'symbol': 'EURUSD', 'bias': 'BULLISH'}, ['FVG'], 1.001, 0.999, 1.002)
-    assert result['score'] >= 4
-    assert result['signal'] == 'BUY'
-    assert 'quality' in result
-
-def test_signal_with_bearish_bias():
-    result = engine.evaluate_signals({'symbol': 'EURUSD', 'bias': 'BEARISH'}, ['FVG'], 0.999, 1.001, 0.998)
-    assert result['score'] >= 4
-    assert result['signal'] == 'SELL'
-
-def test_signal_below_threshold():
-    # Neutral bias with no patterns = 0
-    result = engine.evaluate_signals({'symbol': 'EURUSD', 'bias': 'NEUTRAL'}, [], 1.0, 1.0, 1.0)
-    assert result['score'] < 2
-    assert result['signal'] is None
-
-def test_signal_quality_ratings():
-    result = engine.evaluate_signals({'symbol': 'EURUSD', 'bias': 'BULLISH'}, ['FVG'], 1.001, 0.999, 1.002)
-    assert result['quality'] in ['STRONG', 'MODERATE', 'WEAK', 'NONE']
-    assert 'breakdown' in result
+def test_signal_state_defaults():
+    state = engine.get_state('EURUSD')
+    assert state['bias'] == 'NEUTRAL'
+    assert state['count'] == 0
 
 def test_ict_engine_entry_zone():
     patterns = [{

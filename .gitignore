@@ -15,9 +15,12 @@ Thumbs.db
 .env
 .env.local
 .env.production
+.env.preview
+.env.development.local
 *.env.*
 !/.env.example
 !/.env.sample
+!/.env.*.example
 
 # ────────────────────────────────────────────────
 # Python / Backend
@@ -63,6 +66,9 @@ htmlcov/
 # Ruff
 .ruff_cache/
 
+# Local project intelligence / generated analysis
+.rizz/
+
 # ────────────────────────────────────────────────
 # Node / Frontend
 # ────────────────────────────────────────────────
@@ -76,6 +82,10 @@ yarn-error.log*
 frontend/dist/
 frontend/dist-ssr/
 *.local
+
+# Vercel local project linkage
+.vercel/
+frontend/.vercel/
 
 # TypeScript
 *.tsbuildinfo
@@ -102,6 +112,10 @@ logs/
 # ────────────────────────────────────────────────
 # Data / Volumes (if mounted locally)
 # ────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+price_cache.json
 postgres_data/
 redis_data/
 ollama_data/

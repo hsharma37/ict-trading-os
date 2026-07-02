@@ -164,7 +164,7 @@ export default function WhatsUp() {
       fetchData()
     }, 10000)
     return () => clearInterval(interval)
-  }, []) // Empty deps — interval runs once on mount
+  }, [fetchData]) // Interval runs once because fetchData is stable.
 
   // Countdown timer — independent of lastUpdate to avoid re-subscription
   useEffect(() => {
