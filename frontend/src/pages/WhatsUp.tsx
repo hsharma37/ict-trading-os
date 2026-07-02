@@ -124,32 +124,40 @@ export default function WhatsUp() {
       setTrades(openTrades)
       setInstruments(researchRes.data?.instruments || [])
       
-      // Fetch live prices for all trade symbols
+      // Fetch live prices for ALL trade symbols in ONE request
       const symbols = Array.from(new Set(openTrades.map((t: Trade) => t.symbol))) as string[]
       if (symbols.length > 0) {
-        const pricePromises = symbols.map(async (sym: string) => {
-          try {
-            const res = await marketApi.getPrice(sym)
-            return { sym, data: res.data }
-          } catch (e) {
-            return { sym, data: null }
-          }
-        })
-        const priceResults = await Promise.all(pricePromises)
-        const priceMap: Record<string, PriceData> = {}
-        priceResults.forEach((r: any) => {
-          if (r.data) priceMap[r.sym] = r.data
-        })
-        setLivePrices(priceMap)
+        try {
+          const res = await marketApi.getPrices(symbols.join(','))
+          const prices = res.data?.prices || []
+          const priceMap: Record<string, PriceData> = {}
+          prices.forEach((p: any) => {
+            if (p && p.symbol) priceMap[p.symbol] = p
+          })
+          setLivePrices(priceMap)
+        } catch (e) {
+          // Prices failed but trades loaded — don't block the UI
+          console.error('Price fetch failed:', e)
+        }
       }
       
+      // Only update selected trade data, not the selection itself
       const currentSelected = selectedTradeRef.current
       if (currentSelected && openTrades.length > 0) {
         const updated = openTrades.find((t: Trade) => t.id === currentSelected.id)
-        if (updated) setSelectedTrade(updated)
+        if (updated) {
+          // Only update if actual data changed (not just timestamp)
+          const prev = selectedTradeRef.current
+          const hasChanged = prev && (
+            prev.remaining_quantity !== updated.remaining_quantity ||
+            prev.unrealized_pnl !== updated.unrealized_pnl ||
+            prev.status !== updated.status
+          )
+          if (hasChanged) setSelectedTrade(updated)
+        }
       }
       setLastUpdate(new Date())
-      setCountdown(10)
+      setCountdown(30)
     } catch (e: any) {
       setError(e?.message || 'Failed to load data')
     } finally {
@@ -162,14 +170,14 @@ export default function WhatsUp() {
     fetchData()
     const interval = setInterval(() => {
       fetchData()
-    }, 10000)
+    }, 30000) // 30 seconds instead of 10
     return () => clearInterval(interval)
   }, []) // Empty deps — interval runs once on mount
 
   // Countdown timer — independent of lastUpdate to avoid re-subscription
   useEffect(() => {
     const timer = setInterval(() => {
-      setCountdown((prev) => (prev > 0 ? prev - 1 : 10))
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 30))
     }, 1000)
     return () => clearInterval(timer)
   }, []) // Empty deps — countdown runs independently

@@ -62,17 +62,50 @@ export default function Dashboard() {
   const loadData = useCallback(async () => {
     try {
       setError(null)
-      const [statsRes, researchRes, openRes, newsRes] = await Promise.all([
-        tradesApi.stats(),
-        researchApi.summary(),
-        tradesApi.open(),
-        newsApi.latest(),
-      ])
-      setStats(statsRes.data)
-      setMovers(researchRes.data?.biggest_movers || [])
-      setInstruments(researchRes.data?.instruments?.slice(0, 4) || [])
-      setOpenTrades(openRes.data?.trades || [])
-      setNews(newsRes.data?.news || [])
+      
+      // Fetch each endpoint independently so one failure doesn't block others
+      let statsData = null
+      let researchData = null
+      let openData = null
+      let newsData = null
+      
+      try {
+        const res = await tradesApi.stats()
+        statsData = res.data
+      } catch (e: any) {
+        console.error('Stats fetch failed:', e)
+      }
+      
+      try {
+        const res = await researchApi.summary()
+        researchData = res.data
+      } catch (e: any) {
+        console.error('Research fetch failed:', e)
+      }
+      
+      try {
+        const res = await tradesApi.open()
+        openData = res.data
+      } catch (e: any) {
+        console.error('Open trades fetch failed:', e)
+      }
+      
+      try {
+        const res = await newsApi.latest()
+        newsData = res.data
+      } catch (e: any) {
+        console.error('News fetch failed:', e)
+      }
+      
+      setStats(statsData)
+      setMovers(researchData?.biggest_movers || [])
+      setInstruments(researchData?.instruments?.slice(0, 4) || [])
+      setOpenTrades(openData?.trades || [])
+      setNews(newsData?.news || [])
+      
+      if (!statsData && !openData && !researchData) {
+        setError('Unable to load dashboard data. Some services may be unavailable.')
+      }
     } catch (e: any) {
       setError(e?.message || 'Failed to load dashboard data')
     } finally {
