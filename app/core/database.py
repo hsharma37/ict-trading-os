@@ -1,24 +1,77 @@
-import sqlite3
+"""Durable document storage for the active TradingOS API.
+
+The application still uses a small document-store interface across services. This
+module keeps that API stable while adding a production Postgres backend with
+pgvector support for KB chunks.
+"""
+from __future__ import annotations
+
 import json
 import os
+import sqlite3
 import uuid
-from typing import Dict, List, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-DB_PATH = os.getenv("DATABASE_PATH", os.path.join(os.path.dirname(os.path.dirname(__file__)), "ictos.db"))
+from app.core.config import settings
+
+
+POSTGRES_COLLECTION_TABLES = {
+    "kb_sources": "kb_sources",
+    "kb_chunks": "kb_chunks",
+    "plans": "trade_plans",
+    "trades": "trades",
+    "journal_entries": "journal_entries",
+    "market_snapshots": "market_snapshots",
+    "risk_settings": "risk_settings",
+    "audit_logs": "audit_logs",
+    "settings": "workspace_settings",
+}
+
+PGVECTOR_DIMENSIONS = 384
+
+
+def _utc_now() -> str:
+    return datetime.utcnow().isoformat()
+
+
+def _new_doc_id(collection: str) -> str:
+    return f"{collection[:3].upper()}-{int(datetime.utcnow().timestamp() * 1000)}-{uuid.uuid4().hex[:6]}"
+
+
+def runtime_requires_postgres(
+    app_env: str,
+    *,
+    is_vercel: bool = False,
+    allow_sqlite_runtime: bool = False,
+    require_postgres: bool = False,
+) -> bool:
+    """Return whether this runtime must refuse SQLite fallback."""
+    if allow_sqlite_runtime:
+        return False
+    return require_postgres or app_env in {"production", "preview"} or is_vercel
+
+
+def _vector_literal(values: List[float]) -> str:
+    """Format a pgvector literal from a Python list."""
+    return "[" + ",".join(str(float(value)) for value in values) + "]"
+
 
 class SQLiteDB:
-    """SQLite-backed database that preserves the InMemoryDB interface.
-    
-    All collections are stored in a single 'docs' table with JSON serialization.
-    This provides full persistence across restarts while keeping the API unchanged.
+    """SQLite-backed document store for local development and tests.
+
+    SQLite is intentionally treated as a dev-only fallback. Production and
+    Vercel runtimes require Postgres unless ALLOW_SQLITE_RUNTIME=true is set.
     """
 
-    def __init__(self, db_path: str = DB_PATH):
+    def __init__(self, db_path: str):
         self.db_path = db_path
         self._init_db()
 
-    def _init_db(self):
+    def _init_db(self) -> None:
+        db_dir = os.path.dirname(os.path.abspath(self.db_path))
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
         conn = sqlite3.connect(self.db_path)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS docs (
@@ -35,52 +88,52 @@ class SQLiteDB:
         conn.commit()
         conn.close()
 
-    def get_collection(self, name: str) -> List[Dict]:
+    def get_collection(self, name: str) -> List[Dict[str, Any]]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.execute("SELECT data FROM docs WHERE collection = ? ORDER BY created_at DESC", (name,))
-        rows = [json.loads(r['data']) for r in cursor.fetchall()]
+        rows = [json.loads(r["data"]) for r in cursor.fetchall()]
         conn.close()
         return rows
 
-    def insert(self, name: str, doc: Dict) -> Dict:
-        doc_id = doc.get("id") or f"{name[:3].upper()}-{int(datetime.utcnow().timestamp()*1000)}-{uuid.uuid4().hex[:6]}"
+    def insert(self, name: str, doc: Dict[str, Any]) -> Dict[str, Any]:
+        doc_id = doc.get("id") or _new_doc_id(name)
         doc["id"] = doc_id
-        now = datetime.utcnow().isoformat()
+        now = _utc_now()
         doc["created_at"] = doc.get("created_at") or now
         conn = sqlite3.connect(self.db_path)
         conn.execute(
             "INSERT INTO docs (collection, id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-            (name, doc_id, json.dumps(doc), doc["created_at"], "")
+            (name, doc_id, json.dumps(doc), doc["created_at"], doc.get("updated_at", "")),
         )
         conn.commit()
         conn.close()
         return doc
 
-    def find(self, name: str, **filters) -> List[Dict]:
+    def find(self, name: str, **filters: Any) -> List[Dict[str, Any]]:
         results = self.get_collection(name)
         for key, value in filters.items():
             results = [r for r in results if r.get(key) == value]
         return results
 
-    def find_one(self, name: str, doc_id: str) -> Dict:
+    def find_one(self, name: str, doc_id: str) -> Dict[str, Any]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.execute("SELECT data FROM docs WHERE collection = ? AND id = ?", (name, doc_id))
         row = cursor.fetchone()
         conn.close()
-        return json.loads(row['data']) if row else {}
+        return json.loads(row["data"]) if row else {}
 
-    def update(self, name: str, doc_id: str, updates: Dict) -> Dict:
+    def update(self, name: str, doc_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
         existing = self.find_one(name, doc_id)
         if not existing:
             return {}
         existing.update(updates)
-        existing["updated_at"] = datetime.utcnow().isoformat()
+        existing["updated_at"] = _utc_now()
         conn = sqlite3.connect(self.db_path)
         conn.execute(
             "UPDATE docs SET data = ?, updated_at = ? WHERE collection = ? AND id = ?",
-            (json.dumps(existing), existing["updated_at"], name, doc_id)
+            (json.dumps(existing), existing["updated_at"], name, doc_id),
         )
         conn.commit()
         conn.close()
@@ -94,12 +147,458 @@ class SQLiteDB:
         conn.close()
         return deleted
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> Dict[str, int]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.execute("SELECT collection, COUNT(*) as count FROM docs GROUP BY collection")
-        stats = {r['collection']: r['count'] for r in cursor.fetchall()}
+        stats = {r["collection"]: r["count"] for r in cursor.fetchall()}
         conn.close()
         return stats
 
-db = SQLiteDB()
+    def storage_info(self) -> Dict[str, Any]:
+        return {
+            "backend": "sqlite",
+            "path": self.db_path,
+            "durable": not os.path.abspath(self.db_path).startswith("/tmp/"),
+            "pgvector": False,
+        }
+
+    def search_kb_chunks_by_embedding(self, query_embedding: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
+        return []
+
+
+class PostgresDB:
+    """Postgres-backed document store with domain tables and pgvector search."""
+
+    def __init__(self, database_url: str):
+        if not database_url:
+            raise RuntimeError("DATABASE_URL is required for Postgres storage")
+        try:
+            import psycopg
+            from psycopg.rows import dict_row
+            from psycopg.types.json import Jsonb
+        except ImportError as exc:
+            raise RuntimeError(
+                "DATABASE_URL is set, but psycopg is not installed. Run `pip install -r requirements.txt`."
+            ) from exc
+
+        self.database_url = database_url
+        self._psycopg = psycopg
+        self._dict_row = dict_row
+        self._jsonb = Jsonb
+        self.pgvector_enabled = False
+        self._init_db()
+
+    def _connect(self):
+        return self._psycopg.connect(
+            self.database_url,
+            autocommit=True,
+            row_factory=self._dict_row,
+        )
+
+    def _init_db(self) -> None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                try:
+                    cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                    self.pgvector_enabled = True
+                except Exception:
+                    self.pgvector_enabled = False
+                self._create_tables(cur)
+                if self.pgvector_enabled:
+                    cur.execute(
+                        f"ALTER TABLE kb_chunks ADD COLUMN IF NOT EXISTS embedding vector({PGVECTOR_DIMENSIONS})"
+                    )
+                    cur.execute(
+                        "CREATE INDEX IF NOT EXISTS idx_kb_chunks_embedding "
+                        "ON kb_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)"
+                    )
+
+    def _create_tables(self, cur) -> None:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS app_documents (
+                collection TEXT NOT NULL,
+                id TEXT NOT NULL,
+                data JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ,
+                PRIMARY KEY (collection, id)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_app_documents_collection ON app_documents(collection)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_app_documents_data_gin ON app_documents USING gin(data)")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS kb_sources (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                url TEXT,
+                source_type TEXT,
+                tags TEXT[] NOT NULL DEFAULT '{}',
+                concepts TEXT[] NOT NULL DEFAULT '{}',
+                confidence_score NUMERIC,
+                chunk_count INTEGER NOT NULL DEFAULT 0,
+                data JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+        """)
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_kb_sources_url ON kb_sources(url) WHERE url IS NOT NULL AND url <> ''")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_kb_sources_data_gin ON kb_sources USING gin(data)")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS kb_chunks (
+                id TEXT PRIMARY KEY,
+                source_id TEXT REFERENCES kb_sources(id) ON DELETE CASCADE,
+                chunk_index INTEGER NOT NULL DEFAULT 0,
+                chunk_text TEXT NOT NULL DEFAULT '',
+                tokens TEXT[] NOT NULL DEFAULT '{}',
+                lexical_vector JSONB NOT NULL DEFAULT '{}',
+                embedding_json JSONB NOT NULL DEFAULT '[]',
+                data JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_kb_chunks_source_id ON kb_chunks(source_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_kb_chunks_data_gin ON kb_chunks USING gin(data)")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS trade_plans (
+                id TEXT PRIMARY KEY,
+                symbol TEXT,
+                bias TEXT,
+                status TEXT,
+                strategy TEXT,
+                session_name TEXT,
+                data JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_trade_plans_symbol_status ON trade_plans(symbol, status)")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS trades (
+                id TEXT PRIMARY KEY,
+                symbol TEXT,
+                side TEXT,
+                status TEXT,
+                plan_id TEXT,
+                risk_pct NUMERIC,
+                data JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_trades_symbol_status ON trades(symbol, status)")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS journal_entries (
+                id TEXT PRIMARY KEY,
+                trade_id TEXT,
+                plan_id TEXT,
+                symbol TEXT,
+                session_name TEXT,
+                data JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_journal_entries_symbol ON journal_entries(symbol)")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS market_snapshots (
+                id TEXT PRIMARY KEY,
+                symbol TEXT,
+                timeframe TEXT,
+                session_name TEXT,
+                data JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_market_snapshots_symbol_created ON market_snapshots(symbol, created_at DESC)")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS risk_settings (
+                id TEXT PRIMARY KEY,
+                mode TEXT,
+                kill_switch BOOLEAN NOT NULL DEFAULT FALSE,
+                max_daily_loss NUMERIC,
+                max_position_size NUMERIC,
+                data JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+        """)
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id TEXT PRIMARY KEY,
+                actor_id TEXT,
+                action TEXT,
+                entity_type TEXT,
+                entity_id TEXT,
+                risk_decision TEXT,
+                data JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON audit_logs(entity_type, entity_id)")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS workspace_settings (
+                id TEXT PRIMARY KEY,
+                data JSONB NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+        """)
+
+    def _table_for(self, collection: str) -> Optional[str]:
+        return POSTGRES_COLLECTION_TABLES.get(collection)
+
+    def _domain_values(self, collection: str, doc: Dict[str, Any]) -> Dict[str, Any]:
+        if collection == "kb_sources":
+            return {
+                "title": doc.get("title"),
+                "url": doc.get("url"),
+                "source_type": doc.get("source_type"),
+                "tags": doc.get("tags") or [],
+                "concepts": doc.get("concepts") or [],
+                "confidence_score": doc.get("confidence_score"),
+                "chunk_count": doc.get("chunk_count") or 0,
+            }
+        if collection == "kb_chunks":
+            embedding = doc.get("embedding") or []
+            values = {
+                "source_id": doc.get("source_id"),
+                "chunk_index": doc.get("chunk_index") or 0,
+                "chunk_text": doc.get("chunk_text") or "",
+                "tokens": doc.get("tokens") or [],
+                "lexical_vector": self._jsonb(doc.get("vector") or {}),
+                "embedding_json": self._jsonb(embedding),
+            }
+            if self.pgvector_enabled:
+                values["embedding"] = _vector_literal(embedding) if len(embedding) == PGVECTOR_DIMENSIONS else None
+            return values
+        if collection == "plans":
+            return {
+                "symbol": doc.get("symbol"),
+                "bias": doc.get("bias"),
+                "status": doc.get("status"),
+                "strategy": doc.get("strategy"),
+                "session_name": doc.get("session"),
+            }
+        if collection == "trades":
+            return {
+                "symbol": doc.get("symbol"),
+                "side": doc.get("side"),
+                "status": doc.get("status"),
+                "plan_id": doc.get("plan_id"),
+                "risk_pct": doc.get("risk_pct"),
+            }
+        if collection == "journal_entries":
+            return {
+                "trade_id": doc.get("trade_id"),
+                "plan_id": doc.get("plan_id"),
+                "symbol": doc.get("symbol"),
+                "session_name": doc.get("session"),
+            }
+        if collection == "market_snapshots":
+            return {
+                "symbol": doc.get("symbol"),
+                "timeframe": doc.get("timeframe"),
+                "session_name": doc.get("session"),
+            }
+        if collection == "risk_settings":
+            return {
+                "mode": doc.get("mode"),
+                "kill_switch": bool(doc.get("kill_switch", False)),
+                "max_daily_loss": doc.get("max_daily_loss"),
+                "max_position_size": doc.get("max_position_size"),
+            }
+        if collection == "audit_logs":
+            return {
+                "actor_id": doc.get("actor_id"),
+                "action": doc.get("action"),
+                "entity_type": doc.get("entity_type"),
+                "entity_id": doc.get("entity_id"),
+                "risk_decision": doc.get("risk_decision"),
+            }
+        return {}
+
+    def _write_domain(self, collection: str, doc: Dict[str, Any], *, update: bool = False) -> Dict[str, Any]:
+        table = self._table_for(collection)
+        if not table:
+            raise ValueError(f"Collection {collection} is not mapped to a domain table")
+
+        doc_id = doc["id"]
+        values = {
+            "id": doc_id,
+            "data": self._jsonb(doc),
+            "created_at": doc.get("created_at") or _utc_now(),
+            "updated_at": doc.get("updated_at"),
+            **self._domain_values(collection, doc),
+        }
+
+        if update:
+            set_columns = [key for key in values if key != "id"]
+            assignments = ", ".join(f"{key} = %s" for key in set_columns)
+            params = [values[key] for key in set_columns] + [doc_id]
+            sql = f"UPDATE {table} SET {assignments} WHERE id = %s"
+        else:
+            columns = list(values.keys())
+            placeholders = ", ".join(["%s"] * len(columns))
+            sql = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
+            params = [values[key] for key in columns]
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+        return doc
+
+    def get_collection(self, name: str) -> List[Dict[str, Any]]:
+        table = self._table_for(name)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                if table:
+                    cur.execute(f"SELECT data FROM {table} ORDER BY created_at DESC")
+                else:
+                    cur.execute(
+                        "SELECT data FROM app_documents WHERE collection = %s ORDER BY created_at DESC",
+                        (name,),
+                    )
+                return [row["data"] for row in cur.fetchall()]
+
+    def insert(self, name: str, doc: Dict[str, Any]) -> Dict[str, Any]:
+        doc_id = doc.get("id") or _new_doc_id(name)
+        doc["id"] = doc_id
+        doc["created_at"] = doc.get("created_at") or _utc_now()
+        table = self._table_for(name)
+        if table:
+            return self._write_domain(name, doc)
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO app_documents (collection, id, data, created_at, updated_at) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (name, doc_id, self._jsonb(doc), doc["created_at"], doc.get("updated_at")),
+                )
+        return doc
+
+    def find(self, name: str, **filters: Any) -> List[Dict[str, Any]]:
+        results = self.get_collection(name)
+        for key, value in filters.items():
+            results = [r for r in results if r.get(key) == value]
+        return results
+
+    def find_one(self, name: str, doc_id: str) -> Dict[str, Any]:
+        table = self._table_for(name)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                if table:
+                    cur.execute(f"SELECT data FROM {table} WHERE id = %s", (doc_id,))
+                else:
+                    cur.execute(
+                        "SELECT data FROM app_documents WHERE collection = %s AND id = %s",
+                        (name, doc_id),
+                    )
+                row = cur.fetchone()
+                return row["data"] if row else {}
+
+    def update(self, name: str, doc_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+        existing = self.find_one(name, doc_id)
+        if not existing:
+            return {}
+        existing.update(updates)
+        existing["updated_at"] = _utc_now()
+
+        table = self._table_for(name)
+        if table:
+            return self._write_domain(name, existing, update=True)
+
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE app_documents SET data = %s, updated_at = %s WHERE collection = %s AND id = %s",
+                    (self._jsonb(existing), existing["updated_at"], name, doc_id),
+                )
+        return existing
+
+    def delete(self, name: str, doc_id: str) -> bool:
+        table = self._table_for(name)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                if table:
+                    cur.execute(f"DELETE FROM {table} WHERE id = %s", (doc_id,))
+                else:
+                    cur.execute(
+                        "DELETE FROM app_documents WHERE collection = %s AND id = %s",
+                        (name, doc_id),
+                    )
+                return cur.rowcount > 0
+
+    def get_stats(self) -> Dict[str, int]:
+        stats: Dict[str, int] = {}
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                for collection, table in POSTGRES_COLLECTION_TABLES.items():
+                    cur.execute(f"SELECT COUNT(*) AS count FROM {table}")
+                    count = int(cur.fetchone()["count"])
+                    if count:
+                        stats[collection] = count
+                cur.execute("SELECT collection, COUNT(*) AS count FROM app_documents GROUP BY collection")
+                for row in cur.fetchall():
+                    stats[row["collection"]] = int(row["count"])
+        return stats
+
+    def storage_info(self) -> Dict[str, Any]:
+        return {
+            "backend": "postgres",
+            "durable": True,
+            "pgvector": self.pgvector_enabled,
+            "mapped_collections": sorted(POSTGRES_COLLECTION_TABLES.keys()),
+        }
+
+    def search_kb_chunks_by_embedding(self, query_embedding: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
+        if not self.pgvector_enabled or len(query_embedding) != PGVECTOR_DIMENSIONS:
+            return []
+        vector = _vector_literal(query_embedding)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT data, 1 - (embedding <=> %s::vector) AS score "
+                    "FROM kb_chunks "
+                    "WHERE embedding IS NOT NULL "
+                    "ORDER BY embedding <=> %s::vector "
+                    "LIMIT %s",
+                    (vector, vector, top_k),
+                )
+                return [{"chunk": row["data"], "score": float(row["score"])} for row in cur.fetchall()]
+
+
+def create_db():
+    if settings.STORAGE_BACKEND in {"postgres", "postgresql"} or (
+        settings.STORAGE_BACKEND == "auto" and settings.DATABASE_URL
+    ):
+        return PostgresDB(settings.DATABASE_URL)
+
+    if runtime_requires_postgres(
+        settings.APP_ENV,
+        is_vercel=settings.IS_VERCEL,
+        allow_sqlite_runtime=settings.ALLOW_SQLITE_RUNTIME,
+        require_postgres=settings.REQUIRE_POSTGRES,
+    ):
+        raise RuntimeError(
+            "Postgres DATABASE_URL is required for production, preview, and Vercel runtimes. "
+            "Refusing to store KB/trading state in SQLite or /tmp."
+        )
+
+    return SQLiteDB(settings.DATABASE_PATH)
+
+
+db = create_db()

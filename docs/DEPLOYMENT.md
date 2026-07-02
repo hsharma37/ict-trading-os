@@ -50,9 +50,17 @@ Use different API keys, JWT secrets, databases, storage buckets, Telegram channe
 
 The current frontend does not implement a private session or backend-for-frontend auth proxy. If you set `AUTH_ENABLED=true` today, normal frontend API calls will be rejected unless the client is updated to authenticate safely. Do not put a raw production API key into public Vite client code.
 
-## Current Storage Warning
+## Durable Storage
 
-The Vercel backend defaults to SQLite under `/tmp`. That is acceptable for smoke tests only. The KB and trading state will not be durable on serverless storage. Before relying on production KB memory, move state to persistent storage such as Postgres/Supabase/Neon and point both dev and prod at separate databases.
+The active Vercel backend must use Postgres for KB and trading state. Configure a separate `DATABASE_URL` for preview/staging and production, and apply:
+
+```bash
+psql "$DATABASE_URL" -f migrations/001_postgres_pgvector_foundation.sql
+```
+
+Use a provider that supports pgvector, such as Neon, Supabase, or a managed Postgres where `CREATE EXTENSION vector` is available. If pgvector is not enabled yet, the app can still store JSONB documents in Postgres, but semantic KB search falls back to the in-process scorer until the extension is available.
+
+The Vercel entrypoint no longer defaults the database to `/tmp`. Production, preview, and Vercel runtimes refuse SQLite unless `ALLOW_SQLITE_RUNTIME=true` is explicitly set for a temporary smoke test. Never use that override for private KB, trade plans, journals, or execution state.
 
 ## CLI Setup
 

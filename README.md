@@ -4,7 +4,7 @@ Live API for market data, ICT pattern detection, trading signals, and quantitati
 
 ## Deployment
 
-Use `main` for production and `dev` for integration/staging. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the dev/prod Vercel project split, stable URL plan, environment separation, and storage warning for the KB.
+Use `main` for production and `dev` for integration/staging. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the dev/prod Vercel project split, stable URL plan, environment separation, and durable Postgres storage checklist for the KB.
 
 ## API Endpoints
 
@@ -39,11 +39,16 @@ uv venv --python 3.12 .venv
 uv pip install -r requirements.txt pytest
 npm --prefix frontend ci
 
-DATABASE_PATH=/tmp/tradingos/ictos-dev.db PRICE_CACHE_DIR=/tmp/tradingos AUTH_ENABLED=false \
+export DATABASE_URL=postgresql://ictos:ictos@localhost:5432/ictos_dev
+psql "$DATABASE_URL" -f migrations/001_postgres_pgvector_foundation.sql
+
+PRICE_CACHE_DIR=/tmp/tradingos AUTH_ENABLED=false \
   .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 VITE_API_URL=http://127.0.0.1:8000 npm --prefix frontend run dev -- --host 127.0.0.1 --port 3000
 ```
+
+For throwaway local tests only, leave `DATABASE_URL` empty and set `ALLOW_SQLITE_RUNTIME=true DATABASE_PATH=ictos.db`.
 
 ### Available MT5 proxy endpoints
 

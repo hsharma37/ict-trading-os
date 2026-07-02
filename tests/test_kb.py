@@ -1,4 +1,5 @@
 from app.services.kb_service import kb_service
+from app.services.vector_store import SimpleVectorStore
 from app.services.youtube_service import VideoAnalysis, VideoMetadata, VideoTranscript
 
 
@@ -89,3 +90,38 @@ def test_youtube_auto_transcribe_persists_chunks_and_is_idempotent(monkeypatch):
     assert removed["removed"] is True
     assert kb_service.status()["source_count"] == 0
     assert kb_service.status()["chunk_count"] == 0
+
+
+def test_vector_store_delegates_to_pgvector_backend(monkeypatch):
+    class FakeDB:
+        def __init__(self):
+            self.called = False
+
+        def search_kb_chunks_by_embedding(self, query_embedding, top_k=5):
+            self.called = True
+            assert query_embedding == [0.25, 0.75]
+            assert top_k == 2
+            return [
+                {
+                    "chunk": {
+                        "id": "chunk-1",
+                        "source_id": "source-1",
+                        "chunk_text": "Liquidity sweep into fair value gap.",
+                    },
+                    "score": 0.91,
+                }
+            ]
+
+        def get_collection(self, name):
+            raise AssertionError("pgvector hits should avoid local collection scanning")
+
+    fake_db = FakeDB()
+    store = SimpleVectorStore()
+    monkeypatch.setattr("app.services.vector_store.db", fake_db)
+    monkeypatch.setattr(store, "_embed_text", lambda query: [0.25, 0.75])
+
+    hits = store._search_embeddings("liquidity sweep", top_k=2)
+
+    assert fake_db.called is True
+    assert hits[0]["score"] == 0.91
+    assert hits[0]["chunk"]["source_id"] == "source-1"

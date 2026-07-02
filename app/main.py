@@ -59,7 +59,8 @@ def health():
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
-        "database": db.get_stats()
+        "database": db.get_stats(),
+        "storage": db.storage_info(),
     }
 
 

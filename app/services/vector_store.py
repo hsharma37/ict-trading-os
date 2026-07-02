@@ -118,6 +118,12 @@ class SimpleVectorStore:
         if not query_emb:
             return self._search_tfidf(query, top_k)
 
+        pgvector_search = getattr(db, "search_kb_chunks_by_embedding", None)
+        if callable(pgvector_search):
+            hits = pgvector_search(query_emb, top_k=top_k)
+            if hits:
+                return hits
+
         scores = []
         for chunk in db.get_collection("kb_chunks"):
             chunk_emb = chunk.get("embedding", [])
