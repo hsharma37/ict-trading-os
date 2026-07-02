@@ -47,7 +47,30 @@ Configure environment variables in Vercel instead of committing them in `vercel.
 
 Use different API keys, JWT secrets, databases, storage buckets, Telegram channels, and MT5 bridge settings for dev and production.
 
-The current frontend does not implement a private session or backend-for-frontend auth proxy. If you set `AUTH_ENABLED=true` today, normal frontend API calls will be rejected unless the client is updated to authenticate safely. Do not put a raw production API key into public Vite client code.
+## API Auth And Deployment Protection
+
+Preview, production, and Vercel runtimes protect private and mutating API routes by default. Turning the legacy auth flag off no longer disables that safety gate outside local development. The public routes are limited to `GET /`, `GET /health`, `GET /docs`, `GET /openapi.json`, and `GET /redoc`.
+
+Current-code compatible protected mode:
+
+- Keep Vercel Deployment Protection enabled for production and preview.
+- Set strong `API_KEY` and `JWT_SECRET` values in Vercel.
+- Use the API key only for owner/admin scripts, curl, or server-side callers.
+- Do not place the raw API key in `VITE_*` variables or browser code.
+
+Public API mode:
+
+- Direct calls to protected routes must send `X-Api-Key`.
+- The current frontend does not implement a private session or backend-for-frontend auth proxy, so protected browser flows will return `401` until that exists.
+- CORS is not auth. Same-origin `/api` routes and curl can still reach the backend if deployment protection and API auth are disabled.
+
+Intentional public preview exception:
+
+- Use only throwaway preview Postgres data.
+- Do not configure live MT5 bridge URLs or production Telegram credentials.
+- Keep CORS limited.
+- Set `ALLOW_PUBLIC_API_MUTATIONS=true` explicitly.
+- Record owner, date, expiry, and acceptance that write/delete routes are public.
 
 ## Durable Storage
 

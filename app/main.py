@@ -2,9 +2,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.core.auth import auth_middleware
+from app.core.auth import auth_middleware, validate_auth_config
 from app.routers import market, ict, signals, trades, quant, orders, plans, kb, bot, playground, analytics, alerts, research, telegram, mt5, news
 from app.routers import settings as settings_router
+
+validate_auth_config()
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -21,7 +23,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Optional API key auth middleware (enabled via AUTH_ENABLED env var)
+# Production safety API-key auth middleware.
 app.middleware("http")(auth_middleware)
 
 app.include_router(market.router)
