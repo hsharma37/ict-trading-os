@@ -1,16 +1,13 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Frontend pre-built'",
-  "outputDirectory": "frontend/dist",
+  "buildCommand": "cp -r frontend/dist/* public/",
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index" },
     { "src": "/health", "dest": "/api/index" },
     { "src": "/docs", "dest": "/api/index" },
     { "src": "/openapi.json", "dest": "/api/index" },
     { "src": "/redoc", "dest": "/api/index" },
-    { "src": "/assets/(.*)", "dest": "/assets/$1" },
-    { "src": "/vite.svg", "dest": "/vite.svg" },
-    { "src": "/", "dest": "/index.html" },
+    { "handle": "filesystem" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
