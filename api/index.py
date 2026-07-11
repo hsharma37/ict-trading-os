@@ -36,9 +36,12 @@ class ApiPrefixStripper:
         if scope.get("type") == "http":
             query_string = scope.get("query_string", b"").decode()
             params = urllib.parse.parse_qs(query_string)
+            original_path = scope.get("path", "")
+            print(f"[ICTOS DEBUG] incoming path={original_path} query={query_string}")
 
             if "__original_path" in params:
                 original_path = params["__original_path"][-1]
+                print(f"[ICTOS DEBUG] __original_path={original_path}")
                 if original_path == "/api":
                     scope["path"] = "/"
                 elif original_path.startswith("/api/"):
@@ -48,6 +51,7 @@ class ApiPrefixStripper:
             elif scope.get("path", "").startswith("/api/"):
                 # Fallback: strip /api prefix
                 scope["path"] = scope["path"][4:]
+            print(f"[ICTOS DEBUG] final path={scope.get('path', '')}")
         await self.wrapped_app(scope, receive, send)
 
 

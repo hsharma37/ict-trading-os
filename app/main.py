@@ -66,13 +66,12 @@ def health():
     }
 
 @app.get("/debug")
-async def debug(request):
-    from fastapi import Request
+async def debug(request: Request):
     return {
         "url": str(request.url),
         "path": request.url.path,
         "query": str(request.query_params),
-        "headers": dict(request.headers),
+        "headers": {k: v for k, v in request.headers.items() if k.lower() in ["host", "x-forwarded-host", "x-vercel-id"]},
     }
 
 
