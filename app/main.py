@@ -71,18 +71,22 @@ def health():
 async def serve_root():
     import os
     cwd = os.getcwd()
-    # Try multiple possible paths for index.html
+    all_files = os.listdir(cwd)
+    # Check if public or frontend directories exist
+    has_public = "public" in all_files
+    has_frontend = "frontend" in all_files
+    
     paths = [
         "public/index.html",
         os.path.join(cwd, "public/index.html"),
         os.path.join(cwd, "index.html"),
-        "/var/task/public/index.html",
-        "/var/task/index.html",
+        "frontend/dist/index.html",
+        os.path.join(cwd, "frontend/dist/index.html"),
     ]
     for p in paths:
         if os.path.exists(p):
             return FileResponse(p)
-    return {"error": "index.html not found", "cwd": cwd, "files_in_cwd": os.listdir(cwd)[:20]}
+    return {"error": "index.html not found", "cwd": cwd, "has_public": has_public, "has_frontend": has_frontend, "total_files": len(all_files), "sample_files": sorted(all_files)[:30]}
 
 # Serve React SPA for any non-API path (fallback for direct SPA URL access)
 @app.get("/{path:path}")
@@ -93,8 +97,8 @@ async def serve_spa(path: str):
         "public/index.html",
         os.path.join(cwd, "public/index.html"),
         os.path.join(cwd, "index.html"),
-        "/var/task/public/index.html",
-        "/var/task/index.html",
+        "frontend/dist/index.html",
+        os.path.join(cwd, "frontend/dist/index.html"),
     ]
     for p in paths:
         if os.path.exists(p):
