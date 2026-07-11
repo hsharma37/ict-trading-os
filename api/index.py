@@ -33,6 +33,7 @@ class ApiPrefixStripper:
         self.wrapped_app = wrapped_app
 
     async def __call__(self, scope, receive, send):
+        raise Exception("ApiPrefixStripper IS being executed - path=" + scope.get("path", "unknown"))
         query_string = ""
         if scope.get("type") == "http":
             query_string = scope.get("query_string", b"")
