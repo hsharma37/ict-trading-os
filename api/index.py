@@ -19,7 +19,7 @@ print(f"[ICTOS DEBUG] DATABASE_URL set={bool(os.getenv('DATABASE_URL'))}")
 print(f"[ICTOS DEBUG] API_KEY set={bool(os.getenv('API_KEY'))}")
 print(f"[ICTOS DEBUG] JWT_SECRET set={bool(os.getenv('JWT_SECRET'))}")
 
-from app.main import app as fastapi_app
+from app.main import app as original_app
 
 class ApiPrefixStripper:
     """Let Vercel expose the FastAPI app under /api without changing routes.
@@ -69,4 +69,4 @@ class ApiPrefixStripper:
 
 
 # The `app` variable is what Vercel's Python runtime looks for.
-app = ApiPrefixStripper(fastapi_app)
+app = ApiPrefixStripper(original_app)
