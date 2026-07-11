@@ -66,44 +66,27 @@ def health():
         "storage": db.storage_info(),
     }
 
-# Serve React SPA for root path (Vercel routes / to FastAPI by default)
+# Serve React SPA for root path and any non-API path
+# (Vercel routes / to FastAPI by default when api/index.py exists)
 @app.get("/")
 async def serve_root():
     import os
     cwd = os.getcwd()
-    all_files = os.listdir(cwd)
-    # Check if public or frontend directories exist
-    has_public = "public" in all_files
-    has_frontend = "frontend" in all_files
-    
-    paths = [
-        "public/index.html",
-        os.path.join(cwd, "public/index.html"),
-        os.path.join(cwd, "index.html"),
-        "frontend/dist/index.html",
-        os.path.join(cwd, "frontend/dist/index.html"),
-    ]
-    for p in paths:
+    for rel in ["public/index.html", "frontend/dist/index.html"]:
+        p = os.path.join(cwd, rel)
         if os.path.exists(p):
             return FileResponse(p)
-    return {"error": "index.html not found", "cwd": cwd, "has_public": has_public, "has_frontend": has_frontend, "total_files": len(all_files), "sample_files": sorted(all_files)[:30]}
+    return {"error": "index.html not found"}
 
-# Serve React SPA for any non-API path (fallback for direct SPA URL access)
 @app.get("/{path:path}")
 async def serve_spa(path: str):
     import os
     cwd = os.getcwd()
-    paths = [
-        "public/index.html",
-        os.path.join(cwd, "public/index.html"),
-        os.path.join(cwd, "index.html"),
-        "frontend/dist/index.html",
-        os.path.join(cwd, "frontend/dist/index.html"),
-    ]
-    for p in paths:
+    for rel in ["public/index.html", "frontend/dist/index.html"]:
+        p = os.path.join(cwd, rel)
         if os.path.exists(p):
             return FileResponse(p)
-    return {"error": "index.html not found", "cwd": cwd, "path": path}
+    return {"error": "index.html not found"}
 
 
 if __name__ == "__main__":
