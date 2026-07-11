@@ -67,10 +67,14 @@ def health():
 
 @app.get("/debug")
 async def debug(request: Request):
+    scope = request.scope
     return {
         "url": str(request.url),
         "path": request.url.path,
         "query": str(request.query_params),
+        "asgi_path": scope.get("path"),
+        "raw_path": scope.get("raw_path"),
+        "query_string": scope.get("query_string"),
         "headers": {k: v for k, v in request.headers.items() if k.lower() in ["host", "x-forwarded-host", "x-vercel-id"]},
     }
 
