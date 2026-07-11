@@ -8,6 +8,7 @@
     { "src": "/openapi.json", "dest": "/api/index" },
     { "src": "/redoc", "dest": "/api/index" },
     { "handle": "filesystem" },
+    { "src": "/", "dest": "/index.html" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
