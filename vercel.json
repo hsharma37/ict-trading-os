@@ -3,12 +3,12 @@
   "buildCommand": "echo 'Frontend pre-built'",
   "outputDirectory": "frontend/dist",
   "rewrites": [
-    { "source": "/api", "destination": "/api/index?__original_path=/api" },
-    { "source": "/api/(.*)", "destination": "/api/index?__original_path=/api/$1" },
-    { "source": "/health", "destination": "/api/index?__original_path=/health" },
-    { "source": "/docs", "destination": "/api/index?__original_path=/docs" },
-    { "source": "/openapi.json", "destination": "/api/index?__original_path=/openapi.json" },
-    { "source": "/redoc", "destination": "/api/index?__original_path=/redoc" },
+    { "source": "/api", "destination": "/api/index" },
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/health", "destination": "/api/index" },
+    { "source": "/docs", "destination": "/api/index" },
+    { "source": "/openapi.json", "destination": "/api/index" },
+    { "source": "/redoc", "destination": "/api/index" },
     { "source": "/((?!api/|api$|health|docs|openapi\\.json|redoc).*)$", "destination": "/index.html" }
   ]
 }
