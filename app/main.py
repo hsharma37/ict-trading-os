@@ -91,6 +91,7 @@ async def test_scope(request: Request):
 async def catch_all_debug(request: Request, path: str):
     scope = request.scope
     return {
+        "type": scope.get("type"),
         "asgi_path": scope.get("path"),
         "raw_path": scope.get("raw_path"),
         "query_string": scope.get("query_string"),
