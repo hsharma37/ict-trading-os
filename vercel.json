@@ -4,12 +4,12 @@
   "outputDirectory": "frontend/dist",
   "routes": [
     { "handle": "filesystem" },
-    { "src": "/api", "dest": "/api/index" },
-    { "src": "/api/(.*)", "dest": "/api/index" },
-    { "src": "/health", "dest": "/api/index" },
-    { "src": "/docs", "dest": "/api/index" },
-    { "src": "/openapi.json", "dest": "/api/index" },
-    { "src": "/redoc", "dest": "/api/index" },
+    { "src": "/api", "dest": "api/index.py" },
+    { "src": "/api/(.*)", "dest": "api/index.py" },
+    { "src": "/health", "dest": "api/index.py" },
+    { "src": "/docs", "dest": "api/index.py" },
+    { "src": "/openapi.json", "dest": "api/index.py" },
+    { "src": "/redoc", "dest": "api/index.py" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
