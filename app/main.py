@@ -1,5 +1,5 @@
 """FastAPI Application - ICT Trading OS Backend."""
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.auth import auth_middleware, validate_auth_config

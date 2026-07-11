@@ -34,7 +34,9 @@ class ApiPrefixStripper:
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") == "http":
-            query_string = scope.get("query_string", b"").decode()
+            query_string = scope.get("query_string", b"")
+            if isinstance(query_string, bytes):
+                query_string = query_string.decode()
             params = urllib.parse.parse_qs(query_string)
             original_path = scope.get("path", "")
             print(f"[ICTOS DEBUG] incoming path={original_path} query={query_string}")
