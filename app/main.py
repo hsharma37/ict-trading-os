@@ -78,6 +78,16 @@ async def debug(request: Request):
         "headers": {k: v for k, v in request.headers.items() if k.lower() in ["host", "x-forwarded-host", "x-vercel-id"]},
     }
 
+@app.route("/{path:path}")
+async def catch_all_debug(request: Request, path: str):
+    scope = request.scope
+    return {
+        "asgi_path": scope.get("path"),
+        "raw_path": scope.get("raw_path"),
+        "query_string": scope.get("query_string"),
+        "note": "catch-all for 404 debugging"
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
