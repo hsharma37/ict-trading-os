@@ -9,6 +9,8 @@
     { "source": "/docs", "destination": "/api/index" },
     { "source": "/openapi.json", "destination": "/api/index" },
     { "source": "/redoc", "destination": "/api/index" },
+    { "source": "/index.html", "destination": "/index.html" },
+    { "source": "/$", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
