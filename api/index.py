@@ -1,7 +1,6 @@
 """Vercel serverless entry point for ICT Trading OS backend."""
 import os
 import sys
-import urllib.parse
 
 # Add project root to path so imports work
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,54 +18,13 @@ print(f"[ICTOS DEBUG] DATABASE_URL set={bool(os.getenv('DATABASE_URL'))}")
 print(f"[ICTOS DEBUG] API_KEY set={bool(os.getenv('API_KEY'))}")
 print(f"[ICTOS DEBUG] JWT_SECRET set={bool(os.getenv('JWT_SECRET'))}")
 
-from app.main import app as original_app
-
-class ApiPrefixStripper:
-    """Let Vercel expose the FastAPI app under /api without changing routes.
-
-    Vercel rewrites change the destination path (e.g. /api/health -> /api/index).
-    We pass the original path via __original_path query parameter so we can
-    restore the correct path for FastAPI routing.
-    """
-
-    def __init__(self, wrapped_app):
-        self.wrapped_app = wrapped_app
-
-    async def __call__(self, scope, receive, send):
-        raise Exception("ApiPrefixStripper IS being executed - path=" + scope.get("path", "unknown"))
-        query_string = ""
-        if scope.get("type") == "http":
-            query_string = scope.get("query_string", b"")
-            if isinstance(query_string, bytes):
-                query_string = query_string.decode()
-            params = urllib.parse.parse_qs(query_string)
-            original_path = scope.get("path", "")
-            print(f"[ICTOS DEBUG] incoming path={original_path} query={query_string}")
-
-            if "__original_path" in params:
-                original_path = params["__original_path"][-1]
-                print(f"[ICTOS DEBUG] __original_path={original_path}")
-                if original_path == "/api":
-                    scope["path"] = "/"
-                elif original_path.startswith("/api/"):
-                    scope["path"] = original_path[4:]
-                else:
-                    scope["path"] = original_path
-            elif scope.get("path", "").startswith("/api/"):
-                # Fallback: strip /api prefix
-                scope["path"] = scope["path"][4:]
-            print(f"[ICTOS DEBUG] final path={scope.get('path', '')}")
-        
-        async def modified_send(message):
-            if message.get("type") == "http.response.start":
-                headers = list(message.get("headers", []))
-                headers.append([b"x-ictos-debug-path", scope.get("path", "").encode()])
-                headers.append([b"x-ictos-debug-query", query_string.encode()])
-                message["headers"] = headers
-            await send(message)
-        
-        await self.wrapped_app(scope, receive, modified_send)
-
-
-# The `app` variable is what Vercel's Python runtime looks for.
-app = ApiPrefixStripper(original_app)
+async def app(scope, receive, send):
+    await send({
+        "type": "http.response.start",
+        "status": 200,
+        "headers": [[b"content-type", b"application/json"]],
+    })
+    await send({
+        "type": "http.response.body",
+        "body": b'{"message": "Hello from api/index.py"}',
+    })
