@@ -65,6 +65,16 @@ def health():
         "storage": db.storage_info(),
     }
 
+@app.get("/debug")
+async def debug(request):
+    from fastapi import Request
+    return {
+        "url": str(request.url),
+        "path": request.url.path,
+        "query": str(request.query_params),
+        "headers": dict(request.headers),
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
