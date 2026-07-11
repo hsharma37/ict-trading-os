@@ -78,7 +78,7 @@ async def debug(request: Request):
         "headers": {k: v for k, v in request.headers.items() if k.lower() in ["host", "x-forwarded-host", "x-vercel-id"]},
     }
 
-@app.route("/{path:path}")
+@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
 async def catch_all_debug(request: Request, path: str):
     scope = request.scope
     return {
