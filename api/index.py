@@ -1,6 +1,7 @@
 """Vercel serverless entry point for ICT Trading OS backend."""
 import os
 import sys
+import urllib.parse
 
 # Add project root to path so imports work
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -24,8 +25,8 @@ class ApiPrefixStripper:
     """Let Vercel expose the FastAPI app under /api without changing routes.
 
     Vercel rewrites change the destination path (e.g. /api/health -> /api/index).
-    We use raw_path (original path before rewrites) to strip the /api prefix so
-    FastAPI routes match correctly.
+    We pass the original path via __original_path query parameter so we can
+    restore the correct path for FastAPI routing.
     """
 
     def __init__(self, wrapped_app):
@@ -33,21 +34,20 @@ class ApiPrefixStripper:
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") == "http":
-            # raw_path is the original path before Vercel rewrites; path is the
-            # rewritten destination.  Prefer raw_path so our routes match.
-            raw_path = scope.get("raw_path")
-            if raw_path:
-                try:
-                    effective = raw_path.decode("utf-8")
-                except Exception:
-                    effective = str(raw_path)
-            else:
-                effective = scope.get("path", "")
+            query_string = scope.get("query_string", b"").decode()
+            params = urllib.parse.parse_qs(query_string)
 
-            if effective == "/api":
-                scope["path"] = "/"
-            elif effective.startswith("/api/"):
-                scope["path"] = effective[4:]
+            if "__original_path" in params:
+                original_path = params["__original_path"][-1]
+                if original_path == "/api":
+                    scope["path"] = "/"
+                elif original_path.startswith("/api/"):
+                    scope["path"] = original_path[4:]
+                else:
+                    scope["path"] = original_path
+            elif scope.get("path", "").startswith("/api/"):
+                # Fallback: strip /api prefix
+                scope["path"] = scope["path"][4:]
         await self.wrapped_app(scope, receive, send)
 
 
