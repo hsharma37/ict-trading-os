@@ -69,12 +69,37 @@ def health():
 # Serve React SPA for root path (Vercel routes / to FastAPI by default)
 @app.get("/")
 async def serve_root():
-    return FileResponse("public/index.html")
+    import os
+    cwd = os.getcwd()
+    # Try multiple possible paths for index.html
+    paths = [
+        "public/index.html",
+        os.path.join(cwd, "public/index.html"),
+        os.path.join(cwd, "index.html"),
+        "/var/task/public/index.html",
+        "/var/task/index.html",
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            return FileResponse(p)
+    return {"error": "index.html not found", "cwd": cwd, "files_in_cwd": os.listdir(cwd)[:20]}
 
 # Serve React SPA for any non-API path (fallback for direct SPA URL access)
 @app.get("/{path:path}")
 async def serve_spa(path: str):
-    return FileResponse("public/index.html")
+    import os
+    cwd = os.getcwd()
+    paths = [
+        "public/index.html",
+        os.path.join(cwd, "public/index.html"),
+        os.path.join(cwd, "index.html"),
+        "/var/task/public/index.html",
+        "/var/task/index.html",
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            return FileResponse(p)
+    return {"error": "index.html not found", "cwd": cwd, "path": path}
 
 
 if __name__ == "__main__":
