@@ -33,6 +33,7 @@ class ApiPrefixStripper:
         self.wrapped_app = wrapped_app
 
     async def __call__(self, scope, receive, send):
+        query_string = ""
         if scope.get("type") == "http":
             query_string = scope.get("query_string", b"")
             if isinstance(query_string, bytes):
@@ -54,7 +55,16 @@ class ApiPrefixStripper:
                 # Fallback: strip /api prefix
                 scope["path"] = scope["path"][4:]
             print(f"[ICTOS DEBUG] final path={scope.get('path', '')}")
-        await self.wrapped_app(scope, receive, send)
+        
+        async def modified_send(message):
+            if message.get("type") == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.append([b"x-ictos-debug-path", scope.get("path", "").encode()])
+                headers.append([b"x-ictos-debug-query", query_string.encode()])
+                message["headers"] = headers
+            await send(message)
+        
+        await self.wrapped_app(scope, receive, modified_send)
 
 
 # The `app` variable is what Vercel's Python runtime looks for.
