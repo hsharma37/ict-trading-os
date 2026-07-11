@@ -2,14 +2,7 @@
   "version": 2,
   "buildCommand": "echo 'Frontend pre-built'",
   "outputDirectory": "frontend/dist",
-  "routes": [
-    { "handle": "filesystem" },
-    { "src": "/api", "dest": "api/index.py" },
-    { "src": "/api/(.*)", "dest": "api/index.py" },
-    { "src": "/health", "dest": "api/index.py" },
-    { "src": "/docs", "dest": "api/index.py" },
-    { "src": "/openapi.json", "dest": "api/index.py" },
-    { "src": "/redoc", "dest": "api/index.py" },
-    { "src": "/(.*)", "dest": "/index.html" }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
   ]
 }
