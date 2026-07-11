@@ -23,6 +23,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Strip /api prefix when running on Vercel (frontend uses /api base URL)
+@app.middleware("http")
+async def strip_api_prefix(request: Request, call_next):
+    if request.url.path == "/api":
+        request.scope["path"] = "/"
+    elif request.url.path.startswith("/api/"):
+        request.scope["path"] = request.url.path[4:]
+    response = await call_next(request)
+    return response
+
 # Production safety API-key auth middleware.
 app.middleware("http")(auth_middleware)
 
@@ -63,52 +73,6 @@ def health():
         "timestamp": datetime.utcnow().isoformat(),
         "database": db.get_stats(),
         "storage": db.storage_info(),
-    }
-
-@app.get("/debug")
-async def debug(request: Request):
-    scope = request.scope
-    return {
-        "url": str(request.url),
-        "path": request.url.path,
-        "query": str(request.query_params),
-        "asgi_path": scope.get("path"),
-        "raw_path": scope.get("raw_path"),
-        "query_string": scope.get("query_string"),
-        "headers": {k: v for k, v in request.headers.items() if k.lower() in ["host", "x-forwarded-host", "x-vercel-id"]},
-    }
-
-@app.get("/test-scope")
-async def test_scope(request: Request):
-    scope = request.scope
-    try:
-        scope["test"] = "test"
-        return {"mutable": True, "test": scope.get("test")}
-    except Exception as e:
-        return {"mutable": False, "error": str(e)}
-
-@app.get("/parse-test")
-async def parse_test(request: Request):
-    from urllib.parse import parse_qs
-    query_string = request.scope.get("query_string", b"")
-    if isinstance(query_string, bytes):
-        query_string = query_string.decode()
-    params = parse_qs(query_string)
-    return {
-        "query_string": query_string,
-        "params": params,
-        "has_original_path": "__original_path" in params,
-    }
-
-@app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
-async def catch_all_debug(request: Request, path: str):
-    scope = request.scope
-    return {
-        "type": scope.get("type"),
-        "asgi_path": scope.get("path"),
-        "raw_path": scope.get("raw_path"),
-        "query_string": scope.get("query_string"),
-        "note": "catch-all for 404 debugging"
     }
 
 

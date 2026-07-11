@@ -11,20 +11,7 @@ os.environ.setdefault("TRADINGOS_RUNTIME", "vercel")
 os.environ.setdefault("APP_ENV", os.getenv("VERCEL_ENV", "production"))
 os.environ.setdefault("PRICE_CACHE_DIR", "/tmp")
 
-# Debug: print env vars at import time (visible in Vercel function logs)
-print(f"[ICTOS DEBUG] TRADINGOS_RUNTIME={os.getenv('TRADINGOS_RUNTIME')}")
-print(f"[ICTOS DEBUG] APP_ENV={os.getenv('APP_ENV')}")
-print(f"[ICTOS DEBUG] DATABASE_URL set={bool(os.getenv('DATABASE_URL'))}")
-print(f"[ICTOS DEBUG] API_KEY set={bool(os.getenv('API_KEY'))}")
-print(f"[ICTOS DEBUG] JWT_SECRET set={bool(os.getenv('JWT_SECRET'))}")
+from app.main import app as fastapi_app
 
-async def app(scope, receive, send):
-    await send({
-        "type": "http.response.start",
-        "status": 200,
-        "headers": [[b"content-type", b"application/json"]],
-    })
-    await send({
-        "type": "http.response.body",
-        "body": b'{"message": "Hello from api/index.py"}',
-    })
+# The `app` variable is what Vercel's Python runtime looks for.
+app = fastapi_app
