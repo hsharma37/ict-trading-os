@@ -1,6 +1,7 @@
 """FastAPI Application - ICT Trading OS Backend."""
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from app.core.config import settings
 from app.core.auth import auth_middleware, validate_auth_config
 from app.routers import market, ict, signals, trades, quant, orders, plans, kb, bot, playground, analytics, alerts, research, telegram, mt5, news
@@ -64,6 +65,16 @@ def health():
         "database": db.get_stats(),
         "storage": db.storage_info(),
     }
+
+# Serve React SPA for root path (Vercel routes / to FastAPI by default)
+@app.get("/")
+async def serve_root():
+    return FileResponse("public/index.html")
+
+# Serve React SPA for any non-API path (fallback for direct SPA URL access)
+@app.get("/{path:path}")
+async def serve_spa(path: str):
+    return FileResponse("public/index.html")
 
 
 if __name__ == "__main__":
