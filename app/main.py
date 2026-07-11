@@ -87,6 +87,19 @@ async def test_scope(request: Request):
     except Exception as e:
         return {"mutable": False, "error": str(e)}
 
+@app.get("/parse-test")
+async def parse_test(request: Request):
+    from urllib.parse import parse_qs
+    query_string = request.scope.get("query_string", b"")
+    if isinstance(query_string, bytes):
+        query_string = query_string.decode()
+    params = parse_qs(query_string)
+    return {
+        "query_string": query_string,
+        "params": params,
+        "has_original_path": "__original_path" in params,
+    }
+
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
 async def catch_all_debug(request: Request, path: str):
     scope = request.scope
