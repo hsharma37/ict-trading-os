@@ -1,14 +1,14 @@
 {
   "version": 2,
   "buildCommand": "cp -r frontend/dist/* public/",
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/index" },
-    { "src": "/health", "dest": "/api/index" },
-    { "src": "/docs", "dest": "/api/index" },
-    { "src": "/openapi.json", "dest": "/api/index" },
-    { "src": "/redoc", "dest": "/api/index" },
-    { "handle": "filesystem" },
-    { "src": "/", "dest": "/index.html" },
-    { "src": "/(.*)", "dest": "/index.html" }
+  "rewrites": [
+    { "source": "/assets/(.*)", "destination": "/assets/$1" },
+    { "source": "/vite.svg", "destination": "/vite.svg" },
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/health", "destination": "/api/index" },
+    { "source": "/docs", "destination": "/api/index" },
+    { "source": "/openapi.json", "destination": "/api/index" },
+    { "source": "/redoc", "destination": "/api/index" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
