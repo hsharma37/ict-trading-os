@@ -21,18 +21,33 @@ print(f"[ICTOS DEBUG] JWT_SECRET set={bool(os.getenv('JWT_SECRET'))}")
 from app.main import app as fastapi_app
 
 class ApiPrefixStripper:
-    """Let Vercel expose the FastAPI app under /api without changing routes."""
+    """Let Vercel expose the FastAPI app under /api without changing routes.
+
+    Vercel rewrites change the destination path (e.g. /api/health -> /api/index).
+    We use raw_path (original path before rewrites) to strip the /api prefix so
+    FastAPI routes match correctly.
+    """
 
     def __init__(self, wrapped_app):
         self.wrapped_app = wrapped_app
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") == "http":
-            path = scope.get("path", "")
-            if path == "/api":
+            # raw_path is the original path before Vercel rewrites; path is the
+            # rewritten destination.  Prefer raw_path so our routes match.
+            raw_path = scope.get("raw_path")
+            if raw_path:
+                try:
+                    effective = raw_path.decode("utf-8")
+                except Exception:
+                    effective = str(raw_path)
+            else:
+                effective = scope.get("path", "")
+
+            if effective == "/api":
                 scope["path"] = "/"
-            elif path.startswith("/api/"):
-                scope["path"] = path[4:]
+            elif effective.startswith("/api/"):
+                scope["path"] = effective[4:]
         await self.wrapped_app(scope, receive, send)
 
 
