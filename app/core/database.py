@@ -686,4 +686,46 @@ def create_db():
     return SQLiteDB(settings.DATABASE_PATH)
 
 
-db = create_db()
+class LazyDB:
+    """Lazy proxy that delays DB creation until first use, avoiding import-time
+    failures on Vercel where env vars may not be available at module load.
+    """
+    def __init__(self):
+        self._db = None
+
+    def _get_db(self):
+        if self._db is None:
+            self._db = create_db()
+        return self._db
+
+    def __getattr__(self, name):
+        return getattr(self._get_db(), name)
+
+    def __setattr__(self, name, value):
+        if name == "_db":
+            super().__setattr__(name, value)
+        else:
+            setattr(self._get_db(), name, value)
+
+    def __getitem__(self, key):
+        return self._get_db()[key]
+
+    def __setitem__(self, key, value):
+        self._get_db()[key] = value
+
+    def __contains__(self, key):
+        return key in self._get_db()
+
+    def __iter__(self):
+        return iter(self._get_db())
+
+    def __len__(self):
+        return len(self._get_db())
+
+    def __repr__(self):
+        if self._db is None:
+            return "LazyDB(not initialized)"
+        return repr(self._db)
+
+
+db = LazyDB()
