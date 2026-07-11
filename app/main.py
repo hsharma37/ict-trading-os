@@ -1,7 +1,6 @@
 """FastAPI Application - ICT Trading OS Backend."""
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from app.core.config import settings
 from app.core.auth import auth_middleware, validate_auth_config
 from app.routers import market, ict, signals, trades, quant, orders, plans, kb, bot, playground, analytics, alerts, research, telegram, mt5, news
@@ -65,11 +64,6 @@ def health():
         "database": db.get_stats(),
         "storage": db.storage_info(),
     }
-
-# Serve React SPA for all non-API routes (must be last)
-@app.get("/{path:path}")
-async def serve_spa(path: str):
-    return FileResponse("frontend/dist/index.html")
 
 
 if __name__ == "__main__":
