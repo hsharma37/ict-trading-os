@@ -78,6 +78,15 @@ async def debug(request: Request):
         "headers": {k: v for k, v in request.headers.items() if k.lower() in ["host", "x-forwarded-host", "x-vercel-id"]},
     }
 
+@app.get("/test-scope")
+async def test_scope(request: Request):
+    scope = request.scope
+    try:
+        scope["test"] = "test"
+        return {"mutable": True, "test": scope.get("test")}
+    except Exception as e:
+        return {"mutable": False, "error": str(e)}
+
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
 async def catch_all_debug(request: Request, path: str):
     scope = request.scope
