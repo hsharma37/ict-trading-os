@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import pytest
 
-from mt5_client import Mt5Client, Mt5ConnectionError
+from mt5_client import Mt5Client, Mt5ConnectionError, normalize_position, pair_deals_into_trades
 
 
 # ── Mt5Client: graceful degradation without the MetaTrader5 package ──
@@ -130,6 +130,116 @@ def test_positions_get_empty_tuple_is_a_real_empty_list(connected_client):
     client, fake = connected_client
     fake.positions_result = ()
     assert client.positions() == []
+
+
+# ── Field-name translation: MT5's raw shape -> the frontend's contract ──
+#
+# MetaTrader5's positions_get()/history_deals_get() return their own field
+# names (volume, price_open, price_current, type as 0/1 ...), not what the
+# frontend expects (lot_size, open_price, current_price, direction as a
+# string). Confirmed live: a real open position made the MT5 Terminal page
+# crash on every 5s poll with "Cannot read properties of undefined (reading
+# 'toUpperCase')" -- pos.direction was always undefined -- which looked like
+# the page repeatedly reloading.
+
+# A real open position's raw shape, captured live from the deployed bridge.
+_RAW_POSITION = {
+    "ticket": 9557569537, "symbol": "XAUUSD", "type": 1, "volume": 0.1,
+    "price_open": 4085.44, "price_current": 4078.58, "sl": 4096.0, "tp": 4065.0,
+    "profit": 68.6, "swap": 0.0, "time": 1784047133,
+}
+
+
+def test_normalize_position_maps_mt5_fields_to_frontend_contract():
+    out = normalize_position(_RAW_POSITION)
+    assert out == {
+        "ticket": "9557569537",
+        "symbol": "XAUUSD",
+        "direction": "short",  # type=1 (SELL) -> "short", not the raw int
+        "lot_size": 0.1,
+        "open_price": 4085.44,
+        "current_price": 4078.58,
+        "sl": 4096.0,
+        "tp": 4065.0,
+        "profit": 68.6,
+        "swap": 0.0,
+    }
+
+
+def test_normalize_position_buy_type_maps_to_long():
+    out = normalize_position({**_RAW_POSITION, "type": 0})
+    assert out["direction"] == "long"
+
+
+def test_positions_returns_frontend_shaped_dicts_not_raw_mt5_fields(connected_client):
+    """End-to-end: Mt5Client.positions() must never leak raw MT5 field names
+    (volume, price_open, type as int) -- exactly what crashed the live page."""
+    client, fake = connected_client
+    fake.positions_result = (_FakeResult(**_RAW_POSITION),)
+    positions = client.positions()
+    assert len(positions) == 1
+    assert positions[0]["direction"] == "short"
+    assert positions[0]["lot_size"] == 0.1
+    assert "volume" not in positions[0]
+    assert "price_open" not in positions[0]
+
+
+def test_pair_deals_into_trades_reconstructs_open_close_pair():
+    """MT5's history is a deal ledger (separate open + close deals sharing a
+    position_id), not a trade ledger -- these must be paired into the single
+    open/close record the frontend's MT5HistoryTrade expects."""
+    deals = [
+        {  # opening deal
+            "position_id": 555, "entry": 0, "type": 1, "symbol": "XAUUSD",
+            "volume": 0.1, "price": 4085.44, "profit": 0.0, "time": 1784047133,
+        },
+        {  # closing deal
+            "position_id": 555, "entry": 1, "type": 0, "symbol": "XAUUSD",
+            "volume": 0.1, "price": 4070.0, "profit": 154.4, "time": 1784050000,
+        },
+    ]
+    trades = pair_deals_into_trades(deals)
+    assert len(trades) == 1
+    t = trades[0]
+    assert t["ticket"] == "555"
+    assert t["symbol"] == "XAUUSD"
+    assert t["direction"] == "short"  # from the opening deal's type
+    assert t["open_price"] == 4085.44
+    assert t["close_price"] == 4070.0
+    assert t["profit"] == 154.4
+    assert t["closed_at"]
+
+
+def test_pair_deals_into_trades_omits_still_open_positions():
+    """A position with only an entry deal (no exit yet) must not appear as a
+    'closed trade' -- it's still open."""
+    deals = [{
+        "position_id": 999, "entry": 0, "type": 0, "symbol": "EURUSD",
+        "volume": 0.5, "price": 1.09, "profit": 0.0, "time": 1784047133,
+    }]
+    assert pair_deals_into_trades(deals) == []
+
+
+def test_pair_deals_into_trades_ignores_non_trade_deal_types():
+    """Balance/credit ledger entries (deal type >= 2) must not be mistaken
+    for a buy/sell leg."""
+    deals = [{
+        "position_id": 1, "entry": 0, "type": 2, "symbol": "", "volume": 0,
+        "price": 0, "profit": 1000.0, "time": 1784047133,
+    }]
+    assert pair_deals_into_trades(deals) == []
+
+
+def test_history_deals_returns_paired_trades_not_raw_deal_records(connected_client):
+    client, fake = connected_client
+    fake.history_deals_get = lambda since, until: (
+        _FakeResult(position_id=1, entry=0, type=1, symbol="XAUUSD", volume=0.1, price=100.0, profit=0.0, time=1),
+        _FakeResult(position_id=1, entry=1, type=0, symbol="XAUUSD", volume=0.1, price=110.0, profit=1000.0, time=2),
+    )
+    trades = client.history_deals()
+    assert len(trades) == 1
+    assert trades[0]["direction"] == "short"
+    assert trades[0]["close_price"] == 110.0
 
 
 def test_account_info_none_marks_disconnected_for_self_healing(connected_client):
