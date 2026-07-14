@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/Input'
 import { tradesApi, researchApi, marketApi } from '@/api/client'
 import { useMt5 } from '@/hooks/useMt5'
 import Mt5PositionsPanel from '@/components/Mt5PositionsPanel'
+import Mt5PositionDetail from '@/components/Mt5PositionDetail'
 import {
   Eye, Target, Shield, AlertTriangle, Crosshair, DollarSign,
   Clock, Zap, Percent, MoveRight, RefreshCw, TrendingUp, TrendingDown, 
@@ -183,6 +184,9 @@ export default function WhatsUp() {
   const selectedInstrument = instruments.find(i => i.symbol === selectedTrade?.symbol)
   const killzone = getKillzoneInfo()
   const mt5 = useMt5()
+  const [selectedMt5Ticket, setSelectedMt5Ticket] = useState<string | null>(null)
+  // Default the detail view to the first position; keep selection valid as positions change.
+  const selectedMt5 = mt5.positions.find(p => p.ticket === selectedMt5Ticket) || mt5.positions[0] || null
 
   const handlePartialClose = async (trade: Trade, fraction: number, label: string) => {
     const price = livePrices[trade.symbol]?.price || trade.current_price
@@ -435,7 +439,22 @@ export default function WhatsUp() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Mt5PositionsPanel variant="visual" />
+            {mt5.positions.length === 0 ? (
+              <Mt5PositionsPanel variant="visual" />
+            ) : (
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-3">
+                  <Mt5PositionsPanel
+                    variant="visual"
+                    onSelect={setSelectedMt5Ticket}
+                    selectedTicket={selectedMt5?.ticket}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  {selectedMt5 && <Mt5PositionDetail position={selectedMt5} />}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
