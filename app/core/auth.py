@@ -6,6 +6,7 @@ from fastapi import Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.core.spa import spa_index_response
 
 PUBLIC_PATHS = {"/", "/health", "/docs", "/openapi.json", "/redoc"}
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -25,6 +26,16 @@ PROTECTED_PREFIXES = (
     "/telegram",
     "/trades",
 )
+
+# React Router client-side routes (frontend/src/App.tsx). A few of these
+# (/mt5, /settings, /telegram) share a bare-path name with a protected API
+# prefix above -- e.g. GET /settings is both "load the Settings page shell"
+# and a real protected endpoint returning settings data. Path alone can't
+# tell them apart; see _is_spa_navigation for how this is resolved safely.
+SPA_ROUTES = {
+    "/", "/mt5", "/execute", "/analytics", "/research", "/signals",
+    "/telegram", "/knowledge", "/library", "/whatsup", "/settings",
+}
 
 
 def validate_auth_config() -> None:
@@ -62,8 +73,34 @@ def _api_key_is_valid(api_key: str) -> bool:
     return bool(api_key and settings.API_KEY and secrets.compare_digest(api_key, settings.API_KEY))
 
 
+def _is_spa_navigation(request: Request) -> bool:
+    """True when this looks like a browser loading a page, not an API call.
+
+    Some SPA client routes collide by name with a protected API prefix (see
+    SPA_ROUTES). A bare GET to one of these paths is ambiguous from the path
+    alone: it could mean "render the app shell for this route" or "fetch the
+    protected JSON at this exact path". The Accept header reliably tells
+    them apart without weakening the actual auth check: real browser
+    navigations always prominently request text/html; this app's own API
+    client (axios) never does, and an attacker spoofing this header only
+    ever gets routed to the static SPA shell in exchange -- never the real
+    protected route, since this check short-circuits before FastAPI would
+    otherwise dispatch to it.
+    """
+    if request.method.upper() != "GET":
+        return False
+    if _normalize_path(request.url.path) not in SPA_ROUTES:
+        return False
+    return "text/html" in request.headers.get("accept", "")
+
+
 async def auth_middleware(request: Request, call_next):
     """Validate X-Api-Key for production-like sensitive or mutating routes."""
+    if _is_spa_navigation(request):
+        return spa_index_response() or JSONResponse(
+            status_code=404, content={"error": "index.html not found"}
+        )
+
     if not should_require_api_key(request.method, request.url.path):
         response = await call_next(request)
         return response
