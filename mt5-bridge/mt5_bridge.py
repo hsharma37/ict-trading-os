@@ -187,6 +187,125 @@ def history():
 
 
 # ────────────────────────────────────────────────
+# Market Data
+# ────────────────────────────────────────────────
+
+
+@app.route("/tick/<symbol>", methods=["GET"])
+@require_bridge_key
+def tick(symbol):
+    """Live bid/ask/last for a symbol from the broker feed."""
+    try:
+        return jsonify(mt5_client.get_tick(symbol))
+    except Mt5ConnectionError as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+
+
+@app.route("/candles/<symbol>", methods=["GET"])
+@require_bridge_key
+def candles(symbol):
+    """Historical OHLC candles. Query: timeframe (1m..1w), count."""
+    timeframe = request.args.get("timeframe", "1h")
+    count = request.args.get("count", 200)
+    try:
+        data = mt5_client.get_candles(symbol, timeframe, int(count))
+        return jsonify({"candles": data, "count": len(data), "status": "connected"})
+    except (Mt5ConnectionError, ValueError) as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+
+
+@app.route("/symbol/<symbol>", methods=["GET"])
+@require_bridge_key
+def symbol_spec(symbol):
+    """Contract specification for a symbol."""
+    try:
+        return jsonify(mt5_client.symbol_spec(symbol))
+    except Mt5ConnectionError as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+
+
+@app.route("/symbols", methods=["GET"])
+@require_bridge_key
+def symbols():
+    """All tradable symbols on this account."""
+    try:
+        names = mt5_client.list_symbols()
+        return jsonify({"symbols": names, "count": len(names), "status": "connected"})
+    except Mt5ConnectionError as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+
+
+# ────────────────────────────────────────────────
+# Order & Position Management
+# ────────────────────────────────────────────────
+
+
+@app.route("/modify", methods=["POST"])
+@require_bridge_key
+def modify():
+    """Modify SL/TP on an open position. Body: ticket, stop_loss?, take_profit?."""
+    data = request.get_json(force=True)
+    try:
+        result = mt5_client.modify_sltp(
+            int(data["ticket"]), data.get("stop_loss"), data.get("take_profit")
+        )
+        return jsonify({"status": "modified", **result})
+    except (Mt5ConnectionError, KeyError, TypeError, ValueError) as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+
+
+@app.route("/partial-close", methods=["POST"])
+@require_bridge_key
+def partial_close():
+    """Close part of a position. Body: ticket, volume."""
+    data = request.get_json(force=True)
+    try:
+        result = mt5_client.partial_close(int(data["ticket"]), float(data["volume"]))
+        return jsonify({"status": "partial_closed", **result})
+    except (Mt5ConnectionError, KeyError, TypeError, ValueError) as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+
+
+@app.route("/pending", methods=["POST"])
+@require_bridge_key
+def pending():
+    """Place a pending order. Body: symbol, direction, order_kind, volume, price, sl?, tp?."""
+    data = request.get_json(force=True)
+    try:
+        result = mt5_client.place_pending(
+            data["symbol"], data["direction"], data["order_kind"],
+            float(data["volume"]), float(data["price"]),
+            data.get("stop_loss"), data.get("take_profit"),
+        )
+        return jsonify({"status": "placed", **result})
+    except (Mt5ConnectionError, KeyError, TypeError, ValueError) as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+
+
+@app.route("/orders", methods=["GET"])
+@require_bridge_key
+def orders():
+    """List working pending orders."""
+    try:
+        data = mt5_client.pending_orders()
+        return jsonify({"orders": data, "count": len(data), "status": "connected"})
+    except Mt5ConnectionError as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+
+
+@app.route("/pending/cancel", methods=["POST"])
+@require_bridge_key
+def cancel_pending():
+    """Cancel a pending order. Body: order_ticket."""
+    data = request.get_json(force=True)
+    try:
+        result = mt5_client.cancel_pending(int(data["order_ticket"]))
+        return jsonify({"status": "cancelled", **result})
+    except (Mt5ConnectionError, KeyError, TypeError, ValueError) as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+
+
+# ────────────────────────────────────────────────
 # Telegram Test
 # ────────────────────────────────────────────────
 

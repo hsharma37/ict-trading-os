@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import pytest
 
-from mt5_client import Mt5Client, Mt5ConnectionError, normalize_position, pair_deals_into_trades
+from mt5_client import Mt5Client, Mt5ConnectionError, normalize_position, pair_deals_into_trades, normalize_tick
 
 
 # ── Mt5Client: graceful degradation without the MetaTrader5 package ──
@@ -73,15 +73,43 @@ class _FakeMt5:
     """Minimal stand-in for the MetaTrader5 module's call surface."""
     ORDER_TYPE_BUY = 0
     ORDER_TYPE_SELL = 1
+    ORDER_TYPE_BUY_LIMIT = 2
+    ORDER_TYPE_SELL_LIMIT = 3
+    ORDER_TYPE_BUY_STOP = 4
+    ORDER_TYPE_SELL_STOP = 5
     TRADE_ACTION_DEAL = 1
+    TRADE_ACTION_PENDING = 5
+    TRADE_ACTION_SLTP = 2
+    TRADE_ACTION_REMOVE = 4
     ORDER_TIME_GTC = 0
     ORDER_FILLING_IOC = 1
+    TIMEFRAME_M1 = 1
+    TIMEFRAME_M5 = 5
+    TIMEFRAME_M15 = 15
+    TIMEFRAME_M30 = 30
+    TIMEFRAME_H1 = 16385
+    TIMEFRAME_H4 = 16388
+    TIMEFRAME_D1 = 16408
+    TIMEFRAME_W1 = 32769
 
     def __init__(self):
         self.initialize_result = True
         self.positions_result = ()  # empty tuple = legitimately zero positions
         self.account_info_result = _FakeResult(balance=10000.0, equity=10000.0)
         self.initialize_calls = 0
+        self.last_order_request = None
+        # Market-data fixtures
+        self.tick_result = _FakeResult(bid=1.1000, ask=1.1002, last=1.1001, volume=5, time=1784047133)
+        self.symbol_info_result = _FakeResult(visible=True, digits=5, point=0.00001, spread=2,
+                                              trade_contract_size=100000, volume_min=0.01,
+                                              volume_max=100.0, volume_step=0.01,
+                                              currency_base="EUR", currency_profit="USD", trade_mode=4)
+        self.rates_result = [
+            {"time": 1784047000, "open": 1.10, "high": 1.11, "low": 1.09, "close": 1.105, "tick_volume": 100},
+            {"time": 1784047600, "open": 1.105, "high": 1.12, "low": 1.10, "close": 1.115, "tick_volume": 120},
+        ]
+        self.symbols_result = (_FakeResult(name="EURUSD"), _FakeResult(name="XAUUSD"))
+        self.orders_result = ()
 
     def initialize(self, **kwargs):
         self.initialize_calls += 1
@@ -98,6 +126,28 @@ class _FakeMt5:
 
     def history_deals_get(self, since, until):
         return ()
+
+    def symbol_info(self, symbol):
+        return self.symbol_info_result
+
+    def symbol_select(self, symbol, enable):
+        return True
+
+    def symbol_info_tick(self, symbol):
+        return self.tick_result
+
+    def copy_rates_from_pos(self, symbol, tf, start, count):
+        return self.rates_result
+
+    def symbols_get(self):
+        return self.symbols_result
+
+    def orders_get(self):
+        return self.orders_result
+
+    def order_send(self, request):
+        self.last_order_request = request
+        return _FakeResult(retcode=10009, order=12345, comment="Done")
 
     def shutdown(self):
         pass
@@ -240,6 +290,112 @@ def test_history_deals_returns_paired_trades_not_raw_deal_records(connected_clie
     assert len(trades) == 1
     assert trades[0]["direction"] == "short"
     assert trades[0]["close_price"] == 110.0
+
+
+# ── Market data ──────────────────────────────────────────────
+
+
+def test_normalize_tick_computes_mid_and_spread():
+    out = normalize_tick("eurusd", {"bid": 1.1000, "ask": 1.1002, "last": 1.1001, "volume": 5, "time": 1784047133})
+    assert out["symbol"] == "EURUSD"
+    assert out["bid"] == 1.1000 and out["ask"] == 1.1002
+    assert out["price"] == round((1.1000 + 1.1002) / 2, 8)
+    assert out["spread"] == round(1.1002 - 1.1000, 8)
+    assert out["source"] == "mt5"
+
+
+def test_get_tick_returns_normalized_price(connected_client):
+    client, fake = connected_client
+    out = client.get_tick("EURUSD")
+    assert out["source"] == "mt5"
+    assert out["price"] == round((1.1000 + 1.1002) / 2, 8)
+
+
+def test_get_candles_maps_ohlc(connected_client):
+    client, fake = connected_client
+    candles = client.get_candles("EURUSD", "1h", 200)
+    assert len(candles) == 2
+    assert candles[0] == {"time": 1784047000, "open": 1.10, "high": 1.11, "low": 1.09, "close": 1.105, "volume": 100}
+
+
+def test_get_candles_maps_timeframe_to_mt5_constant(connected_client):
+    client, fake = connected_client
+    captured = {}
+    fake.copy_rates_from_pos = lambda symbol, tf, start, count: captured.update(tf=tf) or fake.rates_result
+    client.get_candles("EURUSD", "4h", 10)
+    assert captured["tf"] == fake.TIMEFRAME_H4
+
+
+def test_symbol_spec_returns_contract_details(connected_client):
+    client, fake = connected_client
+    spec = client.symbol_spec("EURUSD")
+    assert spec["digits"] == 5
+    assert spec["contract_size"] == 100000
+    assert spec["volume_min"] == 0.01
+
+
+def test_list_symbols(connected_client):
+    client, fake = connected_client
+    assert client.list_symbols() == ["EURUSD", "XAUUSD"]
+
+
+# ── Order & position management ──────────────────────────────
+
+
+def test_modify_sltp_sends_sltp_action(connected_client):
+    client, fake = connected_client
+    fake.positions_result = (_FakeResult(**{**_RAW_POSITION, "sl": 4096.0, "tp": 4065.0}),)
+    client.modify_sltp(9557569537, stop_loss=4090.0, take_profit=4060.0)
+    req = fake.last_order_request
+    assert req["action"] == fake.TRADE_ACTION_SLTP
+    assert req["sl"] == 4090.0 and req["tp"] == 4060.0
+    assert req["position"] == 9557569537
+
+
+def test_partial_close_rejects_volume_over_position(connected_client):
+    client, fake = connected_client
+    fake.positions_result = (_FakeResult(**_RAW_POSITION),)  # volume 0.1
+    with pytest.raises(Mt5ConnectionError, match="must be > 0"):
+        client.partial_close(9557569537, 0.5)
+
+
+def test_partial_close_sends_deal_with_partial_volume(connected_client):
+    client, fake = connected_client
+    fake.positions_result = (_FakeResult(**_RAW_POSITION),)  # type 1 (sell) -> close with buy
+    client.partial_close(9557569537, 0.05)
+    req = fake.last_order_request
+    assert req["action"] == fake.TRADE_ACTION_DEAL
+    assert req["volume"] == 0.05
+    assert req["type"] == fake.ORDER_TYPE_BUY  # closing a short
+
+
+def test_place_pending_buy_limit(connected_client):
+    client, fake = connected_client
+    client.place_pending("EURUSD", "long", "limit", 0.1, 1.0900, stop_loss=1.0850, take_profit=1.1000)
+    req = fake.last_order_request
+    assert req["action"] == fake.TRADE_ACTION_PENDING
+    assert req["type"] == fake.ORDER_TYPE_BUY_LIMIT
+    assert req["price"] == 1.0900 and req["sl"] == 1.0850 and req["tp"] == 1.1000
+
+
+def test_place_pending_short_stop(connected_client):
+    client, fake = connected_client
+    client.place_pending("EURUSD", "short", "stop", 0.2, 1.0800)
+    assert fake.last_order_request["type"] == fake.ORDER_TYPE_SELL_STOP
+
+
+def test_place_pending_rejects_bad_kind(connected_client):
+    client, fake = connected_client
+    with pytest.raises(Mt5ConnectionError):
+        client.place_pending("EURUSD", "long", "banana", 0.1, 1.09)
+
+
+def test_cancel_pending_sends_remove_action(connected_client):
+    client, fake = connected_client
+    client.cancel_pending(778899)
+    req = fake.last_order_request
+    assert req["action"] == fake.TRADE_ACTION_REMOVE
+    assert req["order"] == 778899
 
 
 def test_account_info_none_marks_disconnected_for_self_healing(connected_client):

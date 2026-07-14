@@ -71,10 +71,23 @@ small always-on VPS instead.
 | `GET /health` | none | Liveness check |
 | `GET /account` | `X-Bridge-Key` | Real account balance/equity/margin |
 | `GET /positions` | `X-Bridge-Key` | Real open positions |
-| `GET /history` | `X-Bridge-Key` | Closed deals, last 30 days |
+| `GET /history` | `X-Bridge-Key` | Closed trades (deals paired into open/close), last 30 days |
+| `GET /tick/<symbol>` | `X-Bridge-Key` | Live bid/ask/last from the broker feed |
+| `GET /candles/<symbol>?timeframe=&count=` | `X-Bridge-Key` | Historical OHLC candles (1m..1w) |
+| `GET /symbol/<symbol>` | `X-Bridge-Key` | Contract spec (digits, contract size, volume min/max/step) |
+| `GET /symbols` | `X-Bridge-Key` | All tradable symbols on the account |
+| `GET /orders` | `X-Bridge-Key` | Working pending orders |
 | `POST /trade` | `X-Bridge-Key` | Places a real market order |
 | `POST /close` | `X-Bridge-Key` | Closes a position by ticket ID |
+| `POST /partial-close` | `X-Bridge-Key` | Closes part of a position (`ticket`, `volume`) |
+| `POST /modify` | `X-Bridge-Key` | Modify a position's SL/TP (`ticket`, `stop_loss?`, `take_profit?`) |
+| `POST /pending` | `X-Bridge-Key` | Place a limit/stop order (`symbol`, `direction`, `order_kind`, `volume`, `price`, ...) |
+| `POST /pending/cancel` | `X-Bridge-Key` | Cancel a pending order (`order_ticket`) |
 | `POST /test-telegram` | `X-Bridge-Key` | Sends a test Telegram message |
+
+To price the app from the broker's own feed (so displayed prices match your
+fills), set `MARKET_DATA_PROVIDER=mt5` on the main app (with `MT5_BRIDGE_URL`
++ `MT5_BRIDGE_API_KEY`). It uses `GET /tick/<symbol>` under the hood.
 
 Every trade-related endpoint returns `503` with a clear error (not a fake
 success) if the terminal isn't actually connected.

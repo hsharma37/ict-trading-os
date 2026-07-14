@@ -43,6 +43,7 @@ export default function PriceSourceBadge({ source, stale, className = '' }: Prop
   }
 
   const providerLabel: Record<string, string> = {
+    mt5: 'MT5',
     oanda: 'OANDA',
     yahoo: 'Yahoo',
     manual: 'Manual',

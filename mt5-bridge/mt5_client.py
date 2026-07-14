@@ -33,6 +33,42 @@ class Mt5ConnectionError(RuntimeError):
 _TYPE_BUY, _TYPE_SELL = 0, 1
 _DEAL_ENTRY_IN, _DEAL_ENTRY_OUT = 0, 1
 
+# App timeframe string -> MetaTrader5 TIMEFRAME_* constant name. Resolved to
+# the real value lazily (mt5 may be absent on this dev machine).
+_TIMEFRAME_NAMES = {
+    "1m": "TIMEFRAME_M1", "5m": "TIMEFRAME_M5", "15m": "TIMEFRAME_M15",
+    "30m": "TIMEFRAME_M30", "1h": "TIMEFRAME_H1", "4h": "TIMEFRAME_H4",
+    "1d": "TIMEFRAME_D1", "1w": "TIMEFRAME_W1",
+}
+
+# MT5 pending order type name -> constant name. long/short + limit/stop.
+_PENDING_TYPE_NAMES = {
+    ("long", "limit"): "ORDER_TYPE_BUY_LIMIT",
+    ("short", "limit"): "ORDER_TYPE_SELL_LIMIT",
+    ("long", "stop"): "ORDER_TYPE_BUY_STOP",
+    ("short", "stop"): "ORDER_TYPE_SELL_STOP",
+}
+
+
+def normalize_tick(symbol: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize a raw MT5 tick into the app's price shape (mirrors the
+    /market/price response: symbol, price=mid, bid, ask, plus spread)."""
+    bid = raw.get("bid", 0) or 0
+    ask = raw.get("ask", 0) or 0
+    mid = round((bid + ask) / 2, 8) if (bid and ask) else (bid or ask or raw.get("last", 0))
+    ts = raw.get("time")
+    return {
+        "symbol": symbol.upper(),
+        "price": mid,
+        "bid": bid,
+        "ask": ask,
+        "last": raw.get("last", 0),
+        "spread": round(ask - bid, 8) if (bid and ask) else 0,
+        "volume": raw.get("volume", 0),
+        "time": datetime.fromtimestamp(ts).isoformat() if ts else None,
+        "source": "mt5",
+    }
+
 
 def normalize_position(raw: Dict[str, Any]) -> Dict[str, Any]:
     """Translate a raw MetaTrader5 position dict (volume, price_open,
@@ -274,4 +310,194 @@ class Mt5Client:
         if result is None:
             self._mark_disconnected()
             raise Mt5ConnectionError(f"order_send() (close) returned nothing: {mt5.last_error()}")
+        return result._asdict()
+
+    # ── Market data ──────────────────────────────────────────────
+
+    def _select_symbol(self, symbol: str) -> None:
+        """Ensure a symbol is selected/visible in Market Watch before querying."""
+        info = mt5.symbol_info(symbol)
+        if info is None or not info.visible:
+            if not mt5.symbol_select(symbol, True):
+                raise Mt5ConnectionError(f"Symbol {symbol} is not available on this account/server.")
+
+    def get_tick(self, symbol: str) -> Dict[str, Any]:
+        """Live bid/ask/last for a symbol, from the broker's own feed."""
+        self._ensure_connected()
+        self._select_symbol(symbol)
+        tick = mt5.symbol_info_tick(symbol)
+        if tick is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"No tick data for {symbol}: {mt5.last_error()}")
+        return normalize_tick(symbol, tick._asdict())
+
+    def get_candles(self, symbol: str, timeframe: str = "1h", count: int = 200) -> List[Dict[str, Any]]:
+        """Historical OHLC candles for a symbol at the given timeframe."""
+        self._ensure_connected()
+        self._select_symbol(symbol)
+        tf_name = _TIMEFRAME_NAMES.get(timeframe, "TIMEFRAME_H1")
+        tf = getattr(mt5, tf_name)
+        rates = mt5.copy_rates_from_pos(symbol, tf, 0, min(int(count), 5000))
+        if rates is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"copy_rates_from_pos() failed for {symbol}: {mt5.last_error()}")
+        return [
+            {
+                "time": int(r["time"]),
+                "open": float(r["open"]),
+                "high": float(r["high"]),
+                "low": float(r["low"]),
+                "close": float(r["close"]),
+                "volume": int(r["tick_volume"]),
+            }
+            for r in rates
+        ]
+
+    def symbol_spec(self, symbol: str) -> Dict[str, Any]:
+        """Contract specification for a symbol (digits, contract size, ...)."""
+        self._ensure_connected()
+        self._select_symbol(symbol)
+        info = mt5.symbol_info(symbol)
+        if info is None:
+            raise Mt5ConnectionError(f"symbol_info() returned nothing for {symbol}: {mt5.last_error()}")
+        d = info._asdict()
+        return {
+            "symbol": symbol.upper(),
+            "digits": d.get("digits"),
+            "point": d.get("point"),
+            "spread": d.get("spread"),
+            "contract_size": d.get("trade_contract_size"),
+            "volume_min": d.get("volume_min"),
+            "volume_max": d.get("volume_max"),
+            "volume_step": d.get("volume_step"),
+            "currency_base": d.get("currency_base"),
+            "currency_profit": d.get("currency_profit"),
+            "trade_mode": d.get("trade_mode"),
+        }
+
+    def list_symbols(self) -> List[str]:
+        """All tradable symbol names on this account/server."""
+        self._ensure_connected()
+        symbols = mt5.symbols_get()
+        if symbols is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"symbols_get() failed: {mt5.last_error()}")
+        return [s.name for s in symbols]
+
+    # ── Order & position management ──────────────────────────────
+
+    def modify_sltp(
+        self, ticket: int, stop_loss: Optional[float] = None, take_profit: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """Modify the stop-loss / take-profit on an open position."""
+        self._ensure_connected()
+        positions = mt5.positions_get(ticket=ticket)
+        if positions is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"positions_get() failed: {mt5.last_error()}")
+        if not positions:
+            raise Mt5ConnectionError(f"No open position with ticket {ticket}.")
+        pos = positions[0]
+        request = {
+            "action": mt5.TRADE_ACTION_SLTP,
+            "symbol": pos.symbol,
+            "position": ticket,
+            "sl": float(stop_loss) if stop_loss is not None else pos.sl,
+            "tp": float(take_profit) if take_profit is not None else pos.tp,
+        }
+        result = mt5.order_send(request)
+        if result is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"order_send() (modify) returned nothing: {mt5.last_error()}")
+        return result._asdict()
+
+    def partial_close(self, ticket: int, volume: float) -> Dict[str, Any]:
+        """Close part of an open position (a smaller volume than the whole)."""
+        self._ensure_connected()
+        positions = mt5.positions_get(ticket=ticket)
+        if positions is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"positions_get() failed: {mt5.last_error()}")
+        if not positions:
+            raise Mt5ConnectionError(f"No open position with ticket {ticket}.")
+        pos = positions[0]
+        vol = float(volume)
+        if vol <= 0 or vol > pos.volume:
+            raise Mt5ConnectionError(
+                f"Partial close volume {vol} must be > 0 and <= position volume {pos.volume}."
+            )
+        tick = mt5.symbol_info_tick(pos.symbol)
+        if tick is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"No tick data for {pos.symbol}: {mt5.last_error()}")
+        close_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
+        price = tick.bid if close_type == mt5.ORDER_TYPE_SELL else tick.ask
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": pos.symbol,
+            "volume": vol,
+            "type": close_type,
+            "position": ticket,
+            "price": price,
+            "deviation": 20,
+            "magic": 90100,
+            "comment": "ict-trading-os-partial",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+        result = mt5.order_send(request)
+        if result is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"order_send() (partial) returned nothing: {mt5.last_error()}")
+        return result._asdict()
+
+    def place_pending(
+        self, symbol: str, direction: str, order_kind: str, volume: float, price: float,
+        stop_loss: Optional[float] = None, take_profit: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Place a pending limit/stop order (direction: long|short, kind: limit|stop)."""
+        self._ensure_connected()
+        self._select_symbol(symbol)
+        type_name = _PENDING_TYPE_NAMES.get((direction, order_kind))
+        if type_name is None:
+            raise Mt5ConnectionError(f"Invalid pending order: {direction}/{order_kind}.")
+        request = {
+            "action": mt5.TRADE_ACTION_PENDING,
+            "symbol": symbol,
+            "volume": float(volume),
+            "type": getattr(mt5, type_name),
+            "price": float(price),
+            "deviation": 20,
+            "magic": 90100,
+            "comment": "ict-trading-os-pending",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+        if stop_loss is not None:
+            request["sl"] = float(stop_loss)
+        if take_profit is not None:
+            request["tp"] = float(take_profit)
+        result = mt5.order_send(request)
+        if result is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"order_send() (pending) returned nothing: {mt5.last_error()}")
+        return result._asdict()
+
+    def pending_orders(self) -> List[Dict[str, Any]]:
+        """List currently working pending orders."""
+        self._ensure_connected()
+        orders = mt5.orders_get()
+        if orders is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"orders_get() failed: {mt5.last_error()}")
+        return [o._asdict() for o in orders]
+
+    def cancel_pending(self, order_ticket: int) -> Dict[str, Any]:
+        """Cancel a working pending order by its ticket."""
+        self._ensure_connected()
+        request = {"action": mt5.TRADE_ACTION_REMOVE, "order": int(order_ticket)}
+        result = mt5.order_send(request)
+        if result is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"order_send() (cancel) returned nothing: {mt5.last_error()}")
         return result._asdict()

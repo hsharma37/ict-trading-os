@@ -189,6 +189,22 @@ export const mt5Api = {
   trade: (data: any) => apiClient.post('/mt5/trade', data),
   close: (data: any) => apiClient.post('/mt5/close', data),
   history: () => apiClient.get('/mt5/history'),
+  // Market data
+  tick: (symbol: string) => apiClient.get(`/mt5/tick/${symbol}`),
+  candles: (symbol: string, timeframe = '1h', count = 200) =>
+    apiClient.get(`/mt5/candles/${symbol}`, { params: { timeframe, count } }),
+  symbolSpec: (symbol: string) => apiClient.get(`/mt5/symbol/${symbol}`),
+  symbols: () => apiClient.get('/mt5/symbols'),
+  // Order & position management
+  modify: (ticket: string, stop_loss?: number, take_profit?: number) =>
+    apiClient.post('/mt5/modify', null, { params: { ticket, stop_loss, take_profit } }),
+  partialClose: (ticket: string, volume: number) =>
+    apiClient.post('/mt5/partial-close', null, { params: { ticket, volume } }),
+  pending: (data: { symbol: string; direction: string; order_kind: string; volume: number; price: number; stop_loss?: number; take_profit?: number }) =>
+    apiClient.post('/mt5/pending', null, { params: data }),
+  pendingOrders: () => apiClient.get('/mt5/orders'),
+  cancelPending: (order_ticket: string) =>
+    apiClient.post('/mt5/pending/cancel', null, { params: { order_ticket } }),
 }
 
 // Quant API

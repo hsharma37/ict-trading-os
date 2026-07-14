@@ -127,6 +127,35 @@ export default function MT5Terminal() {
     }
   }
 
+  const handleModify = async (pos: MT5Position) => {
+    const sl = window.prompt(`New Stop Loss for ${pos.symbol} (blank to keep ${pos.sl ?? '-'})`, String(pos.sl ?? ''))
+    if (sl === null) return
+    const tp = window.prompt(`New Take Profit for ${pos.symbol} (blank to keep ${pos.tp ?? '-'})`, String(pos.tp ?? ''))
+    if (tp === null) return
+    try {
+      await mt5Api.modify(pos.ticket, sl ? Number(sl) : undefined, tp ? Number(tp) : undefined)
+      await fetchAll()
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || 'Modify failed')
+    }
+  }
+
+  const handlePartialClose = async (pos: MT5Position) => {
+    const raw = window.prompt(`Volume to close for ${pos.symbol} (max ${pos.lot_size})`, String((pos.lot_size || 0) / 2))
+    if (raw === null) return
+    const vol = Number(raw)
+    if (!vol || vol <= 0 || vol > (pos.lot_size || 0)) {
+      alert(`Enter a volume between 0 and ${pos.lot_size}`)
+      return
+    }
+    try {
+      await mt5Api.partialClose(pos.ticket, vol)
+      await fetchAll()
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || 'Partial close failed')
+    }
+  }
+
   const marginLevel = account?.margin_level ?? 0
   const marginSafe = marginLevel > 200 || marginLevel === 0
   const marginWarning = marginLevel > 100 && marginLevel <= 200
@@ -270,9 +299,17 @@ export default function MT5Terminal() {
                             </td>
                             <td className="p-2 text-right font-mono">{pos.swap?.toFixed(2) ?? '0.00'}</td>
                             <td className="p-2">
-                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleClose(pos.ticket)}>
-                                <X className="w-3 h-3 mr-1" /> Close
-                              </Button>
+                              <div className="flex items-center gap-1 justify-end">
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleModify(pos)} title="Modify SL/TP">
+                                  SL/TP
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handlePartialClose(pos)} title="Partial close">
+                                  Partial
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleClose(pos.ticket)}>
+                                  <X className="w-3 h-3 mr-1" /> Close
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         )
