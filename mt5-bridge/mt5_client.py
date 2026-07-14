@@ -46,7 +46,8 @@ class Mt5Client:
         return self._connected
 
     def connect(self) -> bool:
-        """Initialize the terminal and log in. Safe to call repeatedly."""
+        """Initialize the terminal and log in. Safe to call repeatedly —
+        returns immediately if already connected."""
         if not _MT5_AVAILABLE:
             logger.warning(
                 "MetaTrader5 package not installed (it's Windows-only) — "
@@ -74,6 +75,17 @@ class Mt5Client:
             mt5.shutdown()
         self._connected = False
 
+    def _mark_disconnected(self) -> None:
+        """Drop the cached connected flag so the *next* call re-attempts a
+        fresh mt5.initialize() instead of assuming a dead IPC link is fine.
+
+        Without this, a connection that drops after the first successful
+        connect() (terminal closed, PC slept, IPC hiccup) stays marked
+        connected forever, and this bridge silently keeps failing until
+        someone manually restarts the process.
+        """
+        self._connected = False
+
     def _ensure_connected(self) -> None:
         if not self.connect():
             raise Mt5ConnectionError(
@@ -86,19 +98,30 @@ class Mt5Client:
         self._ensure_connected()
         info = mt5.account_info()
         if info is None:
+            self._mark_disconnected()
             raise Mt5ConnectionError(f"account_info() returned nothing: {mt5.last_error()}")
         return info._asdict()
 
     def positions(self) -> List[Dict[str, Any]]:
         self._ensure_connected()
         positions = mt5.positions_get()
-        return [p._asdict() for p in positions] if positions else []
+        # positions_get() returns None on a call/IPC failure but an empty
+        # tuple when there are genuinely zero open positions -- these must
+        # not be treated the same, or a dropped connection silently looks
+        # like "no open positions" instead of an honest error.
+        if positions is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"positions_get() failed: {mt5.last_error()}")
+        return [p._asdict() for p in positions]
 
     def history_deals(self, days: int = 30) -> List[Dict[str, Any]]:
         self._ensure_connected()
         since = datetime.now() - timedelta(days=days)
         deals = mt5.history_deals_get(since, datetime.now())
-        return [d._asdict() for d in deals] if deals else []
+        if deals is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"history_deals_get() failed: {mt5.last_error()}")
+        return [d._asdict() for d in deals]
 
     def send_order(
         self,
@@ -117,7 +140,8 @@ class Mt5Client:
 
         tick = mt5.symbol_info_tick(symbol)
         if tick is None:
-            raise Mt5ConnectionError(f"No tick data available for {symbol}.")
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"No tick data available for {symbol}: {mt5.last_error()}")
 
         is_buy = direction == "long"
         order_type = mt5.ORDER_TYPE_BUY if is_buy else mt5.ORDER_TYPE_SELL
@@ -142,6 +166,7 @@ class Mt5Client:
 
         result = mt5.order_send(request)
         if result is None:
+            self._mark_disconnected()
             raise Mt5ConnectionError(f"order_send() returned nothing: {mt5.last_error()}")
         return result._asdict()
 
@@ -149,13 +174,17 @@ class Mt5Client:
         self._ensure_connected()
 
         positions = mt5.positions_get(ticket=ticket)
+        if positions is None:
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"positions_get() failed: {mt5.last_error()}")
         if not positions:
             raise Mt5ConnectionError(f"No open position with ticket {ticket}.")
         pos = positions[0]
 
         tick = mt5.symbol_info_tick(pos.symbol)
         if tick is None:
-            raise Mt5ConnectionError(f"No tick data available for {pos.symbol}.")
+            self._mark_disconnected()
+            raise Mt5ConnectionError(f"No tick data available for {pos.symbol}: {mt5.last_error()}")
 
         close_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
         price = tick.bid if close_type == mt5.ORDER_TYPE_SELL else tick.ask
@@ -175,5 +204,6 @@ class Mt5Client:
         }
         result = mt5.order_send(request)
         if result is None:
+            self._mark_disconnected()
             raise Mt5ConnectionError(f"order_send() (close) returned nothing: {mt5.last_error()}")
         return result._asdict()
