@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { tradesApi, researchApi, marketApi } from '@/api/client'
+import { useMt5 } from '@/hooks/useMt5'
+import Mt5PositionsPanel from '@/components/Mt5PositionsPanel'
 import {
   Eye, Target, Shield, AlertTriangle, Crosshair, DollarSign,
   Clock, Zap, Percent, MoveRight, RefreshCw, TrendingUp, TrendingDown, 
@@ -180,6 +182,7 @@ export default function WhatsUp() {
 
   const selectedInstrument = instruments.find(i => i.symbol === selectedTrade?.symbol)
   const killzone = getKillzoneInfo()
+  const mt5 = useMt5()
 
   const handlePartialClose = async (trade: Trade, fraction: number, label: string) => {
     const price = livePrices[trade.symbol]?.price || trade.current_price
@@ -418,11 +421,30 @@ export default function WhatsUp() {
         </Card>
       </div>
 
+      {/* Live MT5 Positions — broker-side positions with SL/TP progress + management */}
+      {(mt5.connected || mt5.positions.length > 0) && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Crosshair className="w-5 h-5 text-primary" />
+              Live MT5 Positions
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium">broker feed</span>
+              <span className="text-xs text-muted-foreground font-normal ml-auto">
+                {mt5.positions.length} open · <span className={mt5.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}>{mt5.totalProfit >= 0 ? '+' : ''}${mt5.totalProfit.toFixed(2)}</span>
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Mt5PositionsPanel variant="visual" />
+          </CardContent>
+        </Card>
+      )}
+
       {trades.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             <Crosshair className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <h3 className="text-lg font-semibold mb-2">No Open Trades</h3>
+            <h3 className="text-lg font-semibold mb-2">No Internal Trades</h3>
             <p className="text-sm max-w-md mx-auto mb-4">
               Go to the Execute page to place a trade. Once you have open positions, 
               this dashboard will show real-time P&L, R-multiples, and trade lifecycle tracking.
