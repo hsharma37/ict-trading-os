@@ -34,25 +34,27 @@ export interface Mt5Account {
 export function useMt5() {
   const qc = useQueryClient()
 
+  // Gentle intervals: the bridge is reached over a single tunnel, so keep the
+  // request rate modest. React Query dedupes across all pages using these keys.
   const status = useQuery({
     queryKey: ['mt5', 'status'],
     queryFn: () => mt5Api.status().then((r) => r.data),
-    refetchInterval: 10000,
+    refetchInterval: 20000,
   })
   const account = useQuery({
     queryKey: ['mt5', 'account'],
     queryFn: () => mt5Api.account().then((r) => r.data as Mt5Account),
-    refetchInterval: 8000,
+    refetchInterval: 15000,
   })
   const positions = useQuery({
     queryKey: ['mt5', 'positions'],
     queryFn: () => mt5Api.positions().then((r) => (r.data?.positions || []) as Mt5Position[]),
-    refetchInterval: 5000,
+    refetchInterval: 8000,
   })
   const history = useQuery({
     queryKey: ['mt5', 'history'],
     queryFn: () => mt5Api.history().then((r) => r.data?.history || []),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
   })
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['mt5'] })
