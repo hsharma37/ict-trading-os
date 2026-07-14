@@ -281,12 +281,20 @@ class YouTubeService:
         Fetch transcript using youtube-transcript-api (latest API syntax).
         Falls back to faster-whisper audio transcription if captions are disabled.
         """
-        if YouTubeTranscriptApi is None:
-            raise RuntimeError("youtube-transcript-api is not installed")
-
         languages = languages or ["en", "en-US", "en-GB"]
 
-        # Try captions first
+        # Preferred path: fetch via the MT5 bridge's residential IP. YouTube
+        # blocks caption requests from cloud/serverless IPs, so a *direct*
+        # attempt from Vercel always fails — the bridge (on the user's own
+        # machine) is not blocked.
+        bridge_t = self._fetch_transcript_via_bridge(video_id, languages)
+        if bridge_t and bridge_t.text:
+            return bridge_t
+
+        if YouTubeTranscriptApi is None:
+            return VideoTranscript(video_id=video_id, text='', segments=[], source='fallback')
+
+        # Try captions directly (works from a residential/local runtime).
         try:
             ytt_api = YouTubeTranscriptApi()
             fetched = ytt_api.fetch(video_id, languages=languages)
@@ -322,6 +330,40 @@ class YouTubeService:
                 return VideoTranscript(video_id=video_id, text='', segments=[], source='fallback')
             # Try whisper as last resort
             return self._transcribe_with_whisper(video_id, languages)
+
+    def _fetch_transcript_via_bridge(self, video_id: str, languages: List[str]) -> Optional[VideoTranscript]:
+        """Fetch the transcript through the MT5 bridge (residential IP), when
+        configured. Returns None to fall back to a direct attempt."""
+        from app.core.config import settings
+        base = getattr(settings, "MT5_BRIDGE_URL", "")
+        if not base:
+            return None
+        headers = {"ngrok-skip-browser-warning": "true"}
+        if getattr(settings, "MT5_BRIDGE_API_KEY", ""):
+            headers["X-Bridge-Key"] = settings.MT5_BRIDGE_API_KEY
+        try:
+            resp = self._http_client.get(
+                f"{base}/transcript/{video_id}",
+                params={"languages": ",".join(languages)},
+                headers=headers,
+                timeout=45,
+            )
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            if not data.get("text"):
+                return None
+            return VideoTranscript(
+                video_id=video_id,
+                text=data["text"],
+                segments=data.get("segments", []),
+                language=data.get("language", languages[0] if languages else "en"),
+                is_generated=bool(data.get("is_generated", False)),
+                source="bridge",
+            )
+        except Exception as e:
+            print(f"[Transcript] Bridge fetch failed for {video_id}: {e}")
+            return None
 
     def _transcribe_with_whisper(self, video_id: str, languages: List[str]) -> VideoTranscript:
         """Download audio and transcribe with faster-whisper."""

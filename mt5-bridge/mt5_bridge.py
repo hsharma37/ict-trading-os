@@ -16,6 +16,13 @@ from config import config
 from telegram_bot import TelegramNotifier
 from mt5_client import Mt5Client, Mt5ConnectionError
 
+# YouTube transcripts: fetched here (residential IP) because YouTube blocks
+# caption requests from cloud/serverless IPs (i.e. from Vercel directly).
+try:
+    from youtube_transcript_api import YouTubeTranscriptApi
+except ImportError:
+    YouTubeTranscriptApi = None
+
 # ────────────────────────────────────────────────
 # Logging
 # ────────────────────────────────────────────────
@@ -233,6 +240,37 @@ def symbols():
         return jsonify({"symbols": names, "count": len(names), "status": "connected"})
     except Mt5ConnectionError as e:
         return jsonify({"status": "error", "error": str(e)}), 503
+
+
+# ────────────────────────────────────────────────
+# YouTube transcript (residential-IP proxy for the app's KB)
+# ────────────────────────────────────────────────
+
+
+@app.route("/transcript/<video_id>", methods=["GET"])
+@require_bridge_key
+def transcript(video_id):
+    """Fetch a YouTube video's transcript from this machine's IP. Query:
+    languages (comma-separated, default en,en-US,en-GB)."""
+    if YouTubeTranscriptApi is None:
+        return jsonify({"status": "error", "error": "youtube-transcript-api not installed on bridge"}), 503
+    languages = [s.strip() for s in request.args.get("languages", "en,en-US,en-GB").split(",") if s.strip()]
+    try:
+        fetched = YouTubeTranscriptApi().fetch(video_id, languages=languages)
+        segments = [
+            {"text": s.text, "start": s.start, "duration": getattr(s, "duration", 0)}
+            for s in fetched
+        ]
+        return jsonify({
+            "video_id": video_id,
+            "text": " ".join(s["text"] for s in segments),
+            "segments": segments,
+            "language": getattr(fetched, "language", languages[0] if languages else "en"),
+            "is_generated": getattr(fetched, "is_generated", False),
+            "status": "ok",
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 502
 
 
 # ────────────────────────────────────────────────

@@ -83,6 +83,7 @@ small always-on VPS instead.
 | `POST /modify` | `X-Bridge-Key` | Modify a position's SL/TP (`ticket`, `stop_loss?`, `take_profit?`) |
 | `POST /pending` | `X-Bridge-Key` | Place a limit/stop order (`symbol`, `direction`, `order_kind`, `volume`, `price`, ...) |
 | `POST /pending/cancel` | `X-Bridge-Key` | Cancel a pending order (`order_ticket`) |
+| `GET /transcript/<video_id>` | `X-Bridge-Key` | Fetch a YouTube transcript from this machine's (residential) IP — used by the app's KB auto-transcribe, since YouTube blocks cloud/serverless IPs |
 | `POST /test-telegram` | `X-Bridge-Key` | Sends a test Telegram message |
 
 To price the app from the broker's own feed (so displayed prices match your

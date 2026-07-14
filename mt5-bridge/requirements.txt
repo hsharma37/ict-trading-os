@@ -2,6 +2,7 @@ flask>=3.0.0
 requests>=2.32.0
 python-telegram-bot>=21.0
 python-dotenv>=1.0.0
+youtube-transcript-api>=1.2.4
 # MetaTrader5's Python package only ships Windows wheels; the marker below
 # keeps `pip install -r requirements.txt` working on Mac/Linux dev machines
 # (where this bridge can't run for real, but its code can still be read/tested).
