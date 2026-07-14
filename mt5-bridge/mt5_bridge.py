@@ -94,6 +94,24 @@ def health():
 # ────────────────────────────────────────────────
 
 
+@app.route("/order-check", methods=["POST"])
+@require_bridge_key
+def order_check():
+    """Validate an order without placing it — for diagnosing rejections."""
+    data = request.get_json(force=True)
+    try:
+        result = mt5_client.order_check(
+            data.get("symbol", "UNKNOWN"),
+            data.get("direction", "long"),
+            data.get("lot_size", 0.0),
+            data.get("stop_loss"),
+            data.get("take_profit"),
+        )
+    except Mt5ConnectionError as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+    return jsonify(result)
+
+
 @app.route("/trade", methods=["POST"])
 @require_bridge_key
 def trade():

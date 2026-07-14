@@ -122,7 +122,8 @@ disable. The bridge must be restarted to pick up the change.
 | `GET /symbol/<symbol>` | `X-Bridge-Key` | Contract spec (digits, contract size, volume min/max/step) |
 | `GET /symbols` | `X-Bridge-Key` | All tradable symbols on the account |
 | `GET /orders` | `X-Bridge-Key` | Working pending orders |
-| `POST /trade` | `X-Bridge-Key` | Places a real market order |
+| `POST /trade` | `X-Bridge-Key` | Places a real market order (auto-selects a supported filling mode) |
+| `POST /order-check` | `X-Bridge-Key` | Validates an order **without placing it** — diagnoses rejections (filling mode, stops, margin, market hours) |
 | `POST /close` | `X-Bridge-Key` | Closes a position by ticket ID |
 | `POST /partial-close` | `X-Bridge-Key` | Closes part of a position (`ticket`, `volume`) |
 | `POST /modify` | `X-Bridge-Key` | Modify a position's SL/TP (`ticket`, `stop_loss?`, `take_profit?`) |

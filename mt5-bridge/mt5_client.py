@@ -260,7 +260,7 @@ class Mt5Client:
         order_type = mt5.ORDER_TYPE_BUY if is_buy else mt5.ORDER_TYPE_SELL
         price = tick.ask if is_buy else tick.bid
 
-        request = {
+        base = {
             "action": mt5.TRADE_ACTION_DEAL,
             "symbol": symbol,
             "volume": float(lot_size),
@@ -270,18 +270,91 @@ class Mt5Client:
             "magic": 90100,
             "comment": "ict-trading-os",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
         }
         if stop_loss is not None:
-            request["sl"] = float(stop_loss)
+            base["sl"] = float(stop_loss)
         if take_profit is not None:
-            request["tp"] = float(take_profit)
+            base["tp"] = float(take_profit)
 
-        result = mt5.order_send(request)
-        if result is None:
-            self._mark_disconnected()
-            raise Mt5ConnectionError(f"order_send() returned nothing: {mt5.last_error()}")
-        return result._asdict()
+        # Filling mode must match what the symbol/broker supports, or order_send
+        # returns retcode 10030 (Unsupported filling mode) and nothing books.
+        # Try the symbol's advertised modes, then fall back, until one is accepted.
+        last = None
+        for fill in self._filling_modes(info):
+            result = mt5.order_send({**base, "type_filling": fill})
+            if result is None:
+                self._mark_disconnected()
+                raise Mt5ConnectionError(f"order_send() returned nothing: {mt5.last_error()}")
+            last = result
+            if result.retcode != mt5.TRADE_RETCODE_INVALID_FILL:
+                return result._asdict()
+        return last._asdict()
+
+    @staticmethod
+    def _filling_modes(info) -> List[int]:
+        """Ordered list of order filling modes to try for a symbol.
+
+        `symbol_info().filling_mode` is a bitmask of supported modes
+        (bit0 = FOK, bit1 = IOC). We try the advertised ones first, then
+        RETURN as a last resort (valid for market orders on most servers)."""
+        modes: List[int] = []
+        fm = getattr(info, "filling_mode", 0) or 0
+        if fm & 1:  # SYMBOL_FILLING_FOK
+            modes.append(mt5.ORDER_FILLING_FOK)
+        if fm & 2:  # SYMBOL_FILLING_IOC
+            modes.append(mt5.ORDER_FILLING_IOC)
+        for fallback in (mt5.ORDER_FILLING_FOK, mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN):
+            if fallback not in modes:
+                modes.append(fallback)
+        return modes
+
+    def order_check(
+        self,
+        symbol: str,
+        direction: str,
+        lot_size: float,
+        stop_loss: Optional[float] = None,
+        take_profit: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Validate an order WITHOUT placing it (mt5.order_check). Returns the
+        retcode/comment the broker would give — used to diagnose why an order
+        would be rejected (filling, stops, margin, market hours) safely."""
+        self._ensure_connected()
+        info = mt5.symbol_info(symbol)
+        if info is None or not info.visible:
+            if not mt5.symbol_select(symbol, True):
+                raise Mt5ConnectionError(f"Symbol {symbol} is not available on this account/server.")
+            info = mt5.symbol_info(symbol)
+        tick = mt5.symbol_info_tick(symbol)
+        if tick is None:
+            raise Mt5ConnectionError(f"No tick data available for {symbol}: {mt5.last_error()}")
+        is_buy = direction == "long"
+        base = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": symbol,
+            "volume": float(lot_size),
+            "type": mt5.ORDER_TYPE_BUY if is_buy else mt5.ORDER_TYPE_SELL,
+            "price": tick.ask if is_buy else tick.bid,
+            "deviation": 20,
+            "magic": 90100,
+            "comment": "ict-os-check",
+            "type_time": mt5.ORDER_TIME_GTC,
+        }
+        if stop_loss is not None:
+            base["sl"] = float(stop_loss)
+        if take_profit is not None:
+            base["tp"] = float(take_profit)
+        checks = []
+        for fill in self._filling_modes(info):
+            res = mt5.order_check({**base, "type_filling": fill})
+            entry = {"filling": fill, "retcode": getattr(res, "retcode", None),
+                     "comment": getattr(res, "comment", None)}
+            checks.append(entry)
+            if entry["retcode"] == 0:  # 0 = would succeed
+                return {"ok": True, "filling": fill, "comment": entry["comment"], "tried": checks}
+        return {"ok": False, "tried": checks,
+                "supported_filling_bitmask": getattr(info, "filling_mode", None),
+                "price": base["price"], "volume_min": info.volume_min, "volume_step": info.volume_step}
 
     def close_position(self, ticket: int) -> Dict[str, Any]:
         self._ensure_connected()
@@ -382,6 +455,7 @@ class Mt5Client:
             "currency_base": d.get("currency_base"),
             "currency_profit": d.get("currency_profit"),
             "trade_mode": d.get("trade_mode"),
+            "filling_mode": d.get("filling_mode"),
         }
 
     def list_symbols(self) -> List[str]:
