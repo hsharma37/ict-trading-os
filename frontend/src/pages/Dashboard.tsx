@@ -4,6 +4,8 @@ import {
   TrendingUp, DollarSign, Activity, Target, AlertTriangle, Newspaper, Globe, BarChart3
 } from 'lucide-react'
 import { tradesApi, researchApi, newsApi } from '@/api/client'
+import { useMt5 } from '@/hooks/useMt5'
+import Mt5PositionsPanel from '@/components/Mt5PositionsPanel'
 
 interface TradeStats {
   total_trades: number
@@ -58,6 +60,7 @@ export default function Dashboard() {
   const [newsFilter, setNewsFilter] = useState('All')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const mt5 = useMt5()
 
   const loadData = useCallback(async () => {
     try {
@@ -153,9 +156,11 @@ export default function Dashboard() {
             <Activity className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.open_trades || 0}</div>
+            <div className="text-2xl font-bold">{mt5.connected ? mt5.positions.length : (stats?.open_trades || 0)}</div>
             <p className="text-xs text-muted-foreground">
-              {openTrades.length} open positions
+              {mt5.connected
+                ? <>MT5 open · <span className={mt5.totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}>{mt5.totalProfit >= 0 ? '+' : ''}${mt5.totalProfit.toFixed(2)}</span></>
+                : `${openTrades.length} open positions`}
             </p>
           </CardContent>
         </Card>
@@ -303,13 +308,18 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Open Positions */}
+        {/* Open Positions — live MT5 when connected (managed here or on MT5 Terminal / What's Up) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Open Positions</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2">
+              Open Positions
+              {mt5.connected && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-medium">MT5 live</span>}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {openTrades.length === 0 ? (
+            {mt5.connected || mt5.positions.length > 0 ? (
+              <Mt5PositionsPanel variant="compact" limit={5} />
+            ) : openTrades.length === 0 ? (
               <p className="text-muted-foreground text-sm">No open positions</p>
             ) : (
               openTrades.slice(0, 5).map((t) => {
