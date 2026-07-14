@@ -1,7 +1,8 @@
 """Telegram Router — API endpoints for signal polling and management."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from typing import Optional
+from app.core.config import settings
 from app.services.telegram_service import telegram_service
 
 router = APIRouter(prefix="/telegram", tags=["Telegram"])
@@ -25,6 +26,8 @@ def get_status():
         return {
             "configured": stats.get("configured"),
             "channel_id": stats.get("channel_id"),
+            "source_channel": stats.get("source_channel"),
+            "source_poll_available": stats.get("source_poll_available"),
             "last_poll_time": stats.get("last_poll_time"),
         }
     except Exception as e:
@@ -43,14 +46,31 @@ def list_signals(limit: int = 50, acknowledged: Optional[bool] = None, auto_trad
 
 @router.post("/poll")
 def manual_poll():
-    """Manually trigger a Telegram poll."""
+    """Manually trigger a Telegram poll (public source channel + bot updates)."""
     try:
-        result = telegram_service.poll()
+        result = telegram_service.poll_all()
         if not result.get("ok"):
-            raise HTTPException(status_code=400, detail=result.get("error", "Poll failed"))
+            detail = (result.get("source") or {}).get("error") or "Poll failed"
+            raise HTTPException(status_code=400, detail=detail)
         return result
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/poll-source", summary="Hourly cron: poll the public source channel")
+def poll_source(request: Request):
+    """Poll the public source channel via its web preview. Designed to be hit by
+    a Vercel cron every hour. If CRON_SECRET is set, requires Vercel's
+    `Authorization: Bearer <CRON_SECRET>` header."""
+    secret = settings.CRON_SECRET
+    if secret:
+        auth = request.headers.get("authorization", "")
+        if auth != f"Bearer {secret}":
+            raise HTTPException(status_code=401, detail="Unauthorized cron request")
+    try:
+        return telegram_service.poll_source_channel()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
