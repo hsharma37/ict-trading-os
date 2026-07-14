@@ -6,7 +6,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from app.services.price_service import price_service
-from app.services.instrument_config import get_all_instruments, INSTRUMENTS
+from app.services.mt5_price_service import mt5_price_service
+from app.services.instrument_config import get_all_instruments, get_instrument, INSTRUMENTS
 
 router = APIRouter(prefix="/playground", tags=["Playground"])
 
@@ -81,38 +82,69 @@ class InstrumentInfo(BaseModel):
 # Endpoints
 # ────────────────────────────────────────────────
 
+def _mt5_price_response(symbol: str) -> Optional[PriceResponse]:
+    """Build a PriceResponse from the MT5 broker feed when it's the selected
+    provider, so the topbar/playground match the rest of the app. Returns None
+    to fall back to the Yahoo/synthetic price_service."""
+    q = mt5_price_service.get_price_detailed(symbol)
+    if not q:
+        return None
+    config = get_instrument(symbol.upper()) or {}
+    return PriceResponse(
+        symbol=q["symbol"],
+        label=config.get("label", q["symbol"]),
+        price=q["price"],
+        change=q["change"],
+        change_percent=q["change_percent"],
+        high=q["high"],
+        low=q["low"],
+        open=q["open"],
+        volume=q["volume"],
+        prev_close=q["prev_close"],
+        timestamp=q["timestamp"],
+        kind=config.get("kind", ""),
+        digits=config.get("digits", 5),
+        source="mt5",
+        stale=is_stale(q["timestamp"]),
+    )
+
+
 @router.get("/prices", response_model=AllPricesResponse)
 def get_all_prices():
     """Fetch live prices for all configured instruments."""
     prices = price_service.fetch_all_prices()
+    responses = []
+    for p in prices.values():
+        mt5_resp = _mt5_price_response(p.symbol)
+        responses.append(mt5_resp or PriceResponse(
+            symbol=p.symbol,
+            label=p.label,
+            price=p.price,
+            change=p.change,
+            change_percent=p.change_percent,
+            high=p.high,
+            low=p.low,
+            open=p.open,
+            volume=p.volume,
+            prev_close=p.prev_close,
+            timestamp=p.timestamp,
+            kind=p.kind,
+            digits=p.digits,
+            source=derive_source(p.label),
+            stale=is_stale(p.timestamp),
+        ))
     return AllPricesResponse(
-        prices=[
-            PriceResponse(
-                symbol=p.symbol,
-                label=p.label,
-                price=p.price,
-                change=p.change,
-                change_percent=p.change_percent,
-                high=p.high,
-                low=p.low,
-                open=p.open,
-                volume=p.volume,
-                prev_close=p.prev_close,
-                timestamp=p.timestamp,
-                kind=p.kind,
-                digits=p.digits,
-                source=derive_source(p.label),
-                stale=is_stale(p.timestamp),
-            )
-            for p in prices.values()
-        ],
-        timestamp=prices[list(prices.keys())[0]].timestamp if prices else 0,
+        prices=responses,
+        timestamp=responses[0].timestamp if responses else "",
     )
 
 
 @router.get("/price/{symbol}", response_model=PriceResponse)
 def get_price(symbol: str):
     """Fetch live price for a specific instrument."""
+    mt5_resp = _mt5_price_response(symbol.upper())
+    if mt5_resp:
+        return mt5_resp
     data = price_service.fetch_price(symbol.upper())
     if not data:
         raise HTTPException(status_code=404, detail=f"Instrument {symbol} not found")
