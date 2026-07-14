@@ -483,6 +483,45 @@ def test_protected_endpoint_rejects_wrong_key(app_client):
     assert resp.status_code == 401
 
 
+class _FakeSnippet:
+    def __init__(self, text, start):
+        self.text = text
+        self.start = start
+        self.duration = 1.0
+
+
+class _FakeFetched(list):
+    language = "en"
+    is_generated = True
+
+
+class _FakeYtt:
+    def fetch(self, video_id, languages=None):
+        return _FakeFetched([_FakeSnippet("hello", 0.0), _FakeSnippet("world", 1.0)])
+
+
+def test_transcript_endpoint_returns_text(app_client):
+    import mt5_bridge
+    mt5_bridge.YouTubeTranscriptApi = _FakeYtt  # residential-IP transcript source
+    resp = app_client.get("/transcript/abc123", headers={"X-Bridge-Key": "test-bridge-key"})
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["text"] == "hello world"
+    assert len(body["segments"]) == 2
+
+
+def test_transcript_endpoint_requires_key(app_client):
+    resp = app_client.get("/transcript/abc123")
+    assert resp.status_code == 401
+
+
+def test_transcript_endpoint_503_when_lib_missing(app_client):
+    import mt5_bridge
+    mt5_bridge.YouTubeTranscriptApi = None
+    resp = app_client.get("/transcript/abc123", headers={"X-Bridge-Key": "test-bridge-key"})
+    assert resp.status_code == 503
+
+
 def test_protected_endpoint_accepts_correct_key_but_mt5_not_connected(app_client):
     # Correct key passes the auth gate; then it fails honestly (503) because
     # no real terminal is connected on this machine, never a fake success.
