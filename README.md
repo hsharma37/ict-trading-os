@@ -131,11 +131,13 @@ the internal ledger (which remains the automatic fallback when the bridge is dow
   preview (`t.me/s/<channel>`) — **no bot membership or credentials needed** —
   parses each message into a structured signal (symbol/side/entry/SL/TP/strategy),
   dedupes by channel+message id, and stores it in the signal feed. Set the channel
-  with `TELEGRAM_SOURCE_CHANNEL` (default `xxictxx`). Polled **hourly** by a Vercel
-  cron (`GET /api/telegram/poll-source`, schedule `0 * * * *`); also runnable on
-  demand with the **Manual Poll** button. The Telegram page shows the active source
-  channel. (Hourly cron needs a Vercel plan that permits sub-daily schedules; the
-  manual poll and the always-on bridge are alternatives otherwise.)
+  with `TELEGRAM_SOURCE_CHANNEL` (default `xxictxx`). The Telegram page shows the
+  active source channel; the **Manual Poll** button runs it on demand.
+  - **Hourly** polling is driven by the always-on **MT5 bridge** (set `APP_BASE_URL`
+    in the bridge's `.env` — see [`mt5-bridge/README.md`](mt5-bridge/README.md)),
+    which works on any hosting plan. A Vercel cron (`GET /api/telegram/poll-source`,
+    `0 0 * * *`) also runs it **daily** as a fallback (Vercel Hobby caps crons at
+    once/day; Pro can go hourly — bump the schedule to `0 * * * *`).
 
 ### 🔐 Security
 - Production protects private/mutating routes behind an **`X-Api-Key`** gate
