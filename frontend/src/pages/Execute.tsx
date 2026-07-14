@@ -247,12 +247,36 @@ export default function Execute() {
     return null
   }
 
+  // Resolve a lot to trade even if the user never clicked "Calculate Lot":
+  // fall back to computing it inline from SL + risk %, so the order isn't
+  // silently blocked.
+  const resolveLot = async (): Promise<number | null> => {
+    const existing = effectiveLot()
+    if (existing) return existing
+    const sl = parseFloat(stopLoss)
+    if (!sl || sl <= 0) return null
+    try {
+      const res = await ordersApi.calculateLot({
+        symbol,
+        entry_price: entryPrice ? parseFloat(entryPrice) : undefined,
+        stop_loss: sl,
+        account_balance: parseFloat(accountBalance),
+        risk_pct: parseFloat(riskPct),
+      })
+      if (res.data && !res.data.error && res.data.lot_size > 0) {
+        setLotCalc(res.data)
+        return res.data.lot_size
+      }
+    } catch { /* fall through to the error below */ }
+    return null
+  }
+
   const placeMt5Order = async () => {
     const sl = stopLoss ? parseFloat(stopLoss) : undefined
     const tp = tp1 ? parseFloat(tp1) : undefined  // MT5 positions carry a single TP
-    const lot = effectiveLot()
+    const lot = await resolveLot()
     if (!lot) {
-      setError('Calculate the lot size (or enter one manually) before placing an MT5 order')
+      setError('Enter a stop loss (used to auto-size the lot) or type a lot size in the manual field.')
       return
     }
     const direction = side === 'BUY' ? 'long' : 'short'
