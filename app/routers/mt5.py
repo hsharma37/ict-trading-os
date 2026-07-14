@@ -6,10 +6,14 @@ from typing import Optional
 
 from app.core.config import settings
 from app.services.mt5_guard import validate_trade, Mt5ValidationError
+from app.services.bridge_config import get_bridge_url, get_bridge_api_key
 
 router = APIRouter(prefix="/mt5", tags=["MT5 Terminal"])
 
-MT5_BASE = settings.MT5_BRIDGE_URL
+
+def _base() -> str:
+    """Effective bridge base URL (DB override -> env), resolved per call."""
+    return get_bridge_url()
 
 
 def _bridge_headers() -> dict:
@@ -20,8 +24,9 @@ def _bridge_headers() -> dict:
     - ngrok-skip-browser-warning: bypasses ngrok's free-tier interstitial.
     """
     h = {"ngrok-skip-browser-warning": "true"}
-    if settings.MT5_BRIDGE_API_KEY:
-        h["X-Bridge-Key"] = settings.MT5_BRIDGE_API_KEY
+    key = get_bridge_api_key()
+    if key:
+        h["X-Bridge-Key"] = key
     return h
 
 
@@ -41,19 +46,20 @@ def _audit_execution_intent(record: dict) -> None:
 @router.get("/status", summary="Check MT5 bridge connectivity")
 async def get_bridge_status():
     """Check if the MT5 bridge is reachable and get its status (with retry)."""
+    base = _base()
     last = None
     for attempt in range(3):
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{MT5_BASE}/", headers=_bridge_headers(), timeout=12)
+                resp = await client.get(f"{base}/", headers=_bridge_headers(), timeout=12)
             return {
-                "bridge_url": MT5_BASE,
+                "bridge_url": base,
                 "reachable": resp.status_code == 200,
                 "bridge_response": resp.json() if resp.status_code == 200 else None,
             }
         except Exception as e:
             last = e
-    return {"bridge_url": MT5_BASE, "reachable": False, "error": f"{type(last).__name__}: {last}"}
+    return {"bridge_url": base, "reachable": False, "error": f"{type(last).__name__}: {last}"}
 
 
 @router.get("/account", summary="Get MT5 account summary")
@@ -114,7 +120,7 @@ async def proxy_trade(
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
-                f"{MT5_BASE}/trade",
+                f"{_base()}/trade",
                 json=payload,
                 headers=_bridge_headers(),
                 timeout=30,
@@ -145,7 +151,7 @@ async def _bridge_get(path: str, params: dict = None, timeout: float = 20, retri
     for attempt in range(retries + 1):
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{MT5_BASE}{path}", params=params, headers=_bridge_headers(), timeout=timeout)
+                resp = await client.get(f"{_base()}{path}", params=params, headers=_bridge_headers(), timeout=timeout)
             return resp.json()
         except Exception as e:
             last = e
@@ -157,7 +163,7 @@ async def _bridge_post(path: str, payload: dict, timeout: float = 30, retries: i
     for attempt in range(retries + 1):
         try:
             async with httpx.AsyncClient() as client:
-                resp = await client.post(f"{MT5_BASE}{path}", json=payload, headers=_bridge_headers(), timeout=timeout)
+                resp = await client.post(f"{_base()}{path}", json=payload, headers=_bridge_headers(), timeout=timeout)
             return resp.json()
         except Exception as e:
             last = e

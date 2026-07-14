@@ -344,13 +344,14 @@ class YouTubeService:
 
     def _fetch_meta_via_bridge(self, video_id: str) -> Optional[Dict]:
         """Fetch video title/author via the MT5 bridge (residential IP)."""
-        from app.core.config import settings
-        base = getattr(settings, "MT5_BRIDGE_URL", "")
+        from app.services.bridge_config import get_bridge_url, get_bridge_api_key
+        base = get_bridge_url()
         if not base:
             return None
         headers = {"ngrok-skip-browser-warning": "true"}
-        if getattr(settings, "MT5_BRIDGE_API_KEY", ""):
-            headers["X-Bridge-Key"] = settings.MT5_BRIDGE_API_KEY
+        key = get_bridge_api_key()
+        if key:
+            headers["X-Bridge-Key"] = key
         try:
             resp = self._http_client.get(f"{base}/video-meta/{video_id}", headers=headers, timeout=20)
             if resp.status_code != 200:
@@ -362,13 +363,14 @@ class YouTubeService:
     def _fetch_transcript_via_bridge(self, video_id: str, languages: List[str]) -> Optional[VideoTranscript]:
         """Fetch the transcript through the MT5 bridge (residential IP), when
         configured. Returns None to fall back to a direct attempt."""
-        from app.core.config import settings
-        base = getattr(settings, "MT5_BRIDGE_URL", "")
+        from app.services.bridge_config import get_bridge_url, get_bridge_api_key
+        base = get_bridge_url()
         if not base:
             return None
         headers = {"ngrok-skip-browser-warning": "true"}
-        if getattr(settings, "MT5_BRIDGE_API_KEY", ""):
-            headers["X-Bridge-Key"] = settings.MT5_BRIDGE_API_KEY
+        key = get_bridge_api_key()
+        if key:
+            headers["X-Bridge-Key"] = key
         try:
             resp = self._http_client.get(
                 f"{base}/transcript/{video_id}",
