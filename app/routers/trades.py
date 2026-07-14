@@ -106,6 +106,17 @@ def list_trades(status: Optional[str] = None, symbol: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("")
+def reset_trades(status: Optional[str] = None):
+    """Reset the internal trade ledger (clears Dashboard/Analytics P&L). Protected
+    (mutating). `status=CLOSED` or `OPEN` limits the scope; omit to clear all.
+    Does NOT affect live MT5 broker positions."""
+    try:
+        return trade_lifecycle_service.reset_all(status)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{trade_id}")
 def get_trade(trade_id: str):
     """Get a single trade with current PnL."""
