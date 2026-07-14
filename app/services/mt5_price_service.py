@@ -24,9 +24,10 @@ class Mt5PriceService:
         return settings.MARKET_DATA_PROVIDER == "mt5" and bool(settings.MT5_BRIDGE_URL)
 
     def _headers(self) -> dict:
+        h = {"ngrok-skip-browser-warning": "true"}
         if settings.MT5_BRIDGE_API_KEY:
-            return {"X-Bridge-Key": settings.MT5_BRIDGE_API_KEY}
-        return {}
+            h["X-Bridge-Key"] = settings.MT5_BRIDGE_API_KEY
+        return h
 
     def _mt5_symbol(self, symbol: str) -> str:
         """Broker's symbol name (instrument_config 'mt5' field, else as-is)."""
@@ -36,20 +37,23 @@ class Mt5PriceService:
         return symbol.upper()
 
     def _tick(self, name: str) -> Optional[Dict]:
-        try:
-            resp = httpx.get(
-                f"{settings.MT5_BRIDGE_URL}/tick/{name}",
-                headers=self._headers(),
-                timeout=8,
-            )
-            if resp.status_code != 200:
-                return None
-            data = resp.json()
-            if not data or not data.get("price"):
-                return None
-            return data
-        except Exception:
-            return None
+        # One retry — free tunnels drop the occasional connection.
+        for _ in range(2):
+            try:
+                resp = httpx.get(
+                    f"{settings.MT5_BRIDGE_URL}/tick/{name}",
+                    headers=self._headers(),
+                    timeout=10,
+                )
+                if resp.status_code != 200:
+                    return None
+                data = resp.json()
+                if not data or not data.get("price"):
+                    return None
+                return data
+            except Exception:
+                continue
+        return None
 
     def _daily(self, name: str) -> Optional[Dict]:
         """Today's + yesterday's daily candle, for change% and OHLC context."""

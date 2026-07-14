@@ -13,15 +13,16 @@ MT5_BASE = settings.MT5_BRIDGE_URL
 
 
 def _bridge_headers() -> dict:
-    """Shared-secret header for the bridge, when one is configured.
+    """Headers for every bridge call.
 
-    The bridge is typically exposed to the internet via a tunnel (ngrok/
-    Cloudflare), so it enforces its own auth independent of this app's
-    X-Api-Key gate. Empty when MT5_BRIDGE_API_KEY is unset (e.g. local dev).
+    - X-Bridge-Key: shared secret the bridge enforces (it's tunnelled to the
+      internet, independent of this app's X-Api-Key gate).
+    - ngrok-skip-browser-warning: bypasses ngrok's free-tier interstitial.
     """
+    h = {"ngrok-skip-browser-warning": "true"}
     if settings.MT5_BRIDGE_API_KEY:
-        return {"X-Bridge-Key": settings.MT5_BRIDGE_API_KEY}
-    return {}
+        h["X-Bridge-Key"] = settings.MT5_BRIDGE_API_KEY
+    return h
 
 
 def _audit_execution_intent(record: dict) -> None:
@@ -39,44 +40,32 @@ def _audit_execution_intent(record: dict) -> None:
 
 @router.get("/status", summary="Check MT5 bridge connectivity")
 async def get_bridge_status():
-    """Check if the MT5 bridge is reachable and get its status."""
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{MT5_BASE}/", headers=_bridge_headers(), timeout=5)
-        data = resp.json() if resp.status_code == 200 else None
-        return {
-            "bridge_url": MT5_BASE,
-            "reachable": resp.status_code == 200,
-            "bridge_response": data,
-        }
-    except Exception as e:
-        return {
-            "bridge_url": MT5_BASE,
-            "reachable": False,
-            "error": str(e),
-        }
+    """Check if the MT5 bridge is reachable and get its status (with retry)."""
+    last = None
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(f"{MT5_BASE}/", headers=_bridge_headers(), timeout=12)
+            return {
+                "bridge_url": MT5_BASE,
+                "reachable": resp.status_code == 200,
+                "bridge_response": resp.json() if resp.status_code == 200 else None,
+            }
+        except Exception as e:
+            last = e
+    return {"bridge_url": MT5_BASE, "reachable": False, "error": f"{type(last).__name__}: {last}"}
 
 
 @router.get("/account", summary="Get MT5 account summary")
 async def get_account():
     """Get MT5 account info (balance, equity, margin, etc.)."""
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{MT5_BASE}/account", headers=_bridge_headers(), timeout=10)
-        return resp.json()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
+    return await _bridge_get("/account")
 
 
 @router.get("/positions", summary="Get open positions from MT5")
 async def get_positions():
     """Get currently open positions on MT5."""
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{MT5_BASE}/positions", headers=_bridge_headers(), timeout=10)
-        return resp.json()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
+    return await _bridge_get("/positions")
 
 
 @router.post("/trade", summary="Send trade to MT5")
@@ -138,48 +127,41 @@ async def proxy_trade(
 @router.post("/close", summary="Close a position on MT5")
 async def close_position(ticket_id: str):
     """Close an open position by ticket ID."""
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{MT5_BASE}/close",
-                json={"ticket_id": ticket_id},
-                headers=_bridge_headers(),
-                timeout=30,
-            )
-        return resp.json()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
+    return await _bridge_post("/close", {"ticket_id": ticket_id})
 
 
 @router.get("/history", summary="Get trade history from MT5")
 async def get_history():
     """Get closed trade history from MT5."""
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{MT5_BASE}/history", headers=_bridge_headers(), timeout=10)
-        return resp.json()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
+    return await _bridge_get("/history")
 
 
 # ── Generic proxy helpers for the read/manage endpoints ──────────
 
-async def _bridge_get(path: str, params: dict = None):
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{MT5_BASE}{path}", params=params, headers=_bridge_headers(), timeout=15)
-        return resp.json()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
+async def _bridge_get(path: str, params: dict = None, timeout: float = 20, retries: int = 2):
+    # Tunnels (esp. free ngrok) drop the occasional connection; a quick retry
+    # turns a transient timeout into a success instead of a 503.
+    last = None
+    for attempt in range(retries + 1):
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(f"{MT5_BASE}{path}", params=params, headers=_bridge_headers(), timeout=timeout)
+            return resp.json()
+        except Exception as e:
+            last = e
+    raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {type(last).__name__}: {last}")
 
 
-async def _bridge_post(path: str, payload: dict):
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(f"{MT5_BASE}{path}", json=payload, headers=_bridge_headers(), timeout=30)
-        return resp.json()
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
+async def _bridge_post(path: str, payload: dict, timeout: float = 30, retries: int = 1):
+    last = None
+    for attempt in range(retries + 1):
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(f"{MT5_BASE}{path}", json=payload, headers=_bridge_headers(), timeout=timeout)
+            return resp.json()
+        except Exception as e:
+            last = e
+    raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {type(last).__name__}: {last}")
 
 
 # ── Market data ──────────────────────────────────────────────
