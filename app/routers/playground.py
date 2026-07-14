@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from app.services.price_service import price_service
-from app.services.mt5_price_service import mt5_price_service
+from app.services.quote_service import get_quote
 from app.services.instrument_config import get_all_instruments, get_instrument, INSTRUMENTS
 
 router = APIRouter(prefix="/playground", tags=["Playground"])
@@ -82,57 +82,34 @@ class InstrumentInfo(BaseModel):
 # Endpoints
 # ────────────────────────────────────────────────
 
-def _mt5_price_response(symbol: str) -> Optional[PriceResponse]:
-    """Build a PriceResponse from the MT5 broker feed when it's the selected
-    provider, so the topbar/playground match the rest of the app. Returns None
-    to fall back to the Yahoo/synthetic price_service."""
-    q = mt5_price_service.get_price_detailed(symbol)
-    if not q:
-        return None
-    config = get_instrument(symbol.upper()) or {}
+def _price_response_from_quote(q: dict) -> PriceResponse:
+    """Adapt a canonical quote_service quote into the playground PriceResponse."""
     return PriceResponse(
         symbol=q["symbol"],
-        label=config.get("label", q["symbol"]),
-        price=q["price"],
-        change=q["change"],
-        change_percent=q["change_percent"],
-        high=q["high"],
-        low=q["low"],
-        open=q["open"],
-        volume=q["volume"],
-        prev_close=q["prev_close"],
-        timestamp=q["timestamp"],
-        kind=config.get("kind", ""),
-        digits=config.get("digits", 5),
-        source="mt5",
-        stale=is_stale(q["timestamp"]),
+        label=q.get("label", q["symbol"]),
+        price=q.get("price", 0),
+        change=q.get("change", 0),
+        change_percent=q.get("change_percent", 0),
+        high=q.get("high", q.get("price", 0)),
+        low=q.get("low", q.get("price", 0)),
+        open=q.get("open", q.get("price", 0)),
+        volume=q.get("volume", 0),
+        prev_close=q.get("prev_close", q.get("price", 0)),
+        timestamp=q.get("timestamp") or "",
+        kind=q.get("kind", ""),
+        digits=q.get("digits", 5),
+        source=q.get("source", "unavailable"),
+        stale=bool(q.get("stale", False)),
     )
 
 
 @router.get("/prices", response_model=AllPricesResponse)
 def get_all_prices():
-    """Fetch live prices for all configured instruments."""
-    prices = price_service.fetch_all_prices()
-    responses = []
-    for p in prices.values():
-        mt5_resp = _mt5_price_response(p.symbol)
-        responses.append(mt5_resp or PriceResponse(
-            symbol=p.symbol,
-            label=p.label,
-            price=p.price,
-            change=p.change,
-            change_percent=p.change_percent,
-            high=p.high,
-            low=p.low,
-            open=p.open,
-            volume=p.volume,
-            prev_close=p.prev_close,
-            timestamp=p.timestamp,
-            kind=p.kind,
-            digits=p.digits,
-            source=derive_source(p.label),
-            stale=is_stale(p.timestamp),
-        ))
+    """Fetch live prices for all configured instruments (single source of truth)."""
+    responses = [
+        _price_response_from_quote(get_quote(symbol))
+        for symbol in get_all_instruments().keys()
+    ]
     return AllPricesResponse(
         prices=responses,
         timestamp=responses[0].timestamp if responses else "",
@@ -141,30 +118,11 @@ def get_all_prices():
 
 @router.get("/price/{symbol}", response_model=PriceResponse)
 def get_price(symbol: str):
-    """Fetch live price for a specific instrument."""
-    mt5_resp = _mt5_price_response(symbol.upper())
-    if mt5_resp:
-        return mt5_resp
-    data = price_service.fetch_price(symbol.upper())
-    if not data:
+    """Fetch live price for a specific instrument (single source of truth)."""
+    symbol = symbol.upper()
+    if not get_instrument(symbol):
         raise HTTPException(status_code=404, detail=f"Instrument {symbol} not found")
-    return PriceResponse(
-        symbol=data.symbol,
-        label=data.label,
-        price=data.price,
-        change=data.change,
-        change_percent=data.change_percent,
-        high=data.high,
-        low=data.low,
-        open=data.open,
-        volume=data.volume,
-        prev_close=data.prev_close,
-        timestamp=data.timestamp,
-        kind=data.kind,
-        digits=data.digits,
-        source=derive_source(data.label),
-        stale=is_stale(data.timestamp),
-    )
+    return _price_response_from_quote(get_quote(symbol))
 
 
 @router.get("/instruments", response_model=List[InstrumentInfo])

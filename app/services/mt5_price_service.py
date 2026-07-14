@@ -110,6 +110,8 @@ class Mt5PriceService:
         return {
             "symbol": symbol.upper(),
             "price": round(price, digits),
+            "bid": round(data.get("bid", price), digits),
+            "ask": round(data.get("ask", price), digits),
             "change": round(change, digits),
             "change_percent": round(change_pct, 3),
             "high": round(today.get("high", price), digits),

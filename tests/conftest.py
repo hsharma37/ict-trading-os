@@ -25,6 +25,16 @@ def client():
 
 
 @pytest.fixture(autouse=True)
+def clear_quote_cache():
+    """The single price resolver caches per-symbol; clear it between tests so a
+    quote from one test's provider/mocks never leaks into the next."""
+    from app.services.quote_service import clear_cache
+    clear_cache()
+    yield
+    clear_cache()
+
+
+@pytest.fixture(autouse=True)
 def clean_db():
     collections = [
         "test_settings",
