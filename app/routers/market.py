@@ -11,10 +11,15 @@ def get_price(symbol: str):
 
 @router.get("/prices")
 def get_prices(symbols: str = None):
+    # The price feed is restricted to the instruments the app supports — any
+    # requested symbol outside the configured list is ignored, so the feed never
+    # fetches arbitrary (or non-broker) symbols.
+    allowed = list(get_all_instruments().keys())
     if symbols:
-        syms = [s.strip().upper() for s in symbols.split(",")]
+        requested = [s.strip().upper() for s in symbols.split(",")]
+        syms = [s for s in requested if s in allowed]
     else:
-        syms = list(get_all_instruments().keys())
+        syms = allowed
     quotes = [market_service.get_price(s) for s in syms]
     return {"prices": quotes, "timestamp": quotes[0]["timestamp"] if quotes else None}
 
@@ -86,13 +91,8 @@ def price_debug(symbol: str):
 
 @router.get("/instruments")
 def get_instruments():
+    # Derived from the single instrument config so it never drifts from the feed.
     return {"instruments": [
-        {"symbol": "NQ1!", "name": "Nasdaq-100 Futures (E-mini)", "category": "index"},
-        {"symbol": "ES1!", "name": "S&P 500 Futures (E-mini)", "category": "index"},
-        {"symbol": "EURUSD", "name": "EUR/USD", "category": "forex"},
-        {"symbol": "GBPUSD", "name": "GBP/USD", "category": "forex"},
-        {"symbol": "XAUUSD", "name": "Gold Spot", "category": "metal"},
-        {"symbol": "USDJPY", "name": "USD/JPY", "category": "forex"},
-        {"symbol": "BTCUSD", "name": "Bitcoin", "category": "crypto"},
-        {"symbol": "CL1!", "name": "Crude Oil Futures", "category": "commodity"}
+        {"symbol": sym, "name": cfg.get("label", sym), "category": cfg.get("kind", "")}
+        for sym, cfg in get_all_instruments().items()
     ]}

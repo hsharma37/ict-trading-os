@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
+import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { useState, useEffect, useCallback } from 'react'
 import { marketApi } from '@/api/client'
 import ApiKeyBanner from './ApiKeyBanner'
@@ -35,7 +36,7 @@ const navItems = [
   { path: '/settings', label: 'Settings', icon: Settings },
 ]
 
-const INSTRUMENTS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
+const INSTRUMENTS = SUPPORTED_SYMBOLS
 
 interface LayoutProps {
   children: React.ReactNode

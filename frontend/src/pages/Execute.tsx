@@ -7,6 +7,7 @@ import {
 import { tradesApi, ordersApi, marketApi, mt5Api } from '@/api/client'
 import { useMt5 } from '@/hooks/useMt5'
 import Mt5PositionsPanel from '@/components/Mt5PositionsPanel'
+import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 
 type OrderType = 'market' | 'limit' | 'stop'
 
@@ -57,11 +58,8 @@ interface LotCalc {
   error?: string
 }
 
-const INSTRUMENTS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
-// Symbols that exist on the MT5 broker (MetaQuotes-Demo) AND have lot-calc
-// config, so live orders actually fill. NQ1!/ES1!/BTCUSD/CL1! are TradingView
-// tickers the broker doesn't have, so they're hidden when MT5 is the target.
-const MT5_INSTRUMENTS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'NZDUSD', 'XAUUSD']
+const INSTRUMENTS = SUPPORTED_SYMBOLS
+const MT5_INSTRUMENTS = SUPPORTED_SYMBOLS
 
 // Standard 1R distances per instrument (in price terms)
 const R_DISTANCES: Record<string, number> = {
