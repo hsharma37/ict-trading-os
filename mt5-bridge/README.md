@@ -53,19 +53,31 @@ the bridge is exposed through a tunnel. Recommended: **Cloudflare Tunnel**
 .\cloudflared.exe tunnel --url http://localhost:5000
 ```
 
-Take the `https://...trycloudflare.com` URL, then set on the main app
-(Vercel → Project → Settings → Environment Variables):
+Take the `https://...trycloudflare.com` URL and point the app at it. Two ways:
+
+**Easiest — paste it in the app (no redeploy).** Open the app → **Settings →
+MT5 Bridge Connection**, paste the tunnel URL, and hit **Save & Test**. It's
+stored in the app's database, takes effect immediately, and is probed on save
+so you get instant `reachable` / `MT5 connected` feedback. This override wins
+over the env var and is the recommended way to handle the churning quick-tunnel
+URL. (The shared secret still comes from `MT5_BRIDGE_API_KEY` — see below.)
+
+**Or via env var (needs a redeploy).** On Vercel → Project → Settings →
+Environment Variables:
 
 - `MT5_BRIDGE_URL` = that tunnel URL
 - `MT5_BRIDGE_API_KEY` = the **same** value you put in this bridge's `.env`
 
 Redeploy the app. `GET /api/mt5/status` should then report `reachable: true`.
+`MT5_BRIDGE_API_KEY` must always be set via env (it's a secret and isn't
+editable from the UI); only the URL is overridable in Settings.
 
-### Permanent URL (recommended)
+### Permanent URL (optional)
 
-A **quick** tunnel URL changes on every restart, so `MT5_BRIDGE_URL` has to be
-updated each time. For a URL that never changes, use a **Cloudflare named
-tunnel** (needs a domain on Cloudflare):
+A **quick** tunnel URL changes on every restart. The in-app Settings field
+above makes re-pointing a 5-second paste, but if you want a URL that never
+changes at all, use a **Cloudflare named tunnel** (needs a domain on
+Cloudflare):
 
 ```powershell
 .\cloudflared.exe tunnel login

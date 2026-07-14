@@ -27,11 +27,16 @@ def client():
 @pytest.fixture(autouse=True)
 def clear_quote_cache():
     """The single price resolver caches per-symbol; clear it between tests so a
-    quote from one test's provider/mocks never leaks into the next."""
+    quote from one test's provider/mocks never leaks into the next. Same for the
+    bridge-URL resolver's short TTL cache, so monkeypatched MT5_BRIDGE_URL /
+    settings overrides always take effect."""
     from app.services.quote_service import clear_cache
+    from app.services.bridge_config import clear_cache as clear_bridge_cache
     clear_cache()
+    clear_bridge_cache()
     yield
     clear_cache()
+    clear_bridge_cache()
 
 
 @pytest.fixture(autouse=True)

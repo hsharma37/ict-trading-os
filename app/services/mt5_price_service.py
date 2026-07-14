@@ -14,6 +14,7 @@ from typing import Dict, Optional
 import httpx
 
 from app.core.config import settings
+from app.services.bridge_config import get_bridge_url, get_bridge_api_key
 from app.services.instrument_config import get_instrument
 
 
@@ -21,12 +22,13 @@ class Mt5PriceService:
     def is_configured(self) -> bool:
         # Explicit opt-in: only price from MT5 when asked to, since every quote
         # then depends on the (single, Windows-hosted) bridge being reachable.
-        return settings.MARKET_DATA_PROVIDER == "mt5" and bool(settings.MT5_BRIDGE_URL)
+        return settings.MARKET_DATA_PROVIDER == "mt5" and bool(get_bridge_url())
 
     def _headers(self) -> dict:
         h = {"ngrok-skip-browser-warning": "true"}
-        if settings.MT5_BRIDGE_API_KEY:
-            h["X-Bridge-Key"] = settings.MT5_BRIDGE_API_KEY
+        key = get_bridge_api_key()
+        if key:
+            h["X-Bridge-Key"] = key
         return h
 
     def _mt5_symbol(self, symbol: str) -> str:
@@ -41,7 +43,7 @@ class Mt5PriceService:
         for _ in range(2):
             try:
                 resp = httpx.get(
-                    f"{settings.MT5_BRIDGE_URL}/tick/{name}",
+                    f"{get_bridge_url()}/tick/{name}",
                     headers=self._headers(),
                     timeout=10,
                 )
@@ -59,7 +61,7 @@ class Mt5PriceService:
         """Today's + yesterday's daily candle, for change% and OHLC context."""
         try:
             resp = httpx.get(
-                f"{settings.MT5_BRIDGE_URL}/candles/{name}",
+                f"{get_bridge_url()}/candles/{name}",
                 params={"timeframe": "1d", "count": 2},
                 headers=self._headers(),
                 timeout=8,
