@@ -30,6 +30,34 @@ def _bridge_headers() -> dict:
     return h
 
 
+# MT5 order_send retcodes that mean the request was accepted.
+_MT5_OK_RETCODES = {10008, 10009, 10010}  # PLACED, DONE, DONE_PARTIAL
+
+
+def _result_or_raise(resp: "httpx.Response") -> dict:
+    """Turn a bridge response into data, or raise so callers see the failure.
+
+    The bridge returns non-200 (e.g. 503) or a 200 body carrying
+    ``status: "error"`` / a bad broker ``retcode`` when an order doesn't go
+    through. Returning that verbatim made the frontend show a false success — so
+    detect it here and raise a real HTTP error instead."""
+    try:
+        body = resp.json()
+    except Exception:
+        raise HTTPException(status_code=502, detail=f"MT5 bridge returned non-JSON ({resp.status_code}).")
+    if resp.status_code != 200:
+        detail = (body.get("error") if isinstance(body, dict) else None) or f"MT5 bridge error {resp.status_code}"
+        raise HTTPException(status_code=502, detail=detail)
+    if isinstance(body, dict):
+        if body.get("status") == "error" or body.get("error"):
+            raise HTTPException(status_code=400, detail=body.get("error") or "MT5 reported an error.")
+        retcode = body.get("retcode")
+        if retcode is not None and retcode not in _MT5_OK_RETCODES:
+            comment = body.get("comment") or ""
+            raise HTTPException(status_code=400, detail=f"Broker rejected the order (retcode {retcode}) {comment}".strip())
+    return body
+
+
 def _audit_execution_intent(record: dict) -> None:
     """Best-effort audit log of every MT5 execution intent (never blocks a trade)."""
     try:
@@ -125,9 +153,9 @@ async def proxy_trade(
                 headers=_bridge_headers(),
                 timeout=30,
             )
-        return resp.json()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
+    return _result_or_raise(resp)
 
 
 @router.post("/close", summary="Close a position on MT5")
@@ -164,7 +192,10 @@ async def _bridge_post(path: str, payload: dict, timeout: float = 30, retries: i
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(f"{_base()}{path}", json=payload, headers=_bridge_headers(), timeout=timeout)
-            return resp.json()
+            # Surface broker/bridge errors instead of returning a false success.
+            return _result_or_raise(resp)
+        except HTTPException:
+            raise
         except Exception as e:
             last = e
     raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {type(last).__name__}: {last}")
