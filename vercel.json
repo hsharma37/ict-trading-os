@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cp -r frontend/dist/* public/",
+  "buildCommand": "rm -rf public/assets public/index.html && cp -r frontend/dist/* public/",
   "rewrites": [
     { "source": "/(.*)", "destination": "/api" }
   ],
