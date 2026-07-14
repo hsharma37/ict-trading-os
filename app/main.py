@@ -1,5 +1,5 @@
 """FastAPI Application - ICT Trading OS Backend."""
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from app.core.config import settings
@@ -66,6 +66,12 @@ def health():
         "storage": db.storage_info(),
     }
 
+# index.html must never be cached: it names the current hashed JS/CSS bundle, so
+# a stale copy points at an old bundle that no longer exists (blank page). The
+# hashed assets under /assets/ are immutable and cached separately by Vercel.
+_NOSTORE_HTML = {"Cache-Control": "no-store, must-revalidate"}
+
+
 # Serve React SPA for root path and any non-API path
 # (Vercel routes / to FastAPI by default when api/index.py exists)
 @app.get("/")
@@ -75,17 +81,25 @@ async def serve_root():
     for rel in ["public/index.html", "frontend/dist/index.html"]:
         p = os.path.join(cwd, rel)
         if os.path.exists(p):
-            return FileResponse(p)
+            return FileResponse(p, headers=_NOSTORE_HTML)
     return {"error": "index.html not found"}
+
+_ASSET_SUFFIXES = (".js", ".css", ".map", ".svg", ".png", ".ico", ".webp", ".woff", ".woff2", ".ttf", ".json")
+
 
 @app.get("/{path:path}")
 async def serve_spa(path: str):
     import os
+    # Never return the SPA shell for a missing static asset. Otherwise a browser
+    # holding a stale index.html requests an old hashed bundle, receives HTML,
+    # and tries to execute it as JavaScript -> blank page. 404 fails honestly.
+    if path.startswith("assets/") or path.endswith(_ASSET_SUFFIXES):
+        raise HTTPException(status_code=404, detail="Not found")
     cwd = os.getcwd()
     for rel in ["public/index.html", "frontend/dist/index.html"]:
         p = os.path.join(cwd, rel)
         if os.path.exists(p):
-            return FileResponse(p)
+            return FileResponse(p, headers=_NOSTORE_HTML)
     return {"error": "index.html not found"}
 
 
