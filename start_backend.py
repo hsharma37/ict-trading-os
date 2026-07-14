@@ -2,8 +2,9 @@ import os
 import sys
 import subprocess
 
-# Change to project directory
-os.chdir('/Users/hsharma5/Documents/Kimi/Workspaces/ICTOS_KB/ict-trading-os')
+# Change to the project directory (this script's own location), so the launcher
+# works from any checkout instead of a machine-specific hardcoded path.
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # Start uvicorn as a completely detached process
 proc = subprocess.Popen(

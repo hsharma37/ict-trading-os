@@ -9,8 +9,8 @@ export function useMarketData(symbol: string) {
     const fetchPrice = async () => {
       try {
         const _env = (globalThis as any)?.import?.meta?.env ?? {};
-        const apiUrl = _env.VITE_API_URL || 'http://localhost:8000'
-        const res = await fetch(`${apiUrl}/api/v1/market/price/${symbol}`)
+        const apiUrl = _env.VITE_API_URL || '/api'
+        const res = await fetch(`${apiUrl}/market/price/${symbol}`)
         if (!res.ok) throw new Error('Failed to fetch price')
         const data = await res.json()
         setPrice(data.price)
