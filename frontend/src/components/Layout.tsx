@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
 import { playgroundApi } from '@/api/client'
 import ApiKeyBanner from './ApiKeyBanner'
+import PriceSourceBadge from './PriceSourceBadge'
 import {
   LayoutDashboard,
   ArrowRightLeft,
@@ -44,7 +45,7 @@ export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
   const [selectedInstrument, setSelectedInstrument] = useState('EURUSD')
-  const [livePrice, setLivePrice] = useState<{ symbol: string; price: number; change: number; change_percent: number; digits: number } | null>(null)
+  const [livePrice, setLivePrice] = useState<{ symbol: string; price: number; change: number; change_percent: number; digits: number; source?: string; stale?: boolean } | null>(null)
   const [priceLoading, setPriceLoading] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
 
@@ -60,6 +61,8 @@ export default function Layout({ children }: LayoutProps) {
           change: p.change,
           change_percent: p.change_percent,
           digits: p.digits,
+          source: p.source,
+          stale: p.stale,
         })
       }
     } catch (e) {
@@ -202,8 +205,7 @@ export default function Layout({ children }: LayoutProps) {
               )}
             </div>
             
-            <span className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="text-muted-foreground">Connected</span>
+            <PriceSourceBadge source={livePrice?.source} stale={livePrice?.stale} />
           </div>
         </header>
 
