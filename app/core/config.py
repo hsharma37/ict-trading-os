@@ -13,6 +13,10 @@ class Settings:
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHANNEL_ID: str = os.getenv("TELEGRAM_CHANNEL_ID", "")
     MT5_BRIDGE_URL: str = os.getenv("MT5_BRIDGE_URL", "http://localhost:5001")
+    # Shared secret sent as X-Bridge-Key on every proxied bridge call. Required
+    # once the bridge is reachable over the internet (e.g. via a tunnel) -
+    # must match MT5_BRIDGE_API_KEY set on the bridge process itself.
+    MT5_BRIDGE_API_KEY: str = os.getenv("MT5_BRIDGE_API_KEY", "")
     # MT5 execution guardrails. Empty allowlist -> all configured instruments.
     MT5_ALLOWED_SYMBOLS: str = os.getenv("MT5_ALLOWED_SYMBOLS", "")
     MT5_MAX_LOT: float = float(os.getenv("MT5_MAX_LOT", "10") or "10")
