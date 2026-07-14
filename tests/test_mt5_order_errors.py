@@ -35,12 +35,19 @@ def test_status_error_body_raises_even_on_200():
     assert "No tick data" in ei.value.detail
 
 
-def test_bad_broker_retcode_raises():
+def test_bad_broker_retcode_raises_generic():
+    # A retcode with no friendly mapping falls back to showing the number+comment.
     with pytest.raises(HTTPException) as ei:
-        _result_or_raise(_Resp(200, {"status": "executed", "retcode": 10016, "comment": "Invalid stops"}))
+        _result_or_raise(_Resp(200, {"status": "executed", "retcode": 10099, "comment": "Weird"}))
     assert ei.value.status_code == 400
-    assert "10016" in ei.value.detail
-    assert "Invalid stops" in ei.value.detail
+    assert "10099" in ei.value.detail
+
+
+def test_autotrading_disabled_gives_actionable_message():
+    with pytest.raises(HTTPException) as ei:
+        _result_or_raise(_Resp(200, {"status": "executed", "retcode": 10027, "comment": "AutoTrading disabled by client"}))
+    assert ei.value.status_code == 400
+    assert "Algo Trading" in ei.value.detail  # tells the user how to fix it
 
 
 def test_non_json_raises():

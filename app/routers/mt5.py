@@ -33,6 +33,20 @@ def _bridge_headers() -> dict:
 # MT5 order_send retcodes that mean the request was accepted.
 _MT5_OK_RETCODES = {10008, 10009, 10010}  # PLACED, DONE, DONE_PARTIAL
 
+# Plain-English help for the retcodes users actually hit, so the UI can show a
+# fix instead of a bare number.
+_MT5_RETCODE_HELP = {
+    10027: "AutoTrading is disabled in the MT5 terminal. Turn it on: click the "
+           "\"Algo Trading\" button in the toolbar (or press Ctrl+E) so it's green, then retry.",
+    10018: "The market is closed for this symbol right now.",
+    10019: "Not enough free margin to open this position (try a smaller lot).",
+    10016: "Invalid stop-loss/take-profit — too close to price or on the wrong side.",
+    10015: "Invalid price for the order.",
+    10014: "Invalid lot size for this symbol.",
+    10013: "Invalid order request.",
+    10009: "",  # done
+}
+
 
 def _result_or_raise(resp: "httpx.Response") -> dict:
     """Turn a bridge response into data, or raise so callers see the failure.
@@ -53,8 +67,10 @@ def _result_or_raise(resp: "httpx.Response") -> dict:
             raise HTTPException(status_code=400, detail=body.get("error") or "MT5 reported an error.")
         retcode = body.get("retcode")
         if retcode is not None and retcode not in _MT5_OK_RETCODES:
+            help_text = _MT5_RETCODE_HELP.get(retcode)
             comment = body.get("comment") or ""
-            raise HTTPException(status_code=400, detail=f"Broker rejected the order (retcode {retcode}) {comment}".strip())
+            detail = help_text or f"Broker rejected the order (retcode {retcode}) {comment}".strip()
+            raise HTTPException(status_code=400, detail=detail)
     return body
 
 
