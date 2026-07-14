@@ -24,6 +24,7 @@ interface TradeStats {
   max_win_streak: number
   max_loss_streak: number
   current_streak: number
+  source?: string
 }
 
 interface MarketMover {
@@ -108,9 +109,17 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of your trading activity and market news</p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">Overview of your trading activity and market news</p>
+        </div>
+        {stats?.source === 'mt5' && (
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Live · MT5 terminal
+          </span>
+        )}
       </div>
 
       {error && (

@@ -29,6 +29,8 @@ class AnalyticsService:
             "win_count": stats.get("winning_trades", 0),
             "loss_count": stats.get("losing_trades", 0),
             "r_factor": stats.get("avg_r", 0),
+            "total_pnl": stats.get("total_pnl", 0),
+            "source": stats.get("source", "ledger"),
         }
 
     def get_heatmap(self) -> Dict:

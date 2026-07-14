@@ -81,6 +81,23 @@ and P&L, and **close / modify SL-TP / partial-close work from any of them**
 - **Dashboard:** live MT5 open positions and P&L in the KPIs + positions card.
 - **What's Up:** per-position SL→entry→TP progress-bar visualization + management.
 
+### 🧭 MT5 terminal as the trades base
+When the bridge is reachable and the terminal is connected, **MT5 is the single
+source of truth for all trade data** — Dashboard KPIs, Analytics, and the chatbot
+read the broker's real open positions, closed-deal history, and account instead of
+the internal ledger (which remains the automatic fallback when the bridge is down).
+- One service (`app/services/mt5_trades_service.py`) reshapes broker data into the
+  same stats schema the ledger produced, so `/trades/stats/*` and `/analytics/*`
+  switch over with no schema churn. Dashboard/Analytics show a **"Live · MT5"** badge.
+- **Chatbot is account-aware:** ask "how are my positions doing?" / "what's my P&L?"
+  and the KB assistant answers from the live terminal (with any relevant KB notes
+  as educational context) instead of refusing. Reporting only — never trade advice.
+- **Signals & research** are annotated with your live exposure (a signal flags
+  `held` when you already have a position in that symbol; research summary lists
+  your open positions).
+- Broker closed deals carry no SL, so **R-multiple metrics read 0** under MT5 (not
+  fabricated); P&L is the broker's own realized/float figure, matching the terminal.
+
 ### 🧠 Knowledge base (ICT sources)
 - Add sources by **YouTube URL** (auto-transcribe) or **pasted transcript**;
   chunked, embedded, and searchable via **pgvector** semantic search
@@ -98,7 +115,8 @@ and P&L, and **close / modify SL-TP / partial-close work from any of them**
 - **Quant:** Sharpe/Sortino, Kelly sizing, Monte-Carlo, trend/volatility/levels,
   decision helper, bot coaching.
 - **Analytics & journal:** expectancy, win rate, R-multiples, drawdown, streaks,
-  session/symbol breakdowns over the internal trade ledger.
+  session/symbol breakdowns — computed from the **MT5 terminal** when connected
+  (see "MT5 terminal as the trades base"), else the internal ledger.
 
 ### 💬 Telegram
 - Signal feed + notifications from the app (`TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHANNEL_ID`).
@@ -243,6 +261,7 @@ The MT5 bridge tests inject a fake `MetaTrader5` module so they run on any OS.
 | MT5 execution | ✅ Real orders, close, partial, modify SL/TP, pending; validation + audit |
 | MT5 data | ✅ Live ticks, candles, specs, symbols via the bridge |
 | Connected UI | ✅ Live positions + management (incl. rich per-position viz) on Dashboard, What's Up, Terminal |
+| MT5 as trades base | ✅ Dashboard KPIs, Analytics, chatbot, signals/research all read the live terminal (broker P&L/history/account) when connected; ledger fallback |
 | Auth/security | ✅ X-Api-Key gate + runtime key entry; fail-closed secrets |
 | Telegram | ✅ Connected (app feed + bridge notifications) |
 | Knowledge base | ✅ Ingest/search/pgvector; YouTube auto-transcribe + titles via the bridge (residential IP) |

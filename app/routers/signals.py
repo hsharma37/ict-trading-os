@@ -1,19 +1,40 @@
 """Signals Router."""
 from fastapi import APIRouter
 from app.services.signal_engine import signal_engine
+from app.services.mt5_trades_service import mt5_trades_service
 
 router = APIRouter(prefix="/signals", tags=["Signals"])
+
+
+def _held_map() -> dict:
+    """symbol -> live MT5 position (so signals can flag existing exposure)."""
+    if not mt5_trades_service.is_active():
+        return {}
+    return {p["symbol"]: p for p in mt5_trades_service.get_open_trades()}
+
+
+def _annotate(signal: dict, held: dict) -> dict:
+    """Tag a signal with the user's current live exposure in that symbol."""
+    if not signal:
+        return signal
+    pos = held.get(signal.get("symbol"))
+    signal["held"] = bool(pos)
+    signal["held_direction"] = pos.get("direction") if pos else None
+    return signal
+
 
 @router.get("/analyze/{symbol}")
 def analyze_signal(symbol: str):
     signal = signal_engine.analyze(symbol)
     if not signal:
         return {"symbol": symbol, "signal": None, "message": "No valid signal. Setup below confluence threshold."}
-    return {"symbol": symbol, "signal": signal}
+    return {"symbol": symbol, "signal": _annotate(signal, _held_map())}
 
 @router.get("/active")
 def active_signals(symbol: str = None):
-    return {"signals": signal_engine.get_active(symbol), "count": len(signal_engine.get_active(symbol))}
+    held = _held_map()
+    signals = [_annotate(s, held) for s in signal_engine.get_active(symbol)]
+    return {"signals": signals, "count": len(signals)}
 
 @router.get("/stats/{symbol}")
 def signal_stats(symbol: str):
@@ -22,8 +43,9 @@ def signal_stats(symbol: str):
 @router.post("/scan")
 def scan_all():
     symbols = ["NQ1!", "ES1!", "EURUSD", "GBPUSD", "XAUUSD", "USDJPY", "BTCUSD", "CL1!"]
+    held = _held_map()
     results = []
     for sym in symbols:
         sig = signal_engine.analyze(sym)
-        if sig: results.append(sig)
+        if sig: results.append(_annotate(sig, held))
     return {"scanned": len(symbols), "signals_found": len(results), "signals": results}
