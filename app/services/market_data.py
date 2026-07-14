@@ -6,6 +6,7 @@ import random
 
 from app.services.instrument_config import get_instrument
 from app.services.price_service import price_service
+from app.services.oanda_service import oanda_service
 
 # Deprecated hardcoded map — now using instrument_config for all ticker lookups
 # Kept for backward compatibility only
@@ -90,8 +91,13 @@ class MarketDataService:
         if manual:
             manual["symbol"] = symbol
             return manual
-        
-        # 2. Try price_service (Yahoo → persistent → scraper → synthetic)
+
+        # 2. OANDA real-time feed (when configured; falls through to Yahoo otherwise)
+        oanda = oanda_service.get_price(symbol)
+        if oanda and oanda.get("price", 0) > 0:
+            return oanda
+
+        # 3. Try price_service (Yahoo → persistent → scraper → synthetic)
         try:
             pdata = price_service.get_price(symbol)
             if pdata and pdata.price > 0:
@@ -185,6 +191,11 @@ class MarketDataService:
         return {'symbol': symbol, 'price': 0, 'timestamp': datetime.utcnow().isoformat(), 'source': 'unavailable'}
 
     def get_history(self, symbol: str, timeframe: str = "1h", limit: int = 200) -> List[Dict]:
+        # Prefer OANDA candles when configured (native 4H, tighter data).
+        oanda_candles = oanda_service.get_history(symbol, timeframe, limit)
+        if oanda_candles:
+            return oanda_candles
+
         yahoo_sym = self._get_yahoo_ticker(symbol)
         tf_map = {
             "1m": ("1d", "1m"), "5m": ("5d", "5m"), "15m": ("5d", "15m"),
