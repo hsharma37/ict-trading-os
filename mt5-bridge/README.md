@@ -44,14 +44,16 @@ connected when it isn't.
 
 ## Exposing it to the deployed app
 
-Vercel (where the main app runs) can't reach a machine on your LAN directly.
-Expose this bridge with a tunnel:
+Vercel (where the main app runs) can't reach a machine on your LAN directly, so
+the bridge is exposed through a tunnel. Recommended: **Cloudflare Tunnel**
+(reliable from cloud IPs, unlike free ngrok which Vercel often can't reach):
 
 ```powershell
-ngrok http 5000
+# Quick tunnel — free, but the URL is random and CHANGES every restart
+.\cloudflared.exe tunnel --url http://localhost:5000
 ```
 
-Take the `https://...ngrok...` URL it gives you, then set on the main app
+Take the `https://...trycloudflare.com` URL, then set on the main app
 (Vercel → Project → Settings → Environment Variables):
 
 - `MT5_BRIDGE_URL` = that tunnel URL
@@ -59,9 +61,22 @@ Take the `https://...ngrok...` URL it gives you, then set on the main app
 
 Redeploy the app. `GET /api/mt5/status` should then report `reachable: true`.
 
-A tunnel URL from the free ngrok tier changes every time you restart it —
-for anything beyond testing, use a reserved ngrok domain or run this on a
-small always-on VPS instead.
+### Permanent URL (recommended)
+
+A **quick** tunnel URL changes on every restart, so `MT5_BRIDGE_URL` has to be
+updated each time. For a URL that never changes, use a **Cloudflare named
+tunnel** (needs a domain on Cloudflare):
+
+```powershell
+.\cloudflared.exe tunnel login
+.\cloudflared.exe tunnel create mt5bridge
+.\cloudflared.exe tunnel route dns mt5bridge bridge.yourdomain.com
+.\cloudflared.exe tunnel run --url http://localhost:5000 mt5bridge
+# permanent: https://bridge.yourdomain.com
+```
+
+Both the bridge (`python mt5_bridge.py`) and the tunnel must stay running.
+An always-on Windows VPS avoids keeping a desktop awake.
 
 ## Endpoints
 
@@ -84,6 +99,7 @@ small always-on VPS instead.
 | `POST /pending` | `X-Bridge-Key` | Place a limit/stop order (`symbol`, `direction`, `order_kind`, `volume`, `price`, ...) |
 | `POST /pending/cancel` | `X-Bridge-Key` | Cancel a pending order (`order_ticket`) |
 | `GET /transcript/<video_id>` | `X-Bridge-Key` | Fetch a YouTube transcript from this machine's (residential) IP — used by the app's KB auto-transcribe, since YouTube blocks cloud/serverless IPs |
+| `GET /video-meta/<video_id>` | `X-Bridge-Key` | Fetch a YouTube video's title/author (oembed) from the residential IP, for proper KB source names |
 | `POST /test-telegram` | `X-Bridge-Key` | Sends a test Telegram message |
 
 To price the app from the broker's own feed (so displayed prices match your
