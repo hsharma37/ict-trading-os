@@ -82,7 +82,10 @@ class _FakeMt5:
     TRADE_ACTION_SLTP = 2
     TRADE_ACTION_REMOVE = 4
     ORDER_TIME_GTC = 0
+    ORDER_FILLING_FOK = 0
     ORDER_FILLING_IOC = 1
+    ORDER_FILLING_RETURN = 2
+    TRADE_RETCODE_INVALID_FILL = 10030
     TIMEFRAME_M1 = 1
     TIMEFRAME_M5 = 5
     TIMEFRAME_M15 = 15
@@ -103,7 +106,10 @@ class _FakeMt5:
         self.symbol_info_result = _FakeResult(visible=True, digits=5, point=0.00001, spread=2,
                                               trade_contract_size=100000, volume_min=0.01,
                                               volume_max=100.0, volume_step=0.01,
-                                              currency_base="EUR", currency_profit="USD", trade_mode=4)
+                                              currency_base="EUR", currency_profit="USD", trade_mode=4,
+                                              filling_mode=1)  # 1 = FOK supported
+        # Filling modes the fake broker rejects with retcode 10030 (for tests).
+        self.reject_fillings = set()
         self.rates_result = [
             {"time": 1784047000, "open": 1.10, "high": 1.11, "low": 1.09, "close": 1.105, "tick_volume": 100},
             {"time": 1784047600, "open": 1.105, "high": 1.12, "low": 1.10, "close": 1.115, "tick_volume": 120},
@@ -147,7 +153,14 @@ class _FakeMt5:
 
     def order_send(self, request):
         self.last_order_request = request
+        if request.get("type_filling") in self.reject_fillings:
+            return _FakeResult(retcode=self.TRADE_RETCODE_INVALID_FILL, order=0, comment="Unsupported filling mode")
         return _FakeResult(retcode=10009, order=12345, comment="Done")
+
+    def order_check(self, request):
+        if request.get("type_filling") in self.reject_fillings:
+            return _FakeResult(retcode=self.TRADE_RETCODE_INVALID_FILL, comment="Unsupported filling mode")
+        return _FakeResult(retcode=0, comment="Done")
 
     def shutdown(self):
         pass
@@ -390,6 +403,38 @@ def test_partial_close_sends_deal_with_partial_volume(connected_client):
     assert req["action"] == fake.TRADE_ACTION_DEAL
     assert req["volume"] == 0.05
     assert req["type"] == fake.ORDER_TYPE_BUY  # closing a short
+
+
+def test_send_order_uses_symbol_supported_filling(connected_client):
+    client, fake = connected_client
+    fake.symbol_info_result = _FakeResult(**{**fake.symbol_info_result.__dict__})
+    res = client.send_order("EURUSD", "long", 0.1)
+    assert res["retcode"] == 10009
+    # symbol advertises FOK (filling_mode=1) -> FOK is tried first and accepted.
+    assert fake.last_order_request["type_filling"] == fake.ORDER_FILLING_FOK
+
+
+def test_send_order_retries_when_filling_rejected(connected_client):
+    client, fake = connected_client
+    # Broker rejects FOK (10030); code must fall back to another mode and succeed.
+    fake.reject_fillings = {fake.ORDER_FILLING_FOK}
+    res = client.send_order("EURUSD", "long", 0.1)
+    assert res["retcode"] == 10009
+    assert fake.last_order_request["type_filling"] != fake.ORDER_FILLING_FOK
+
+
+def test_order_check_reports_ok(connected_client):
+    client, fake = connected_client
+    out = client.order_check("EURUSD", "long", 0.1)
+    assert out["ok"] is True
+
+
+def test_order_check_reports_rejection(connected_client):
+    client, fake = connected_client
+    fake.reject_fillings = {fake.ORDER_FILLING_FOK, fake.ORDER_FILLING_IOC, fake.ORDER_FILLING_RETURN}
+    out = client.order_check("EURUSD", "long", 0.1)
+    assert out["ok"] is False
+    assert len(out["tried"]) >= 1
 
 
 def test_place_pending_buy_limit(connected_client):

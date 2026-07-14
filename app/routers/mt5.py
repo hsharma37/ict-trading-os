@@ -158,6 +158,34 @@ async def proxy_trade(
     return _result_or_raise(resp)
 
 
+@router.post("/order-check", summary="Validate an order without placing it")
+async def order_check(
+    symbol: str,
+    direction: str,
+    lot_size: float,
+    stop_loss: Optional[float] = None,
+    take_profit: Optional[float] = None,
+):
+    """Diagnose whether an order would fill (filling mode, stops, margin, market
+    hours) without actually executing it."""
+    payload = {"symbol": symbol, "direction": direction, "lot_size": lot_size}
+    if stop_loss is not None:
+        payload["stop_loss"] = stop_loss
+    if take_profit is not None:
+        payload["take_profit"] = take_profit
+    # Not an execution -> the strict retcode check in _bridge_post doesn't apply;
+    # order_check returns its own {ok, tried:[...]} shape.
+    last = None
+    for _ in range(2):
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(f"{_base()}/order-check", json=payload, headers=_bridge_headers(), timeout=20)
+            return resp.json()
+        except Exception as e:
+            last = e
+    raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {last}")
+
+
 @router.post("/close", summary="Close a position on MT5")
 async def close_position(ticket_id: str):
     """Close an open position by ticket ID."""
