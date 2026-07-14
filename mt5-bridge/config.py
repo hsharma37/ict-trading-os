@@ -1,11 +1,18 @@
 """
 MT5 Bridge Configuration.
 
-Loads from environment variables. For local development,
-create a `.env` file in the mt5-bridge directory.
+Loads from environment variables. For local development, create a `.env`
+file in this directory (see `.env.example`) — it's loaded automatically
+if python-dotenv is installed.
 """
 import os
 from dataclasses import dataclass
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
 @dataclass(frozen=True)
@@ -14,6 +21,21 @@ class BridgeConfig:
     telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
+
+    # MetaTrader5 terminal login. This bridge must run on the same Windows
+    # machine as a terminal logged into this account — required for real
+    # (non-simulated) execution.
+    mt5_login: int = int(os.getenv("MT5_LOGIN", "0") or "0")
+    mt5_password: str = os.getenv("MT5_PASSWORD", "")
+    mt5_server: str = os.getenv("MT5_SERVER", "")
+    # Optional: full path to terminal64.exe if MT5 isn't in its default location.
+    mt5_terminal_path: str = os.getenv("MT5_TERMINAL_PATH", "")
+
+    # Shared secret required on every request (except /health) once this
+    # bridge is reachable from the internet (e.g. via a tunnel) — otherwise
+    # anyone who finds the URL could read the account or place trades. Must
+    # match MT5_BRIDGE_API_KEY on the main app.
+    bridge_api_key: str = os.getenv("MT5_BRIDGE_API_KEY", "")
 
 
 config = BridgeConfig()

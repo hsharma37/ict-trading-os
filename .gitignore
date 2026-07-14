@@ -122,3 +122,4 @@ redis_data/
 ollama_data/
 .vercel
 .env*
+!mt5-bridge/.env.example

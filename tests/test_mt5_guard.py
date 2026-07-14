@@ -3,6 +3,17 @@ import pytest
 
 from app.core.config import settings
 from app.services.mt5_guard import validate_trade, Mt5ValidationError, allowed_symbols
+from app.routers.mt5 import _bridge_headers
+
+
+def test_bridge_headers_empty_when_unconfigured(monkeypatch):
+    monkeypatch.setattr(settings, "MT5_BRIDGE_API_KEY", "")
+    assert _bridge_headers() == {}
+
+
+def test_bridge_headers_set_when_configured(monkeypatch):
+    monkeypatch.setattr(settings, "MT5_BRIDGE_API_KEY", "shared-secret-123")
+    assert _bridge_headers() == {"X-Bridge-Key": "shared-secret-123"}
 
 
 def test_valid_trade_normalizes():
