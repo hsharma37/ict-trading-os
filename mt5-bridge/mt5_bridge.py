@@ -273,6 +273,32 @@ def transcript(video_id):
         return jsonify({"status": "error", "error": str(e)}), 502
 
 
+@app.route("/video-meta/<video_id>", methods=["GET"])
+@require_bridge_key
+def video_meta(video_id):
+    """Fetch a YouTube video's title/author from this machine's IP (YouTube's
+    oembed is also blocked from cloud IPs, so the app can't get titles either)."""
+    import requests
+    try:
+        r = requests.get(
+            "https://www.youtube.com/oembed",
+            params={"url": f"https://www.youtube.com/watch?v={video_id}", "format": "json"},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return jsonify({"status": "error", "error": f"oembed {r.status_code}"}), 502
+        data = r.json()
+        return jsonify({
+            "video_id": video_id,
+            "title": data.get("title"),
+            "author": data.get("author_name"),
+            "thumbnail": data.get("thumbnail_url"),
+            "status": "ok",
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 502
+
+
 # ────────────────────────────────────────────────
 # Order & Position Management
 # ────────────────────────────────────────────────
