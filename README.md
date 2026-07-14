@@ -178,6 +178,15 @@ ngrok http 5000                         # or Cloudflare Tunnel (stable URL, reco
 Then set `MT5_BRIDGE_URL` (the tunnel URL) and `MT5_BRIDGE_API_KEY` (matching the
 bridge) on the app, and `MARKET_DATA_PROVIDER=mt5` to price from the broker feed.
 
+**Tunnel URL changed? No redeploy needed.** A free Cloudflare *quick* tunnel URL
+changes on every bridge restart. Instead of editing `MT5_BRIDGE_URL` on Vercel
+and redeploying, open **Settings → MT5 Bridge Connection** in the app, paste the
+new `https://…trycloudflare.com` URL, and hit **Save & Test** — it's stored in
+the database, takes effect immediately, and is probed on save so you get instant
+`reachable` / `MT5 connected` feedback. This DB override wins over the env var;
+the env var stays the fallback default. (`MT5_BRIDGE_API_KEY` remains env-only —
+it's a secret and isn't editable from the UI.)
+
 ---
 
 ## Configuration (env)
@@ -238,7 +247,7 @@ The MT5 bridge tests inject a fake `MetaTrader5` module so they run on any OS.
 | Telegram | ✅ Connected (app feed + bridge notifications) |
 | Knowledge base | ✅ Ingest/search/pgvector; YouTube auto-transcribe + titles via the bridge (residential IP) |
 | Journal/planner | 🟡 Ledger + analytics exist; deeper plan↔trade↔journal linking pending |
-| Reliability | 🟡 Bridge on a free **quick** tunnel — URL changes on restart; use a Cloudflare *named* tunnel or VPS for a permanent URL |
+| Reliability | 🟡 Bridge on a free **quick** tunnel — URL changes on restart, but re-pointing is a paste in **Settings → MT5 Bridge Connection** (no redeploy); a Cloudflare *named* tunnel or VPS gives a permanent URL |
 
 See [PROGRESS.md](PROGRESS.md) for the detailed improvement plan.
 
@@ -246,8 +255,9 @@ See [PROGRESS.md](PROGRESS.md) for the detailed improvement plan.
 
 ## Notes & caveats
 
-- The whole MT5 experience depends on the **Windows bridge + tunnel** staying up;
-  a free ngrok URL changes on restart. A **Cloudflare Tunnel** (free, permanent
-  URL) or a small VPS is the durable setup.
+- The whole MT5 experience depends on the **Windows bridge + tunnel** staying up.
+  A free quick-tunnel URL changes on restart — re-point it in **Settings → MT5
+  Bridge Connection** (no redeploy). A **Cloudflare named tunnel** (free,
+  permanent URL) or a small VPS is the durable setup.
 - The app is a **decision/tracking cockpit** — AI is advisory only and never fires
   trades; deterministic guardrails enforce execution safety.
