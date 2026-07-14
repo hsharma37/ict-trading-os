@@ -662,5 +662,18 @@ class TradeLifecycleService:
         closed = sorted([t for t in trades if t.get("status") == "CLOSED"], key=lambda x: x.get("created_at", ""), reverse=True)
         return closed[:limit]
 
+    def reset_all(self, status: Optional[str] = None) -> Dict:
+        """Delete trades from the internal ledger (resets Dashboard/Analytics
+        P&L). With no status, deletes all; with "CLOSED"/"OPEN", only those.
+        Does not touch MT5 broker positions — this is the app's own ledger."""
+        with self._trade_lock:
+            trades = db.get_collection("trades")
+            targets = [t for t in trades if status is None or t.get("status") == status]
+            deleted = 0
+            for t in targets:
+                if db.delete("trades", t["id"]):
+                    deleted += 1
+            return {"deleted": deleted, "remaining": len(db.get_collection("trades"))}
+
 
 trade_lifecycle_service = TradeLifecycleService()
