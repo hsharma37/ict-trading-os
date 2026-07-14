@@ -13,6 +13,14 @@ class Settings:
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHANNEL_ID: str = os.getenv("TELEGRAM_CHANNEL_ID", "")
     MT5_BRIDGE_URL: str = os.getenv("MT5_BRIDGE_URL", "http://localhost:5001")
+    # Market data provider selection: "auto" uses OANDA when configured, else Yahoo.
+    # Force with "oanda" or "yahoo".
+    MARKET_DATA_PROVIDER: str = os.getenv("MARKET_DATA_PROVIDER", "auto").lower()
+    # OANDA v20 REST (real-time FX/metals/index-CFD feed). Token from an OANDA
+    # fxTrade practice or live account. Env selects the API host.
+    OANDA_API_TOKEN: str = os.getenv("OANDA_API_TOKEN", "").strip()
+    OANDA_ACCOUNT_ID: str = os.getenv("OANDA_ACCOUNT_ID", "").strip()
+    OANDA_ENV: str = os.getenv("OANDA_ENV", "practice").strip().lower()  # practice | live
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
     DATABASE_SCHEMA: str = os.getenv("DATABASE_SCHEMA", "")
     DATABASE_PATH: str = os.getenv(
