@@ -63,6 +63,12 @@ shared-secret (`X-Bridge-Key`), retries, and audit logging.
 
 - **Execution:** market orders (`POST /mt5/trade`), close, **partial close**,
   **modify SL/TP**, **pending limit/stop orders**, cancel pending.
+- **Execution Console (Execute page)** places orders **directly on the MT5 account**
+  when the terminal is connected — market or pending (limit/stop), with the lot
+  auto-sized from account balance + risk %, SL and TP1 attached. It shows a
+  **Live MT5** badge with the account balance, and the live positions right below
+  the form with full **close / partial-close / modify-SL-TP** controls. When the
+  bridge is offline it falls back to planning in the internal ledger.
 - **Safety guardrails** on every order: symbol allowlist, lot caps (`MT5_MAX_LOT`),
   min-lot, side-aware SL/TP validation, optional required SL, per-intent audit log.
 - **Market data from the broker:** live tick, historical candles (M1–W1), contract
@@ -121,6 +127,15 @@ the internal ledger (which remains the automatic fallback when the bridge is dow
 ### 💬 Telegram
 - Signal feed + notifications from the app (`TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHANNEL_ID`).
 - The MT5 bridge can also send trade execution/close notifications directly.
+- **Public-channel polling:** reads a public ICT channel's posts via its web
+  preview (`t.me/s/<channel>`) — **no bot membership or credentials needed** —
+  parses each message into a structured signal (symbol/side/entry/SL/TP/strategy),
+  dedupes by channel+message id, and stores it in the signal feed. Set the channel
+  with `TELEGRAM_SOURCE_CHANNEL` (default `xxictxx`). Polled **hourly** by a Vercel
+  cron (`GET /api/telegram/poll-source`, schedule `0 * * * *`); also runnable on
+  demand with the **Manual Poll** button. The Telegram page shows the active source
+  channel. (Hourly cron needs a Vercel plan that permits sub-daily schedules; the
+  manual poll and the always-on bridge are alternatives otherwise.)
 
 ### 🔐 Security
 - Production protects private/mutating routes behind an **`X-Api-Key`** gate
@@ -218,6 +233,8 @@ it's a secret and isn't editable from the UI.)
 | `MT5_ALLOWED_SYMBOLS`, `MT5_MAX_LOT`, `MT5_REQUIRE_SL` | Execution guardrails |
 | `OANDA_API_TOKEN`, `OANDA_ACCOUNT_ID`, `OANDA_ENV` | OANDA price provider |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID` | Telegram notifications |
+| `TELEGRAM_SOURCE_CHANNEL` | Public channel to poll hourly via web preview (default `xxictxx`) |
+| `CRON_SECRET` | Optional; when set, the cron poll endpoint requires Vercel's `Authorization: Bearer` |
 | `CORS_ORIGINS`, `LOG_LEVEL`, `APP_ENV` | Runtime config |
 
 See `.env.example`, `.env.production.example`, `.env.preview.example`.
@@ -263,7 +280,8 @@ The MT5 bridge tests inject a fake `MetaTrader5` module so they run on any OS.
 | Connected UI | ✅ Live positions + management (incl. rich per-position viz) on Dashboard, What's Up, Terminal |
 | MT5 as trades base | ✅ Dashboard KPIs, Analytics, chatbot, signals/research all read the live terminal (broker P&L/history/account) when connected; ledger fallback |
 | Auth/security | ✅ X-Api-Key gate + runtime key entry; fail-closed secrets |
-| Telegram | ✅ Connected (app feed + bridge notifications) |
+| Telegram | ✅ App feed + bridge notifications; **hourly public-channel polling** (web preview, no bot needed) |
+| Execution Console | ✅ Places real MT5 market/pending orders + live position management from the Execute page |
 | Knowledge base | ✅ Ingest/search/pgvector; YouTube auto-transcribe + titles via the bridge (residential IP) |
 | Journal/planner | 🟡 Ledger + analytics exist; deeper plan↔trade↔journal linking pending |
 | Reliability | 🟡 Bridge on a free **quick** tunnel — URL changes on restart, but re-pointing is a paste in **Settings → MT5 Bridge Connection** (no redeploy); a Cloudflare *named* tunnel or VPS gives a permanent URL |

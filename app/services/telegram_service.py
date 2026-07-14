@@ -1,4 +1,5 @@
 """Telegram service — polling and signal parsing for ICT Trading OS."""
+import html as html_lib
 import re
 import httpx
 import os
@@ -24,6 +25,11 @@ class TelegramService:
     @property
     def channel_id(self) -> str:
         return getattr(settings, "TELEGRAM_CHANNEL_ID", "") or os.getenv("TELEGRAM_CHANNEL_ID", "")
+
+    @property
+    def source_channel(self) -> str:
+        """Public channel username to poll via web preview (no bot needed)."""
+        return (getattr(settings, "TELEGRAM_SOURCE_CHANNEL", "") or os.getenv("TELEGRAM_SOURCE_CHANNEL", "")).lstrip("@")
 
     @property
     def is_configured(self) -> bool:
@@ -224,6 +230,111 @@ class TelegramService:
 
         return parsed
 
+    # ── Public channel polling (web preview, no bot membership needed) ──
+
+    @staticmethod
+    def _html_to_text(fragment: str) -> str:
+        """Turn a Telegram message-text HTML fragment into plain text."""
+        fragment = re.sub(r"<br\s*/?>", "\n", fragment, flags=re.IGNORECASE)
+        fragment = re.sub(r"</p\s*>", "\n", fragment, flags=re.IGNORECASE)
+        fragment = re.sub(r"<[^>]+>", "", fragment)
+        return html_lib.unescape(fragment).strip()
+
+    def _parse_channel_html(self, page: str) -> List[Dict[str, Any]]:
+        """Extract messages from a t.me/s/<channel> preview page."""
+        messages: List[Dict[str, Any]] = []
+        # Each message is a block starting at `<div class="tgme_widget_message ...">`.
+        blocks = re.split(r'(?=<div class="tgme_widget_message[ "])', page)
+        for block in blocks:
+            post = re.search(r'data-post="([^"]+)"', block)
+            if not post:
+                continue
+            text_m = re.search(
+                r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>\s*(?:<div class="tgme_widget_message_(?:footer|reply|inline)|<time)',
+                block,
+                re.DOTALL,
+            )
+            if not text_m:
+                text_m = re.search(
+                    r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>',
+                    block,
+                    re.DOTALL,
+                )
+            if not text_m:
+                continue
+            text = self._html_to_text(text_m.group(1))
+            if not text:
+                continue
+            time_m = re.search(r'<time[^>]*datetime="([^"]+)"', block)
+            messages.append({
+                "post": post.group(1),          # e.g. "xxictxx/1234"
+                "text": text,
+                "datetime": time_m.group(1) if time_m else None,
+            })
+        return messages
+
+    def poll_source_channel(self, channel: Optional[str] = None, limit: int = 50) -> Dict[str, Any]:
+        """Fetch a public channel's recent posts via its web preview, parse them
+        into signals, and store new ones. Works without a bot token/membership."""
+        channel = (channel or self.source_channel or "").lstrip("@")
+        if not channel:
+            return {"ok": False, "error": "No source channel configured", "new_signals": 0}
+
+        url = f"https://t.me/s/{channel}"
+        try:
+            r = httpx.get(url, timeout=30.0, follow_redirects=True,
+                          headers={"User-Agent": "Mozilla/5.0 (compatible; ICTradingOS/1.0)"})
+            r.raise_for_status()
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "error": f"Fetch failed: {e}", "new_signals": 0}
+
+        messages = self._parse_channel_html(r.text)[-limit:]
+        new_signals = []
+        for m in messages:
+            msg_id = m["post"]  # channel/msgid — globally unique, stable
+            if db.find_one("telegram_signals", msg_id):
+                continue
+            text = m["text"]
+            parsed = self._parse_signal(text)
+            signal = {
+                "id": msg_id,
+                "source_channel": channel,
+                "source": "web_preview",
+                "raw_text": text,
+                "parsed": parsed["symbol"] is not None and parsed["side"] is not None,
+                "symbol": parsed["symbol"],
+                "side": parsed["side"],
+                "entry_prices": parsed["entry_prices"],
+                "stop_loss": parsed["stop_loss"],
+                "take_profits": parsed["take_profits"],
+                "strategy": parsed["strategy"],
+                "confidence": parsed["confidence"],
+                "acknowledged": False,
+                "auto_traded": False,
+                "trade_id": None,
+                "message_time": m.get("datetime"),
+                "created_at": m.get("datetime") or datetime.utcnow().isoformat(),
+                "parsed_at": datetime.utcnow().isoformat(),
+            }
+            db.insert("telegram_signals", signal)
+            new_signals.append(signal)
+
+        self._last_poll_time = datetime.utcnow().isoformat()
+        return {"ok": True, "channel": channel, "scanned": len(messages),
+                "new_signals": len(new_signals), "signals": new_signals}
+
+    def poll_all(self) -> Dict[str, Any]:
+        """Poll both the bot updates (if configured) and the public source
+        channel. Used by the manual 'Poll now' button."""
+        source = self.poll_source_channel()
+        bot = self.poll() if self.is_configured else {"ok": False, "new_signals": 0, "skipped": "bot not configured"}
+        return {
+            "ok": source.get("ok") or bot.get("ok"),
+            "new_signals": (source.get("new_signals", 0) + bot.get("new_signals", 0)),
+            "source": source,
+            "bot": bot,
+        }
+
     def poll(self) -> Dict[str, Any]:
         """Poll Telegram for new messages, parse signals, and store them."""
         if not self.is_configured:
@@ -349,6 +460,8 @@ class TelegramService:
             "auto_traded": auto_traded,
             "configured": self.is_configured,
             "channel_id": self.channel_id,
+            "source_channel": self.source_channel,
+            "source_poll_available": bool(self.source_channel),
             "last_poll_time": self._last_poll_time,
         }
 

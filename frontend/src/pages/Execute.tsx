@@ -2,9 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import {
-  Target, Shield, AlertTriangle, Zap, CheckCircle, RefreshCw, BarChart3, Sparkles
+  Target, Shield, AlertTriangle, Zap, CheckCircle, RefreshCw, BarChart3, Sparkles, Wifi, WifiOff
 } from 'lucide-react'
-import { tradesApi, ordersApi, marketApi } from '@/api/client'
+import { tradesApi, ordersApi, marketApi, mt5Api } from '@/api/client'
+import { useMt5 } from '@/hooks/useMt5'
+import Mt5PositionsPanel from '@/components/Mt5PositionsPanel'
+
+type OrderType = 'market' | 'limit' | 'stop'
 
 interface Trade {
   id: string
@@ -96,6 +100,18 @@ export default function Execute() {
   const [success, setSuccess] = useState<string | null>(null)
   const [livePrice, setLivePrice] = useState<number | null>(null)
   const [priceLoading, setPriceLoading] = useState(false)
+  const [orderType, setOrderType] = useState<OrderType>('market')
+  const [manualLot, setManualLot] = useState('')
+
+  // Live MT5 state — when the terminal is connected, orders route to the broker.
+  const mt5 = useMt5()
+
+  // Prefer the real MT5 account balance for risk sizing when connected.
+  useEffect(() => {
+    if (mt5.connected && mt5.account?.balance) {
+      setAccountBalance(String(Math.round(mt5.account.balance)))
+    }
+  }, [mt5.connected, mt5.account?.balance])
 
   const fetchOpenTrades = useCallback(async () => {
     try {
@@ -211,39 +227,79 @@ export default function Execute() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryPrice, stopLoss])
 
+  // Lot to trade: an explicit manual override, else the calculator's result.
+  const effectiveLot = (): number | null => {
+    const m = parseFloat(manualLot)
+    if (m && m > 0) return m
+    if (lotCalc && !lotCalc.error && lotCalc.lot_size > 0) return lotCalc.lot_size
+    return null
+  }
+
+  const placeMt5Order = async () => {
+    const sl = stopLoss ? parseFloat(stopLoss) : undefined
+    const tp = tp1 ? parseFloat(tp1) : undefined  // MT5 positions carry a single TP
+    const lot = effectiveLot()
+    if (!lot) {
+      setError('Calculate the lot size (or enter one manually) before placing an MT5 order')
+      return
+    }
+    const direction = side === 'BUY' ? 'long' : 'short'
+
+    if (orderType === 'market') {
+      await mt5Api.trade({ symbol, direction, lot_size: lot, stop_loss: sl, take_profit: tp })
+      setSuccess(`✅ Live MT5 market order sent: ${symbol} ${direction} ${lot} lots`)
+    } else {
+      const price = parseFloat(entryPrice)
+      if (!price || price <= 0) {
+        setError('Entry price is required for a pending (limit/stop) order')
+        return
+      }
+      await mt5Api.pending({
+        symbol, direction, order_kind: orderType, volume: lot, price,
+        stop_loss: sl, take_profit: tp,
+      })
+      setSuccess(`✅ Live MT5 ${orderType} order placed: ${symbol} ${direction} ${lot} lots @ ${price}`)
+    }
+    // Refresh live positions/orders across the app.
+    mt5.refetch?.()
+  }
+
+  const placeSyntheticOrder = async () => {
+    const sl = parseFloat(stopLoss)
+    if (!sl || sl <= 0) {
+      setError('Stop loss is required')
+      return
+    }
+    const res = await ordersApi.create({
+      symbol,
+      side,
+      entry_price: entryPrice ? parseFloat(entryPrice) : undefined,
+      stop_loss: sl,
+      take_profit_1: tp1 ? parseFloat(tp1) : undefined,
+      take_profit_2: tp2 ? parseFloat(tp2) : undefined,
+      take_profit_3: tp3 ? parseFloat(tp3) : undefined,
+      account_balance: parseFloat(accountBalance),
+      risk_pct: parseFloat(riskPct),
+      strategy: strategy || undefined,
+      notes: notes || undefined,
+    })
+    setSuccess(`Trade planned (ledger): ${res.data.symbol} ${res.data.side} @ ${res.data.quantity} lots — MT5 bridge offline`)
+    fetchOpenTrades()
+  }
+
   const placeOrder = async () => {
     setOrderLoading(true)
     setError(null)
     setSuccess(null)
     try {
-      const sl = parseFloat(stopLoss)
-      if (!sl || sl <= 0) {
-        setError('Stop loss is required')
-        setOrderLoading(false)
-        return
+      if (mt5.connected) {
+        await placeMt5Order()
+      } else {
+        await placeSyntheticOrder()
       }
-
-      const res = await ordersApi.create({
-        symbol,
-        side,
-        entry_price: entryPrice ? parseFloat(entryPrice) : undefined,
-        stop_loss: sl,
-        take_profit_1: tp1 ? parseFloat(tp1) : undefined,
-        take_profit_2: tp2 ? parseFloat(tp2) : undefined,
-        take_profit_3: tp3 ? parseFloat(tp3) : undefined,
-        account_balance: parseFloat(accountBalance),
-        risk_pct: parseFloat(riskPct),
-        strategy: strategy || undefined,
-        notes: notes || undefined,
-      })
-      setSuccess(`Trade created: ${res.data.symbol} ${res.data.side} @ ${res.data.quantity} lots`)
-      fetchOpenTrades()
       setLotCalc(null)
-      // Reset form
-      setTp1('')
-      setTp2('')
-      setTp3('')
-      setStopLoss('')
+      setManualLot('')
+      setTp1(''); setTp2(''); setTp3(''); setStopLoss('')
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Order placement failed')
     } finally {
@@ -277,10 +333,31 @@ export default function Execute() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Execution Console</h1>
-        <p className="text-muted-foreground">Place orders with automatic lot calculation and 1R-based targets</p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Execution Console</h1>
+          <p className="text-muted-foreground">Place orders with automatic lot calculation and 1R-based targets</p>
+        </div>
+        {mt5.connected ? (
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+            <Wifi className="w-3.5 h-3.5" />
+            Live MT5{mt5.account?.balance ? ` · $${Math.round(mt5.account.balance).toLocaleString()}` : ''}
+          </span>
+        ) : (
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/10 border border-amber-500/20 text-amber-400">
+            <WifiOff className="w-3.5 h-3.5" />
+            Bridge offline · planning to ledger
+          </span>
+        )}
       </div>
+
+      {mt5.connected && (
+        <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-emerald-300/90 text-xs">
+          Orders below are sent <strong>directly to your MT5 account</strong>. Market orders fill immediately;
+          limit/stop orders rest as pending until price is reached. Guardrails (symbol allow-list, max lot,
+          side-aware SL/TP) are enforced server-side.
+        </div>
+      )}
 
       {error && (
         <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">
@@ -336,6 +413,28 @@ export default function Execute() {
                   </button>
                 </div>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Order Type</label>
+              <div className="flex gap-2">
+                {(['market', 'limit', 'stop'] as OrderType[]).map((ot) => (
+                  <button
+                    key={ot}
+                    onClick={() => setOrderType(ot)}
+                    className={`flex-1 px-3 py-2 rounded-md text-sm font-medium capitalize ${
+                      orderType === ot ? 'bg-primary text-primary-foreground' : 'border bg-background'
+                    }`}
+                  >
+                    {ot}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {orderType === 'market'
+                  ? 'Fills now at the current market price.'
+                  : `Rests as a pending ${orderType} order at your entry price.`}
+              </p>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
@@ -435,6 +534,21 @@ export default function Execute() {
             </div>
 
             <div className="space-y-2">
+              <label className="text-sm font-medium">Lot Size (manual override)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={manualLot}
+                onChange={(e) => setManualLot(e.target.value)}
+                placeholder={lotCalc && !lotCalc.error ? `Calculated: ${lotCalc.lot_size.toFixed(2)}` : 'Leave blank to use calculator'}
+                className="w-full px-3 py-2 border rounded-md bg-background"
+              />
+              <p className="text-xs text-muted-foreground">
+                {effectiveLot() ? `Will trade ${effectiveLot()} lots` : 'Calculate a lot size or enter one to enable MT5 order'}
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <label className="text-sm font-medium">Notes</label>
               <textarea
                 value={notes}
@@ -469,7 +583,11 @@ export default function Execute() {
                 className="flex-1"
               >
                 <Zap className="w-4 h-4 mr-2" />
-                {orderLoading ? 'Placing...' : 'Place Order'}
+                {orderLoading
+                  ? 'Placing...'
+                  : mt5.connected
+                    ? `Send ${orderType} to MT5`
+                    : 'Plan Order (ledger)'}
               </Button>
             </div>
           </CardContent>
@@ -532,10 +650,32 @@ export default function Execute() {
         </Card>
       </div>
 
-      {/* Open Trades */}
+      {/* Live MT5 positions with full management (close / partial / modify SL-TP) */}
+      {mt5.connected && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Wifi className="w-4 h-4 text-emerald-400" />
+              Live MT5 Positions
+            </CardTitle>
+            <div className="text-sm text-muted-foreground">
+              {mt5.positions.length} open · float{' '}
+              <span className={mt5.totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                {mt5.totalProfit >= 0 ? '+' : ''}{mt5.totalProfit.toFixed(2)}
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Mt5PositionsPanel variant="full" />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Ledger open trades (planning fallback when the bridge is offline) */}
+      {!mt5.connected && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Open Trades</CardTitle>
+          <CardTitle>Open Trades (ledger)</CardTitle>
           <div className="text-sm text-muted-foreground">
             {stats?.open_trades || 0} open | {stats?.total_trades || 0} total
           </div>
@@ -632,6 +772,7 @@ export default function Execute() {
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }

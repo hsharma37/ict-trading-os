@@ -180,8 +180,9 @@ export const mt5Api = {
   status: () => apiClient.get('/mt5/status'),
   account: () => apiClient.get('/mt5/account'),
   positions: () => apiClient.get('/mt5/positions'),
-  trade: (data: any) => apiClient.post('/mt5/trade', data),
-  close: (data: any) => apiClient.post('/mt5/close', data),
+  trade: (data: { symbol: string; direction: string; lot_size: number; stop_loss?: number; take_profit?: number }) =>
+    apiClient.post('/mt5/trade', null, { params: data }),
+  close: (ticket_id: string) => apiClient.post('/mt5/close', null, { params: { ticket_id } }),
   history: () => apiClient.get('/mt5/history'),
   // Market data
   tick: (symbol: string) => apiClient.get(`/mt5/tick/${symbol}`),

@@ -12,6 +12,13 @@ class Settings:
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHANNEL_ID: str = os.getenv("TELEGRAM_CHANNEL_ID", "")
+    # Public Telegram channel to poll for ICT signals via its web preview
+    # (t.me/s/<channel>) — no bot membership or credentials needed. Polled
+    # hourly by a Vercel cron; also runnable on demand from the Telegram page.
+    TELEGRAM_SOURCE_CHANNEL: str = os.getenv("TELEGRAM_SOURCE_CHANNEL", "xxictxx").lstrip("@")
+    # Optional shared secret Vercel Cron sends as `Authorization: Bearer <secret>`.
+    # When set, the cron poll endpoint requires it; when empty, the endpoint is open.
+    CRON_SECRET: str = os.getenv("CRON_SECRET", "")
     MT5_BRIDGE_URL: str = os.getenv("MT5_BRIDGE_URL", "http://localhost:5001")
     # Shared secret sent as X-Bridge-Key on every proxied bridge call. Required
     # once the bridge is reachable over the internet (e.g. via a tunnel) -

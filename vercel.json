@@ -3,5 +3,8 @@
   "buildCommand": "cp -r frontend/dist/* public/",
   "rewrites": [
     { "source": "/(.*)", "destination": "/api" }
+  ],
+  "crons": [
+    { "path": "/api/telegram/poll-source", "schedule": "0 * * * *" }
   ]
 }

@@ -33,6 +33,8 @@ interface SignalStats {
   auto_traded: number
   configured: boolean
   channel_id: string
+  source_channel?: string
+  source_poll_available?: boolean
   last_poll_time: string | null
 }
 
@@ -61,8 +63,10 @@ export default function TelegramFeed() {
     try {
       const res = await telegramApi.stats()
       setStats(res.data)
-      if (!res.data?.configured) {
-        setError('Telegram Bot not configured. Set token and channel ID below.')
+      // Source-channel polling (t.me/s/<channel>) needs no bot token, so only
+      // warn when neither a bot nor a source channel is available.
+      if (!res.data?.configured && !res.data?.source_poll_available) {
+        setError('No Telegram source configured. Set a bot token/channel below, or configure TELEGRAM_SOURCE_CHANNEL.')
       } else {
         setError(null)
       }
@@ -165,9 +169,23 @@ export default function TelegramFeed() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Telegram Signals</h1>
-        <p className="text-muted-foreground">Live feed from your Telegram channel with auto-trade support</p>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Telegram Signals</h1>
+          <p className="text-muted-foreground">Live feed from your Telegram channel with auto-trade support</p>
+        </div>
+        {stats?.source_channel && (
+          <a
+            href={`https://t.me/s/${stats.source_channel}`}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/20"
+            title="Polled automatically every hour"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+            @{stats.source_channel} · hourly
+          </a>
+        )}
       </div>
 
       {error && (

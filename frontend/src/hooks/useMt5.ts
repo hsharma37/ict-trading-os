@@ -60,7 +60,7 @@ export function useMt5() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['mt5'] })
 
   const close = useMutation({
-    mutationFn: (ticket: string) => mt5Api.close({ ticket_id: ticket }),
+    mutationFn: (ticket: string) => mt5Api.close(ticket),
     onSuccess: invalidate,
   })
   const modify = useMutation({
