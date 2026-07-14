@@ -12,10 +12,11 @@ def get_price(symbol: str):
 @router.get("/prices")
 def get_prices(symbols: str = None):
     if symbols:
-        syms = [s.strip() for s in symbols.split(",")]
+        syms = [s.strip().upper() for s in symbols.split(",")]
     else:
         syms = list(get_all_instruments().keys())
-    return {"prices": {s: market_service.get_price(s) for s in syms}}
+    quotes = [market_service.get_price(s) for s in syms]
+    return {"prices": quotes, "timestamp": quotes[0]["timestamp"] if quotes else None}
 
 @router.post("/manual-price/{symbol}")
 def set_manual_price(symbol: str, price: float, bid: float = None, ask: float = None):

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { playgroundApi } from '@/api/client'
+import { marketApi } from '@/api/client'
 import {
   TrendingUp,
   TrendingDown,
@@ -61,7 +61,7 @@ export default function Playground() {
   const fetchPrices = useCallback(async () => {
     try {
       setError(null)
-      const response = await playgroundApi.getPrices()
+      const response = await marketApi.getPrices()
       setPrices(response.data.prices || [])
       setLastUpdate(new Date())
     } catch (e: any) {
