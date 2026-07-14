@@ -260,6 +260,29 @@ def test_pair_deals_into_trades_reconstructs_open_close_pair():
     assert t["closed_at"]
 
 
+def test_close_without_matching_open_still_appears():
+    """A close (OUT) deal whose opening deal isn't in the window must still show
+    as a closed trade — the old pair-both-legs approach dropped these."""
+    deals = [{"position_id": 42, "entry": 1, "type": 0, "symbol": "XAUUSD",
+              "volume": 0.2, "price": 4065.0, "profit": 300.0, "time": 5}]
+    trades = pair_deals_into_trades(deals)
+    assert len(trades) == 1
+    assert trades[0]["profit"] == 300.0
+    assert trades[0]["direction"] == "short"   # closed a short with a buy
+    assert trades[0]["open_price"] is None
+
+
+def test_multiple_closes_all_appear_newest_first():
+    deals = [
+        {"position_id": 1, "entry": 1, "type": 0, "symbol": "XAUUSD", "volume": 0.1, "price": 100, "profit": 10, "time": 100},
+        {"position_id": 2, "entry": 1, "type": 1, "symbol": "EURUSD", "volume": 0.2, "price": 1.1, "profit": -5, "time": 300},
+        {"position_id": 3, "entry": 1, "type": 0, "symbol": "XAUUSD", "volume": 0.3, "price": 200, "profit": 50, "time": 200},
+    ]
+    trades = pair_deals_into_trades(deals)
+    assert len(trades) == 3
+    assert [t["ticket"] for t in trades] == ["2", "3", "1"]  # newest close first
+
+
 def test_pair_deals_into_trades_omits_still_open_positions():
     """A position with only an entry deal (no exit yet) must not appear as a
     'closed trade' -- it's still open."""

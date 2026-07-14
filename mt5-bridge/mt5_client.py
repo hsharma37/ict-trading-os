@@ -98,35 +98,44 @@ def normalize_position(raw: Dict[str, Any]) -> Dict[str, Any]:
 def pair_deals_into_trades(deals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Reconstruct closed-trade records from MT5's deal ledger.
 
-    MetaTrader5's history_deals_get() returns individual deals, not trades:
-    opening and closing a position each produce a separate deal, linked by
-    `position_id`. This pairs the entry (open) and exit (close) deal of each
-    position into the single open/close record the frontend expects
-    (MT5HistoryTrade), and normalizes field names the same way
-    normalize_position does. Positions without a closing deal in the queried
-    window (i.e. still open) are omitted.
+    MetaTrader5's history_deals_get() returns individual deals, not trades.
+    Every *close* is an OUT deal carrying the realized profit; the matching
+    *open* is an IN deal sharing the same position_id. This is driven by the
+    OUT deals — one closed-trade record per close — so a trade shows even when
+    its opening deal isn't in the window and even when position_id linking is
+    imperfect (the earlier pair-both-legs approach silently dropped such
+    closes). The open price is filled from the matching IN deal when available.
+
+    Note: a partially-closed position produces multiple OUT deals and therefore
+    multiple rows (one per partial close), which is the honest history.
     """
-    by_position: Dict[Any, Dict[str, Any]] = {}
+    opens: Dict[Any, Dict[str, Any]] = {}
+    closes: List[Dict[str, Any]] = []
     for d in deals:
         if d.get("type") not in (_TYPE_BUY, _TYPE_SELL):
             continue  # skip balance/credit/other non-trade ledger entries
-        trade = by_position.setdefault(d.get("position_id"), {"profit": 0.0})
         if d.get("entry") == _DEAL_ENTRY_IN:
-            trade["ticket"] = str(d.get("position_id", ""))
-            trade["symbol"] = d.get("symbol", "")
-            trade["direction"] = "long" if d.get("type") == _TYPE_BUY else "short"
-            trade["lot_size"] = d.get("volume", 0)
-            trade["open_price"] = d.get("price", 0)
-        else:  # DEAL_ENTRY_OUT / OUT_BY
-            trade["close_price"] = d.get("price", 0)
-            trade["profit"] += d.get("profit", 0) or 0
-            ts = d.get("time")
-            trade["closed_at"] = datetime.fromtimestamp(ts).isoformat() if ts else None
-            trade.setdefault("ticket", str(d.get("position_id", "")))
-            trade.setdefault("symbol", d.get("symbol", ""))
-            trade.setdefault("lot_size", d.get("volume", 0))
+            opens[d.get("position_id")] = d
+        else:  # DEAL_ENTRY_OUT / OUT_BY / INOUT — a realized close
+            closes.append(d)
 
-    trades = [t for t in by_position.values() if "close_price" in t]
+    trades: List[Dict[str, Any]] = []
+    for d in closes:
+        in_deal = opens.get(d.get("position_id"))
+        ts = d.get("time")
+        trades.append({
+            "ticket": str(d.get("position_id", "") or d.get("ticket", "")),
+            "symbol": d.get("symbol", ""),
+            # An OUT deal's type is the *closing* side; the position it closed
+            # was the opposite direction.
+            "direction": "short" if d.get("type") == _TYPE_BUY else "long",
+            "lot_size": d.get("volume", 0),
+            "open_price": (in_deal or {}).get("price"),
+            "close_price": d.get("price", 0),
+            "profit": d.get("profit", 0) or 0,
+            "closed_at": datetime.fromtimestamp(ts).isoformat() if ts else None,
+        })
+
     trades.sort(key=lambda t: t.get("closed_at") or "", reverse=True)
     return trades
 

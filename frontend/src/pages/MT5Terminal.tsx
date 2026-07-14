@@ -119,6 +119,7 @@ export default function MT5Terminal() {
               <CardTitle className="flex items-center gap-2 text-base">
                 <History className="w-5 h-5 text-primary" />
                 Trade History
+                <span className="text-xs text-muted-foreground font-normal ml-auto">Latest 3 closed</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -135,7 +136,7 @@ export default function MT5Terminal() {
                       </tr>
                     </thead>
                     <tbody>
-                      {history.slice(0, 20).map((h: any) => {
+                      {history.slice(0, 3).map((h: any) => {
                         const positive = (h.profit ?? 0) >= 0
                         return (
                           <tr key={h.ticket} className="border-b border-border/50 hover:bg-muted/30">
