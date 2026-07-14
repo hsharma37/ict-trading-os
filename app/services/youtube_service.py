@@ -182,7 +182,18 @@ class YouTubeService:
 
         info = self._ytdlp_extract(url)
         if not info:
-            # Fallback: try oEmbed
+            # Bridge (residential IP) first — YouTube blocks title/oembed from
+            # cloud IPs just like captions.
+            bmeta = self._fetch_meta_via_bridge(video_id)
+            if bmeta and bmeta.get("title"):
+                return VideoMetadata(
+                    video_id=video_id,
+                    title=bmeta["title"],
+                    channel=bmeta.get("author", "") or "",
+                    thumbnail=bmeta.get("thumbnail", "") or "",
+                    url=url,
+                )
+            # Fallback: direct oEmbed (works from a local/residential runtime).
             title = self._fetch_oembed_title(url) or f"YouTube video {video_id}"
             return VideoMetadata(
                 video_id=video_id,
@@ -330,6 +341,23 @@ class YouTubeService:
                 return VideoTranscript(video_id=video_id, text='', segments=[], source='fallback')
             # Try whisper as last resort
             return self._transcribe_with_whisper(video_id, languages)
+
+    def _fetch_meta_via_bridge(self, video_id: str) -> Optional[Dict]:
+        """Fetch video title/author via the MT5 bridge (residential IP)."""
+        from app.core.config import settings
+        base = getattr(settings, "MT5_BRIDGE_URL", "")
+        if not base:
+            return None
+        headers = {"ngrok-skip-browser-warning": "true"}
+        if getattr(settings, "MT5_BRIDGE_API_KEY", ""):
+            headers["X-Bridge-Key"] = settings.MT5_BRIDGE_API_KEY
+        try:
+            resp = self._http_client.get(f"{base}/video-meta/{video_id}", headers=headers, timeout=20)
+            if resp.status_code != 200:
+                return None
+            return resp.json()
+        except Exception:
+            return None
 
     def _fetch_transcript_via_bridge(self, video_id: str, languages: List[str]) -> Optional[VideoTranscript]:
         """Fetch the transcript through the MT5 bridge (residential IP), when
