@@ -8,7 +8,10 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.spa import spa_index_response
 
-PUBLIC_PATHS = {"/", "/health", "/docs", "/openapi.json", "/redoc"}
+# /telegram/poll-source is hit by an external scheduler (Vercel cron or the
+# always-on bridge) that can't carry the app's X-Api-Key; it's guarded instead
+# by the optional CRON_SECRET bearer checked inside the handler.
+PUBLIC_PATHS = {"/", "/health", "/docs", "/openapi.json", "/redoc", "/telegram/poll-source"}
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 PROTECTED_PREFIXES = (
     "/alerts",
