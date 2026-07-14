@@ -1,9 +1,9 @@
 """Single source of truth for instrument prices.
 
-Every price surface in the app (/market/price, /playground/price[s], the
-topbar, signals, quant, trade reference prices, ...) resolves through
-get_quote() here, so a given symbol shows the *same* value everywhere at a
-given moment and the data provider is switched in exactly one place.
+Every price surface in the app (the /market/* endpoints, the topbar, signals,
+quant, trade reference prices, ...) resolves through get_quote() here, so a
+given symbol shows the *same* value everywhere at a given moment and the data
+provider is switched in exactly one place.
 
 Provider order (per settings.MARKET_DATA_PROVIDER):
   manual override -> MT5 (when provider=mt5) -> OANDA (when configured)
@@ -42,13 +42,19 @@ def _stale(timestamp: str, max_age_s: int = 120) -> bool:
         return False
 
 
-def _derive_source_from_label(label: str) -> str:
+def derive_source(label: str) -> str:
+    """Classify a price's provenance from its label suffix (yahoo/scraped/synthetic)."""
     l = (label or "").lower()
     if "(synthetic)" in l:
         return "synthetic"
     if any(s in l for s in ("(kitco)", "(gold.org)", "(investing.com)", "(scraped)")):
         return "scraped"
     return "yahoo"
+
+
+# Public aliases (single home for these helpers now that playground is gone).
+_derive_source_from_label = derive_source
+is_stale = _stale
 
 
 def _canonical(symbol: str, fields: Dict[str, Any], source: str) -> Dict[str, Any]:

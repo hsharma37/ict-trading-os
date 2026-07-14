@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button'
 import {
   Target, Shield, AlertTriangle, Zap, CheckCircle, RefreshCw, BarChart3, Sparkles
 } from 'lucide-react'
-import { tradesApi, ordersApi, playgroundApi } from '@/api/client'
+import { tradesApi, ordersApi, marketApi } from '@/api/client'
 
 interface Trade {
   id: string
@@ -128,7 +128,7 @@ export default function Execute() {
     async function fetchPrice() {
       setPriceLoading(true)
       try {
-        const res = await playgroundApi.getPrice(symbol)
+        const res = await marketApi.getPrice(symbol)
         const p = res.data?.price
         if (p) {
           setLivePrice(p)

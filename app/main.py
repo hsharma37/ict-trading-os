@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.auth import auth_middleware, validate_auth_config
 from app.core.spa import spa_index_response
-from app.routers import market, ict, signals, trades, quant, orders, plans, kb, bot, playground, analytics, alerts, research, telegram, mt5, news
+from app.routers import market, ict, signals, trades, quant, orders, plans, kb, bot, analytics, alerts, research, telegram, mt5, news
 from app.routers import settings as settings_router
 
 validate_auth_config()
@@ -46,7 +46,6 @@ app.include_router(orders.router)
 app.include_router(plans.router)
 app.include_router(kb.router)
 app.include_router(bot.router)
-app.include_router(playground.router)
 app.include_router(analytics.router)
 app.include_router(alerts.router)
 app.include_router(research.router)

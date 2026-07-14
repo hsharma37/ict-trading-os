@@ -90,7 +90,7 @@ def test_get_price_detailed_computes_change_from_daily_candle(monkeypatch):
     assert out["high"] == 1.106  # today's high
 
 
-def test_playground_price_uses_mt5_when_selected(client, monkeypatch):
+def test_market_price_uses_mt5_when_selected(client, monkeypatch):
     monkeypatch.setattr(settings, "MARKET_DATA_PROVIDER", "mt5")
     monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "http://bridge")
 
@@ -102,7 +102,7 @@ def test_playground_price_uses_mt5_when_selected(client, monkeypatch):
         return _Resp(404, {})
 
     monkeypatch.setattr(httpx, "get", fake_get)
-    resp = client.get("/playground/price/EURUSD")
+    resp = client.get("/market/price/EURUSD")
     assert resp.status_code == 200
     body = resp.json()
     assert body["source"] == "mt5"

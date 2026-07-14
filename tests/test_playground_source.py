@@ -1,7 +1,7 @@
-"""Tests for price source/staleness transparency on the playground API."""
+"""Tests for price source/staleness classification (single price API: /market)."""
 from datetime import datetime, timedelta, timezone
 
-from app.routers.playground import derive_source, is_stale
+from app.services.quote_service import derive_source, is_stale
 
 
 def test_derive_source_synthetic():
@@ -34,13 +34,12 @@ def test_is_stale_old():
 def test_is_stale_handles_z_suffix_and_garbage():
     fresh_z = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     assert is_stale(fresh_z) is False
-    # Unparseable timestamps must not raise; default to not-stale.
     assert is_stale("not-a-date") is False
 
 
 def test_price_endpoint_includes_source(client):
-    resp = client.get("/playground/price/EURUSD")
+    resp = client.get("/market/price/EURUSD")
     assert resp.status_code == 200
     body = resp.json()
-    assert "source" in body and body["source"] in {"yahoo", "scraped", "synthetic"}
+    assert "source" in body and body["source"] in {"yahoo", "scraped", "synthetic", "mt5", "oanda"}
     assert "stale" in body and isinstance(body["stale"], bool)

@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
-import { playgroundApi } from '@/api/client'
+import { marketApi } from '@/api/client'
 import ApiKeyBanner from './ApiKeyBanner'
 import PriceSourceBadge from './PriceSourceBadge'
 import {
@@ -52,7 +52,7 @@ export default function Layout({ children }: LayoutProps) {
   const fetchLivePrice = useCallback(async () => {
     try {
       setPriceLoading(true)
-      const response = await playgroundApi.getPrice(selectedInstrument)
+      const response = await marketApi.getPrice(selectedInstrument)
       const p = response.data
       if (p) {
         setLivePrice({

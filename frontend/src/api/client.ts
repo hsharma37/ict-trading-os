@@ -78,12 +78,6 @@ export const kbApi = {
   status: () => apiClient.get('/kb/status'),
 }
 
-// Add interceptors here later (auth, error handling, etc.)
-export const playgroundApi = {
-  getPrices: () => apiClient.get('/playground/prices'),
-  getPrice: (symbol: string) => apiClient.get(`/playground/price/${symbol}`),
-  getInstruments: () => apiClient.get('/playground/instruments'),
-}
 
 // Analytics API
 export const analyticsApi = {

@@ -83,14 +83,15 @@ def test_cache_makes_concurrent_reads_consistent(monkeypatch):
     assert first["price"] == second["price"] == 100.0
 
 
-def test_market_and_playground_agree_via_single_resolver(client, monkeypatch):
-    """The /market/price and /playground/price surfaces must return the same
-    price for a symbol, because both go through get_quote."""
+def test_single_and_bulk_price_endpoints_agree(client, monkeypatch):
+    """/market/price/{symbol} and /market/prices must return the same price
+    for a symbol, because both go through the one resolver (get_quote)."""
     monkeypatch.setattr(settings, "MARKET_DATA_PROVIDER", "mt5")
     monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "http://bridge")
     monkeypatch.setattr(httpx, "get", _mt5_mock(4096.7))
 
-    market = client.get("/market/price/XAUUSD").json()
-    playground = client.get("/playground/price/XAUUSD").json()
-    assert market["source"] == playground["source"] == "mt5"
-    assert market["price"] == playground["price"] == 4096.7
+    single = client.get("/market/price/XAUUSD").json()
+    bulk = client.get("/market/prices?symbols=XAUUSD").json()
+    bulk_xau = bulk["prices"][0]
+    assert single["source"] == bulk_xau["source"] == "mt5"
+    assert single["price"] == bulk_xau["price"] == 4096.7
