@@ -160,3 +160,109 @@ async def get_history():
         return resp.json()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
+
+
+# ── Generic proxy helpers for the read/manage endpoints ──────────
+
+async def _bridge_get(path: str, params: dict = None):
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{MT5_BASE}{path}", params=params, headers=_bridge_headers(), timeout=15)
+        return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
+
+
+async def _bridge_post(path: str, payload: dict):
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{MT5_BASE}{path}", json=payload, headers=_bridge_headers(), timeout=30)
+        return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
+
+
+# ── Market data ──────────────────────────────────────────────
+
+@router.get("/tick/{symbol}", summary="Live bid/ask/last from the broker feed")
+async def get_tick(symbol: str):
+    return await _bridge_get(f"/tick/{symbol}")
+
+
+@router.get("/candles/{symbol}", summary="Historical OHLC candles")
+async def get_candles(symbol: str, timeframe: str = "1h", count: int = 200):
+    return await _bridge_get(f"/candles/{symbol}", params={"timeframe": timeframe, "count": count})
+
+
+@router.get("/symbol/{symbol}", summary="Contract specification for a symbol")
+async def get_symbol_spec(symbol: str):
+    return await _bridge_get(f"/symbol/{symbol}")
+
+
+@router.get("/symbols", summary="List tradable symbols on the account")
+async def get_symbols():
+    return await _bridge_get("/symbols")
+
+
+@router.get("/orders", summary="List working pending orders")
+async def get_pending_orders():
+    return await _bridge_get("/orders")
+
+
+# ── Order & position management ──────────────────────────────
+
+@router.post("/modify", summary="Modify SL/TP on an open position")
+async def modify_position(
+    ticket: str,
+    stop_loss: Optional[float] = None,
+    take_profit: Optional[float] = None,
+):
+    if stop_loss is None and take_profit is None:
+        raise HTTPException(status_code=400, detail="Provide stop_loss and/or take_profit to modify.")
+    if (stop_loss is not None and stop_loss <= 0) or (take_profit is not None and take_profit <= 0):
+        raise HTTPException(status_code=400, detail="stop_loss/take_profit must be positive prices.")
+    _audit_execution_intent({"action": "modify", "ticket": ticket,
+                             "stop_loss": stop_loss, "take_profit": take_profit, "status": "accepted"})
+    return await _bridge_post("/modify", {"ticket": ticket, "stop_loss": stop_loss, "take_profit": take_profit})
+
+
+@router.post("/partial-close", summary="Close part of an open position")
+async def partial_close(ticket: str, volume: float):
+    if volume <= 0:
+        raise HTTPException(status_code=400, detail="volume must be greater than 0.")
+    _audit_execution_intent({"action": "partial_close", "ticket": ticket, "volume": volume, "status": "accepted"})
+    return await _bridge_post("/partial-close", {"ticket": ticket, "volume": volume})
+
+
+@router.post("/pending", summary="Place a pending limit/stop order")
+async def place_pending(
+    symbol: str,
+    direction: str,       # long | short
+    order_kind: str,      # limit | stop
+    volume: float,
+    price: float,
+    stop_loss: Optional[float] = None,
+    take_profit: Optional[float] = None,
+):
+    if order_kind not in ("limit", "stop"):
+        raise HTTPException(status_code=400, detail="order_kind must be 'limit' or 'stop'.")
+    # Same guardrails as market orders (symbol allowlist, lot caps, side-aware
+    # SL/TP), validated against the pending order's own entry price.
+    try:
+        validated = validate_trade(symbol, direction, volume, stop_loss, take_profit, reference_price=price)
+    except Mt5ValidationError as e:
+        _audit_execution_intent({"action": "pending", "symbol": symbol, "direction": direction,
+                                 "status": "rejected", "reason": str(e)})
+        raise HTTPException(status_code=400, detail=str(e))
+    _audit_execution_intent({"action": "pending", "symbol": validated["symbol"],
+                             "direction": validated["direction"], "order_kind": order_kind, "status": "accepted"})
+    return await _bridge_post("/pending", {
+        "symbol": validated["symbol"], "direction": validated["direction"], "order_kind": order_kind,
+        "volume": validated["lot_size"], "price": price, "stop_loss": stop_loss, "take_profit": take_profit,
+    })
+
+
+@router.post("/pending/cancel", summary="Cancel a pending order")
+async def cancel_pending(order_ticket: str):
+    _audit_execution_intent({"action": "cancel_pending", "order_ticket": order_ticket, "status": "accepted"})
+    return await _bridge_post("/pending/cancel", {"order_ticket": order_ticket})

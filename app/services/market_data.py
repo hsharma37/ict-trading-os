@@ -7,6 +7,7 @@ import random
 from app.services.instrument_config import get_instrument
 from app.services.price_service import price_service
 from app.services.oanda_service import oanda_service
+from app.services.mt5_price_service import mt5_price_service
 
 # Deprecated hardcoded map — now using instrument_config for all ticker lookups
 # Kept for backward compatibility only
@@ -92,7 +93,12 @@ class MarketDataService:
             manual["symbol"] = symbol
             return manual
 
-        # 2. OANDA real-time feed (when configured; falls through to Yahoo otherwise)
+        # 2. MT5 broker feed (when MARKET_DATA_PROVIDER=mt5; matches fills exactly)
+        mt5_quote = mt5_price_service.get_price(symbol)
+        if mt5_quote and mt5_quote.get("price", 0) > 0:
+            return mt5_quote
+
+        # 3. OANDA real-time feed (when configured; falls through to Yahoo otherwise)
         oanda = oanda_service.get_price(symbol)
         if oanda and oanda.get("price", 0) > 0:
             return oanda
