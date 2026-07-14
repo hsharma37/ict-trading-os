@@ -10,7 +10,13 @@ type Variant = 'full' | 'compact' | 'visual'
  * What's Up ('visual') pages, so all three show the same positions and the
  * same close/modify/partial actions work identically everywhere.
  */
-export default function Mt5PositionsPanel({ variant = 'full', limit }: { variant?: Variant; limit?: number }) {
+export default function Mt5PositionsPanel({
+  variant = 'full', limit, onSelect, selectedTicket,
+}: {
+  variant?: Variant; limit?: number
+  onSelect?: (ticket: string) => void
+  selectedTicket?: string
+}) {
   const { connected, positions, close, modify, partialClose } = useMt5()
 
   const busy = close.isPending || modify.isPending || partialClose.isPending
@@ -96,7 +102,13 @@ export default function Mt5PositionsPanel({ variant = 'full', limit }: { variant
           const pct = range ? Math.max(0, Math.min(100, ((cur - p.sl) / range) * 100)) : 50
           const entryPct = range ? Math.max(0, Math.min(100, ((p.open_price - p.sl) / range) * 100)) : 50
           return (
-            <div key={p.ticket} className="p-3 rounded-xl border border-border bg-card">
+            <div
+              key={p.ticket}
+              onClick={onSelect ? () => onSelect(p.ticket) : undefined}
+              className={`p-3 rounded-xl border bg-card transition-all ${
+                onSelect ? 'cursor-pointer hover:bg-muted/50' : ''
+              } ${selectedTicket === p.ticket ? 'border-primary ring-1 ring-primary/30' : 'border-border'}`}
+            >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   {dirBadge(p)}
