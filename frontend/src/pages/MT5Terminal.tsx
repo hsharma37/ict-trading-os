@@ -257,7 +257,7 @@ export default function MT5Terminal() {
                             <td className="p-2">
                               <span className={`inline-flex items-center gap-1 text-xs font-medium ${pos.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}`}>
                                 {pos.direction === 'long' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                                {pos.direction.toUpperCase()}
+                                {(pos.direction || '-').toUpperCase()}
                               </span>
                             </td>
                             <td className="p-2 text-right font-mono">{pos.lot_size}</td>
@@ -320,7 +320,7 @@ export default function MT5Terminal() {
                             <td className="p-2 font-medium">{h.symbol}</td>
                             <td className="p-2">
                               <span className={`text-xs font-medium ${h.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {h.direction.toUpperCase()}
+                                {(h.direction || '-').toUpperCase()}
                               </span>
                             </td>
                             <td className="p-2 text-right font-mono">{h.lot_size}</td>

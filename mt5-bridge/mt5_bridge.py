@@ -178,11 +178,12 @@ def positions():
 def history():
     """Get closed trade history from MT5 (last 30 days)."""
     try:
-        deals = mt5_client.history_deals()
+        trades = mt5_client.history_deals()
     except Mt5ConnectionError as e:
         return jsonify({"status": "error", "error": str(e)}), 503
 
-    return jsonify({"deals": deals, "count": len(deals), "status": "connected"})
+    # Key must be "history" -- MT5Terminal.tsx reads histData.history.
+    return jsonify({"history": trades, "count": len(trades), "status": "connected"})
 
 
 # ────────────────────────────────────────────────

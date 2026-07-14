@@ -27,6 +27,74 @@ class Mt5ConnectionError(RuntimeError):
     or a request to it fails."""
 
 
+# MT5's DEAL_TYPE_BUY / DEAL_TYPE_SELL (and ORDER_TYPE_BUY / ORDER_TYPE_SELL,
+# which share the same 0/1 values) -- deal types >= 2 are non-trade entries
+# (balance, credit, etc.) and are ignored when reconstructing trade history.
+_TYPE_BUY, _TYPE_SELL = 0, 1
+_DEAL_ENTRY_IN, _DEAL_ENTRY_OUT = 0, 1
+
+
+def normalize_position(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate a raw MetaTrader5 position dict (volume, price_open,
+    price_current, type as 0/1, ...) into the field names the frontend
+    (MT5Terminal.tsx's MT5Position) actually expects.
+
+    Without this, the app renders MT5's own field names directly: `direction`
+    is always undefined (MT5 has no such field, only an int `type`), so
+    `pos.direction.toUpperCase()` throws on every render once a real position
+    exists -- which, on a page that polls every 5s, looks like the page
+    repeatedly crashing/reloading.
+    """
+    return {
+        "ticket": str(raw.get("ticket", "")),
+        "symbol": raw.get("symbol", ""),
+        "direction": "long" if raw.get("type") == _TYPE_BUY else "short",
+        "lot_size": raw.get("volume", 0),
+        "open_price": raw.get("price_open", 0),
+        "current_price": raw.get("price_current"),
+        "sl": raw.get("sl", 0),
+        "tp": raw.get("tp", 0),
+        "profit": raw.get("profit", 0),
+        "swap": raw.get("swap", 0),
+    }
+
+
+def pair_deals_into_trades(deals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Reconstruct closed-trade records from MT5's deal ledger.
+
+    MetaTrader5's history_deals_get() returns individual deals, not trades:
+    opening and closing a position each produce a separate deal, linked by
+    `position_id`. This pairs the entry (open) and exit (close) deal of each
+    position into the single open/close record the frontend expects
+    (MT5HistoryTrade), and normalizes field names the same way
+    normalize_position does. Positions without a closing deal in the queried
+    window (i.e. still open) are omitted.
+    """
+    by_position: Dict[Any, Dict[str, Any]] = {}
+    for d in deals:
+        if d.get("type") not in (_TYPE_BUY, _TYPE_SELL):
+            continue  # skip balance/credit/other non-trade ledger entries
+        trade = by_position.setdefault(d.get("position_id"), {"profit": 0.0})
+        if d.get("entry") == _DEAL_ENTRY_IN:
+            trade["ticket"] = str(d.get("position_id", ""))
+            trade["symbol"] = d.get("symbol", "")
+            trade["direction"] = "long" if d.get("type") == _TYPE_BUY else "short"
+            trade["lot_size"] = d.get("volume", 0)
+            trade["open_price"] = d.get("price", 0)
+        else:  # DEAL_ENTRY_OUT / OUT_BY
+            trade["close_price"] = d.get("price", 0)
+            trade["profit"] += d.get("profit", 0) or 0
+            ts = d.get("time")
+            trade["closed_at"] = datetime.fromtimestamp(ts).isoformat() if ts else None
+            trade.setdefault("ticket", str(d.get("position_id", "")))
+            trade.setdefault("symbol", d.get("symbol", ""))
+            trade.setdefault("lot_size", d.get("volume", 0))
+
+    trades = [t for t in by_position.values() if "close_price" in t]
+    trades.sort(key=lambda t: t.get("closed_at") or "", reverse=True)
+    return trades
+
+
 class Mt5Client:
     """Owns the single MetaTrader5 terminal connection for this process."""
 
@@ -112,7 +180,7 @@ class Mt5Client:
         if positions is None:
             self._mark_disconnected()
             raise Mt5ConnectionError(f"positions_get() failed: {mt5.last_error()}")
-        return [p._asdict() for p in positions]
+        return [normalize_position(p._asdict()) for p in positions]
 
     def history_deals(self, days: int = 30) -> List[Dict[str, Any]]:
         self._ensure_connected()
@@ -121,7 +189,7 @@ class Mt5Client:
         if deals is None:
             self._mark_disconnected()
             raise Mt5ConnectionError(f"history_deals_get() failed: {mt5.last_error()}")
-        return [d._asdict() for d in deals]
+        return pair_deals_into_trades([d._asdict() for d in deals])
 
     def send_order(
         self,
