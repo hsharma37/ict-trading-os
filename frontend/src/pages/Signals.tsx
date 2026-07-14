@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { signalsApi } from '@/api/client'
@@ -51,7 +52,7 @@ interface SignalResponse {
   htf_bias?: string
 }
 
-const SYMBOLS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
+const SYMBOLS = SUPPORTED_SYMBOLS
 
 const qualityBadge = (quality: string) => {
   switch (quality) {

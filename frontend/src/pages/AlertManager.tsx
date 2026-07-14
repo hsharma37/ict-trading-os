@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { alertsApi } from '@/api/client'
@@ -19,7 +20,7 @@ interface Alert {
   created_at: string
 }
 
-const INSTRUMENTS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
+const INSTRUMENTS = SUPPORTED_SYMBOLS
 
 export default function AlertManager() {
   const [alerts, setAlerts] = useState<Alert[]>([])
