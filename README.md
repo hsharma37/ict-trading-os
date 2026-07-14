@@ -82,13 +82,15 @@ and P&L, and **close / modify SL-TP / partial-close work from any of them**
 - **What's Up:** per-position SL→entry→TP progress-bar visualization + management.
 
 ### 🧠 Knowledge base (ICT sources)
-- Add sources by **YouTube URL** or **pasted transcript**; chunked, embedded, and
-  searchable via **pgvector** semantic search (deterministic fallback when the
-  extension isn't available).
+- Add sources by **YouTube URL** (auto-transcribe) or **pasted transcript**;
+  chunked, embedded, and searchable via **pgvector** semantic search
+  (deterministic fallback when the extension isn't available).
 - Auto-extracts ICT **concepts** (FVG, OB, MSS, liquidity, killzones, …) and a
   reusable **playbook** (setup / trigger / invalidation / management) per source.
-- Note: YouTube blocks caption fetching from cloud/serverless IPs, so on Vercel use
-  the **paste-transcript** path (fetching works from a local/residential machine).
+- **Auto-transcribe works via the MT5 bridge:** YouTube blocks caption/title
+  requests from cloud/serverless IPs, so the app fetches transcripts and titles
+  through the bridge (`/transcript`, `/video-meta`) on the user's residential
+  IP. Requires the bridge running; paste-transcript is always available too.
 
 ### 🎯 ICT analysis, signals & quant
 - **ICT engine:** MSS/BOS, FVG, order blocks, liquidity — single & multi-timeframe.
@@ -125,7 +127,7 @@ and P&L, and **close / modify SL-TP / partial-close work from any of them**
 |---|---|
 | **Market** | `GET /market/price/{sym}`, `/market/prices`, `/market/history/{sym}`, `POST/DELETE /market/manual-price/{sym}` |
 | **MT5** | `GET /mt5/status·account·positions·history·tick/{s}·candles/{s}·symbol/{s}·symbols·orders`; `POST /mt5/trade·close·partial-close·modify·pending·pending/cancel` |
-| **Trades** | `POST /trades`, `GET /trades`, `POST /trades/{id}/close·partial·move-sl-be`, stats |
+| **Trades** | `POST /trades`, `GET /trades`, `POST /trades/{id}/close·partial·move-sl-be`, stats, `DELETE /trades` (reset ledger) |
 | **ICT** | `GET /ict/analyze/{sym}`, `/ict/analyze/multi/{sym}` |
 | **Signals** | `GET /signals/analyze/{sym}`, `/signals/active`, `POST /signals/scan` |
 | **Quant** | `GET /quant/metrics·kelly·coach·trend/{s}·volatility/{s}`, `POST /quant/monte-carlo` |
@@ -231,12 +233,12 @@ The MT5 bridge tests inject a fake `MetaTrader5` module so they run on any OS.
 | Market data | ✅ Single resolver, switchable providers, source/staleness transparency |
 | MT5 execution | ✅ Real orders, close, partial, modify SL/TP, pending; validation + audit |
 | MT5 data | ✅ Live ticks, candles, specs, symbols via the bridge |
-| Connected UI | ✅ Live positions + management on Dashboard, What's Up, Terminal |
+| Connected UI | ✅ Live positions + management (incl. rich per-position viz) on Dashboard, What's Up, Terminal |
 | Auth/security | ✅ X-Api-Key gate + runtime key entry; fail-closed secrets |
 | Telegram | ✅ Connected (app feed + bridge notifications) |
-| Knowledge base | 🟡 Ingest/search/pgvector work; YouTube auto-fetch blocked on cloud IPs (use paste) |
+| Knowledge base | ✅ Ingest/search/pgvector; YouTube auto-transcribe + titles via the bridge (residential IP) |
 | Journal/planner | 🟡 Ledger + analytics exist; deeper plan↔trade↔journal linking pending |
-| Reliability | 🟡 Bridge on a free tunnel — move to Cloudflare Tunnel/VPS for durability |
+| Reliability | 🟡 Bridge on a free **quick** tunnel — URL changes on restart; use a Cloudflare *named* tunnel or VPS for a permanent URL |
 
 See [PROGRESS.md](PROGRESS.md) for the detailed improvement plan.
 
