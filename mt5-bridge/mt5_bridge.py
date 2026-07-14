@@ -8,8 +8,12 @@ MT5_BRIDGE_URL + MT5_BRIDGE_API_KEY on the main app to reach it. See
 .env.example and README.md for full setup.
 """
 import logging
+import threading
+import time
 from datetime import datetime
 from functools import wraps
+
+import requests
 from flask import Flask, request, jsonify
 
 from config import config
@@ -382,10 +386,46 @@ def test_telegram():
 
 
 # ────────────────────────────────────────────────
+# Background: hourly Telegram source-channel poll
+# ────────────────────────────────────────────────
+def _telegram_poll_loop():
+    """Call the app's source-channel poll endpoint on a fixed interval.
+
+    Runs from this always-on bridge so hourly polling works regardless of the
+    app's hosting plan (Vercel Hobby crons can't run sub-daily). Enabled by
+    setting APP_BASE_URL in the bridge's .env.
+    """
+    url = f"{config.app_base_url}/api/telegram/poll-source"
+    interval = max(60, config.app_poll_interval_minutes * 60)
+    headers = {"Authorization": f"Bearer {config.cron_secret}"} if config.cron_secret else {}
+    logger.info(f"Telegram poll scheduler on: every {config.app_poll_interval_minutes}m -> {url}")
+    while True:
+        try:
+            r = requests.get(url, headers=headers, timeout=45)
+            if r.status_code == 200:
+                body = r.json()
+                logger.info(f"Telegram poll ok: {body.get('new_signals', 0)} new from {body.get('channel')}")
+            else:
+                logger.warning(f"Telegram poll HTTP {r.status_code}: {r.text[:200]}")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"Telegram poll failed: {e}")
+        time.sleep(interval)
+
+
+def _start_telegram_scheduler():
+    if not config.app_base_url:
+        logger.info("Telegram poll scheduler off (set APP_BASE_URL to enable hourly polling from the bridge).")
+        return
+    t = threading.Thread(target=_telegram_poll_loop, name="telegram-poll", daemon=True)
+    t.start()
+
+
+# ────────────────────────────────────────────────
 # Main
 # ────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    _start_telegram_scheduler()
     connected = mt5_client.connect()
     if connected:
         logger.info("MT5 terminal connected at startup.")
