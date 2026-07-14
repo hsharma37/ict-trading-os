@@ -13,6 +13,10 @@ class Settings:
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHANNEL_ID: str = os.getenv("TELEGRAM_CHANNEL_ID", "")
     MT5_BRIDGE_URL: str = os.getenv("MT5_BRIDGE_URL", "http://localhost:5001")
+    # MT5 execution guardrails. Empty allowlist -> all configured instruments.
+    MT5_ALLOWED_SYMBOLS: str = os.getenv("MT5_ALLOWED_SYMBOLS", "")
+    MT5_MAX_LOT: float = float(os.getenv("MT5_MAX_LOT", "10") or "10")
+    MT5_REQUIRE_SL: bool = os.getenv("MT5_REQUIRE_SL", "false").lower() == "true"
     # Market data provider selection: "auto" uses OANDA when configured, else Yahoo.
     # Force with "oanda" or "yahoo".
     MARKET_DATA_PROVIDER: str = os.getenv("MARKET_DATA_PROVIDER", "auto").lower()
