@@ -94,6 +94,20 @@ def test_poll_source_endpoint(client, monkeypatch):
     assert resp.json()["ok"] is True
 
 
+def test_poll_source_is_public_even_when_auth_enabled(monkeypatch):
+    """The cron/bridge scheduler can't carry X-Api-Key, so this path must be
+    exempt from the key gate even with AUTH_ENABLED (it's guarded by CRON_SECRET)."""
+    from app.core import auth
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "AUTH_ENABLED", True)
+    monkeypatch.setattr(settings, "API_KEY", "secret")
+    # Exempt regardless of the /api prefix normalization.
+    assert auth.should_require_api_key("GET", "/telegram/poll-source") is False
+    assert auth.should_require_api_key("GET", "/api/telegram/poll-source") is False
+    # A sibling telegram GET is still gated.
+    assert auth.should_require_api_key("GET", "/telegram/signals") is True
+
+
 def test_poll_source_endpoint_requires_secret(client, monkeypatch):
     monkeypatch.setattr(settings, "CRON_SECRET", "s3cret")
     monkeypatch.setattr(httpx, "get", lambda *a, **k: _Resp(SAMPLE_HTML))

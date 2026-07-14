@@ -37,5 +37,14 @@ class BridgeConfig:
     # match MT5_BRIDGE_API_KEY on the main app.
     bridge_api_key: str = os.getenv("MT5_BRIDGE_API_KEY", "")
 
+    # Hourly Telegram source-channel poll driven from this always-on bridge
+    # (Vercel Hobby crons can't run sub-daily). When APP_BASE_URL is set, a
+    # background thread calls <APP_BASE_URL>/api/telegram/poll-source every
+    # APP_POLL_INTERVAL_MINUTES. CRON_SECRET, if set, is sent as a bearer token
+    # and must match the app's CRON_SECRET.
+    app_base_url: str = os.getenv("APP_BASE_URL", "").rstrip("/")
+    app_poll_interval_minutes: int = int(os.getenv("APP_POLL_INTERVAL_MINUTES", "60") or "60")
+    cron_secret: str = os.getenv("CRON_SECRET", "")
+
 
 config = BridgeConfig()

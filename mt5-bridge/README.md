@@ -90,6 +90,24 @@ Cloudflare):
 Both the bridge (`python mt5_bridge.py`) and the tunnel must stay running.
 An always-on Windows VPS avoids keeping a desktop awake.
 
+## Optional: drive the hourly Telegram poll from the bridge
+
+The app polls a public Telegram channel (`TELEGRAM_SOURCE_CHANNEL`, default
+`xxictxx`) for ICT signals. Hosted crons on some plans (e.g. Vercel Hobby) can't
+run hourly, so this always-on bridge can drive the schedule instead. In the
+bridge's `.env`:
+
+```
+APP_BASE_URL=https://your-app.vercel.app
+APP_POLL_INTERVAL_MINUTES=60
+# CRON_SECRET=<same value as the app, only if you set one there>
+```
+
+On start, the bridge logs `Telegram poll scheduler on: every 60m` and calls
+`<APP_BASE_URL>/api/telegram/poll-source` every hour; the app fetches the
+channel's web preview and stores any new posts. Leave `APP_BASE_URL` empty to
+disable. The bridge must be restarted to pick up the change.
+
 ## Endpoints
 
 | Endpoint | Auth | Description |
