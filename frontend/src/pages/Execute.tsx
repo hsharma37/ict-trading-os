@@ -58,6 +58,10 @@ interface LotCalc {
 }
 
 const INSTRUMENTS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
+// Symbols that exist on the MT5 broker (MetaQuotes-Demo) AND have lot-calc
+// config, so live orders actually fill. NQ1!/ES1!/BTCUSD/CL1! are TradingView
+// tickers the broker doesn't have, so they're hidden when MT5 is the target.
+const MT5_INSTRUMENTS = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'NZDUSD', 'XAUUSD']
 
 // Standard 1R distances per instrument (in price terms)
 const R_DISTANCES: Record<string, number> = {
@@ -106,12 +110,22 @@ export default function Execute() {
   // Live MT5 state — when the terminal is connected, orders route to the broker.
   const mt5 = useMt5()
 
+  // Instruments the current execution target can actually trade.
+  const availableInstruments = mt5.connected ? MT5_INSTRUMENTS : INSTRUMENTS
+
   // Prefer the real MT5 account balance for risk sizing when connected.
   useEffect(() => {
     if (mt5.connected && mt5.account?.balance) {
       setAccountBalance(String(Math.round(mt5.account.balance)))
     }
   }, [mt5.connected, mt5.account?.balance])
+
+  // When switching to MT5 execution, drop any symbol the broker can't trade.
+  useEffect(() => {
+    if (mt5.connected && !MT5_INSTRUMENTS.includes(symbol)) {
+      setSymbol('EURUSD')
+    }
+  }, [mt5.connected, symbol])
 
   const fetchOpenTrades = useCallback(async () => {
     try {
@@ -246,19 +260,24 @@ export default function Execute() {
     const direction = side === 'BUY' ? 'long' : 'short'
 
     if (orderType === 'market') {
-      await mt5Api.trade({ symbol, direction, lot_size: lot, stop_loss: sl, take_profit: tp })
-      setSuccess(`✅ Live MT5 market order sent: ${symbol} ${direction} ${lot} lots`)
+      const res = await mt5Api.trade({ symbol, direction, lot_size: lot, stop_loss: sl, take_profit: tp })
+      const d = res.data || {}
+      const at = d.price ? ` @ ${d.price}` : ''
+      const ref = d.order ? ` (ticket ${d.order})` : ''
+      setSuccess(`✅ Live MT5 market order filled: ${symbol} ${direction} ${lot} lots${at}${ref}`)
     } else {
       const price = parseFloat(entryPrice)
       if (!price || price <= 0) {
         setError('Entry price is required for a pending (limit/stop) order')
         return
       }
-      await mt5Api.pending({
+      const res = await mt5Api.pending({
         symbol, direction, order_kind: orderType, volume: lot, price,
         stop_loss: sl, take_profit: tp,
       })
-      setSuccess(`✅ Live MT5 ${orderType} order placed: ${symbol} ${direction} ${lot} lots @ ${price}`)
+      const d = res.data || {}
+      const ref = d.order ? ` (ticket ${d.order})` : ''
+      setSuccess(`✅ Live MT5 ${orderType} order placed: ${symbol} ${direction} ${lot} lots @ ${price}${ref}`)
     }
     // Refresh live positions/orders across the app.
     mt5.refetch?.()
@@ -387,7 +406,7 @@ export default function Execute() {
                   onChange={(e) => setSymbol(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md bg-background"
                 >
-                  {INSTRUMENTS.map((s) => (
+                  {availableInstruments.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
