@@ -1,6 +1,7 @@
 """
 Playground Router — Live market data, price charts, and instrument analysis.
 """
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
@@ -8,6 +9,33 @@ from app.services.price_service import price_service
 from app.services.instrument_config import get_all_instruments, INSTRUMENTS
 
 router = APIRouter(prefix="/playground", tags=["Playground"])
+
+# Prices older than this are flagged stale so the UI never shows them as live.
+STALE_AFTER_SECONDS = 120
+
+
+def derive_source(label: str) -> str:
+    """Classify a price's provenance from its label suffix.
+
+    "synthetic" is demo/fallback data and must never be shown as live;
+    "scraped" is a best-effort alternate source; otherwise it's the Yahoo feed.
+    """
+    l = (label or "").lower()
+    if "(synthetic)" in l:
+        return "synthetic"
+    if any(s in l for s in ("(kitco)", "(gold.org)", "(investing.com)", "(scraped)")):
+        return "scraped"
+    return "yahoo"
+
+
+def is_stale(timestamp: str, max_age_s: int = STALE_AFTER_SECONDS) -> bool:
+    """True when the price timestamp is older than max_age_s."""
+    try:
+        ts = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+        now = datetime.now(ts.tzinfo) if ts.tzinfo else datetime.utcnow()
+        return (now - ts).total_seconds() > max_age_s
+    except (ValueError, TypeError):
+        return False
 
 
 class PriceResponse(BaseModel):
@@ -24,6 +52,8 @@ class PriceResponse(BaseModel):
     timestamp: str
     kind: str
     digits: int
+    source: str = "yahoo"
+    stale: bool = False
 
 
 class AllPricesResponse(BaseModel):
@@ -71,6 +101,8 @@ def get_all_prices():
                 timestamp=p.timestamp,
                 kind=p.kind,
                 digits=p.digits,
+                source=derive_source(p.label),
+                stale=is_stale(p.timestamp),
             )
             for p in prices.values()
         ],
@@ -98,6 +130,8 @@ def get_price(symbol: str):
         timestamp=data.timestamp,
         kind=data.kind,
         digits=data.digits,
+        source=derive_source(data.label),
+        stale=is_stale(data.timestamp),
     )
 
 
