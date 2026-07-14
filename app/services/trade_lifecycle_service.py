@@ -444,6 +444,10 @@ class TradeLifecycleService:
 
     def get_open_trades(self) -> List[Dict[str, Any]]:
         """Get all open trades with live unrealized PnL. Auto-check TP/SL hits."""
+        from app.services.mt5_trades_service import mt5_trades_service
+        if mt5_trades_service.is_active():
+            return mt5_trades_service.get_open_trades()
+
         # Run auto-management checks first
         self.check_tp_hits()
         # Return updated trades
@@ -451,7 +455,15 @@ class TradeLifecycleService:
         return [t for t in trades if t["status"] != "CLOSED"]
 
     def get_trade_stats(self) -> Dict[str, Any]:
-        """Compute comprehensive trade statistics."""
+        """Compute comprehensive trade statistics.
+
+        When the MT5 terminal is the active base (bridge reachable + connected),
+        stats come straight from the broker so Dashboard/Analytics mirror the
+        terminal; otherwise fall back to the internal ledger."""
+        from app.services.mt5_trades_service import mt5_trades_service
+        if mt5_trades_service.is_active():
+            return mt5_trades_service.get_stats()
+
         trades = db.get_collection("trades")
         closed = [t for t in trades if t.get("status") == "CLOSED"]
         open_trades = [t for t in trades if t.get("status") != "CLOSED"]
@@ -647,6 +659,10 @@ class TradeLifecycleService:
 
     def get_kelly_criterion(self) -> Dict:
         """Calculate Kelly Criterion from trade history."""
+        from app.services.mt5_trades_service import mt5_trades_service
+        if mt5_trades_service.is_active():
+            return mt5_trades_service.get_kelly()
+
         trades = db.get_collection("trades")
         closed = [t for t in trades if t.get("status") == "CLOSED"]
         from app.services.quant_service import quant_service
@@ -658,6 +674,10 @@ class TradeLifecycleService:
 
     def get_recent_trades(self, limit: int = 10) -> List[Dict]:
         """Get recent closed trades."""
+        from app.services.mt5_trades_service import mt5_trades_service
+        if mt5_trades_service.is_active():
+            return mt5_trades_service.get_recent_trades(limit)
+
         trades = db.get_collection("trades")
         closed = sorted([t for t in trades if t.get("status") == "CLOSED"], key=lambda x: x.get("created_at", ""), reverse=True)
         return closed[:limit]

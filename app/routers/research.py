@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException
 from typing import Optional
 from app.services.research_service import research_service
 from app.services.instrument_config import get_instrument, get_all_instruments
+from app.services.mt5_trades_service import mt5_trades_service
 
 router = APIRouter(prefix="/research", tags=["Research"])
 
@@ -41,9 +42,12 @@ def get_correlation():
 
 @router.get("/summary")
 def get_market_summary():
-    """Get market-wide summary."""
+    """Get market-wide summary, annotated with the user's live MT5 holdings."""
     try:
-        return research_service.get_market_summary()
+        summary = research_service.get_market_summary()
+        if isinstance(summary, dict) and mt5_trades_service.is_active():
+            summary["open_positions"] = mt5_trades_service.get_open_trades()
+        return summary
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

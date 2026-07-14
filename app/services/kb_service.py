@@ -55,6 +55,21 @@ class KBService:
         lower = (query or "").lower()
         return any(term in lower for term in self.EXECUTION_TERMS)
 
+    # Terms that mean the user is asking about their OWN live account/trades,
+    # which the knowledge base can't answer but the MT5 terminal can.
+    ACCOUNT_TERMS = (
+        "my position", "my positions", "my trade", "my trades", "open position",
+        "open positions", "open trade", "open trades", "my account", "my balance",
+        "my equity", "my pnl", "my p&l", "my profit", "my loss", "my drawdown",
+        "my win rate", "current position", "current trade", "am i in", "how am i doing",
+        "how are my", "what am i holding", "what do i hold", "my performance",
+        "floating", "unrealized", "my exposure", "portfolio",
+    )
+
+    def _is_account_query(self, query: str) -> bool:
+        lower = (query or "").lower()
+        return any(term in lower for term in self.ACCOUNT_TERMS)
+
     def _canonical_url(self, url: str, video_id: Optional[str] = None) -> str:
         if not url:
             return ""
@@ -725,11 +740,75 @@ class KBService:
             "last_source": sources[0] if sources else None,
         }
 
+    def _answer_from_account(self, query: str, account_ctx: str, use_vectors: bool, top_k: int) -> Dict[str, Any]:
+        """Answer an account/trades question from the live MT5 snapshot, with any
+        relevant KB passages appended as (educational) coaching context."""
+        kb_notes = ""
+        sources: List[Dict[str, Any]] = []
+        try:
+            hits = vector_store.search(query, top_k=top_k) if use_vectors else []
+        except Exception:
+            hits = []
+        supported = [h for h in hits if self._hit_has_query_support(query, h)]
+        if supported:
+            note_lines = []
+            for i, hit in enumerate(supported[:3], 1):
+                chunk = hit.get("chunk", {})
+                source = self.find_source(chunk.get("source_id", ""))
+                citation = self._citation_from_hit(hit)
+                text = (chunk.get("chunk_text", "") or "").strip()
+                snippet = text.split(".")[0][:200] if text else ""
+                note_lines.append(f"[{i}] {source.get('title', 'Unknown')}: {snippet}...")
+                sources.append({
+                    "id": source.get("id"),
+                    "title": source.get("title"),
+                    "url": source.get("url"),
+                    "score": hit.get("score", 0),
+                    "timestamp": citation.get("timestamp"),
+                    "span": citation.get("span"),
+                })
+            kb_notes = "\n".join(note_lines)
+
+        answer = (
+            f"{account_ctx}\n\n---\n\nYour question: {query}\n\n"
+            "Answered from your live MT5 terminal (the figures above are your real "
+            "broker account, not the knowledge base)."
+        )
+        if kb_notes:
+            answer += f"\n\nRelevant notes from your knowledge base (educational context):\n{kb_notes}"
+
+        return {
+            "answer": answer,
+            "sources": sources,
+            "citations": [],
+            "confidence": "high",
+            "missing_context": [],
+            "refused": False,
+            "safety_disclaimer": (
+                "Educational only. This reports your live account state; it is not "
+                "advice to open, hold, or close any position."
+            ),
+            "context_chunks": len(sources),
+            "query": query,
+            "source": "mt5_account",
+        }
+
     def chat_answer(self, query: str, use_vectors: bool = True, top_k: int = 5) -> Dict[str, Any]:
         """
         Generate a RAG-based answer from the knowledge base.
         Uses vector search to find relevant chunks, then builds a prompt.
+
+        If the question is about the user's own live account/trades, answer it
+        directly from the MT5 terminal (the knowledge base has no such data),
+        and blend in any relevant KB context as coaching notes.
         """
+        from app.services.mt5_trades_service import mt5_trades_service
+        account_ctx = None
+        if self._is_account_query(query) and mt5_trades_service.is_active():
+            account_ctx = mt5_trades_service.get_context_block()
+        if account_ctx:
+            return self._answer_from_account(query, account_ctx, use_vectors, top_k)
+
         # Retrieve relevant chunks
         if use_vectors:
             hits = vector_store.search(query, top_k=top_k)
