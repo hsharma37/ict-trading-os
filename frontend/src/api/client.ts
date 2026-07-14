@@ -2,6 +2,31 @@ import axios from 'axios'
 
 const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : '/api')
 
+const API_KEY_STORAGE = 'ictos_api_key'
+
+/** Owner-supplied API key, entered at runtime and kept only in this browser.
+ *  It is never baked into the bundle or committed, per the deployment policy. */
+export function getApiKey(): string {
+  try {
+    return localStorage.getItem(API_KEY_STORAGE) || ''
+  } catch {
+    return ''
+  }
+}
+
+export function setApiKey(key: string): void {
+  try {
+    if (key) localStorage.setItem(API_KEY_STORAGE, key)
+    else localStorage.removeItem(API_KEY_STORAGE)
+  } catch {
+    /* ignore storage errors (private mode, etc.) */
+  }
+}
+
+export function clearApiKey(): void {
+  setApiKey('')
+}
+
 export const apiClient = axios.create({
   baseURL: apiUrl,
   headers: {
@@ -9,6 +34,25 @@ export const apiClient = axios.create({
   },
   timeout: 30000,
 })
+
+// Attach the owner's API key to every request so production-protected routes
+// (trades, plans, settings, alerts, mutations, ...) authenticate instead of 401ing.
+apiClient.interceptors.request.use((config) => {
+  const key = getApiKey()
+  if (key) config.headers['X-Api-Key'] = key
+  return config
+})
+
+// On 401, broadcast so the app can prompt for (or update) the API key.
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ictos:unauthorized'))
+    }
+    return Promise.reject(error)
+  }
+)
 
 // KB-specific API helpers
 export const kbApi = {

@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
 import { playgroundApi } from '@/api/client'
+import ApiKeyBanner from './ApiKeyBanner'
 import {
   LayoutDashboard,
   ArrowRightLeft,
@@ -78,6 +79,7 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
+      <ApiKeyBanner />
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
