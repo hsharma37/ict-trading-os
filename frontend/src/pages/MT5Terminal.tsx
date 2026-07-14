@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { mt5Api } from '@/api/client'
@@ -181,7 +182,7 @@ export default function MT5Terminal() {
                   value={tradeForm.symbol}
                   onChange={(e) => setTradeForm({ ...tradeForm, symbol: e.target.value })}
                 >
-                  {['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD', 'BTCUSD', 'NQ1!', 'ES1!', 'CL1!'].map((s) => (
+                  {SUPPORTED_SYMBOLS.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>

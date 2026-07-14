@@ -42,7 +42,8 @@ def signal_stats(symbol: str):
 
 @router.post("/scan")
 def scan_all():
-    symbols = ["NQ1!", "ES1!", "EURUSD", "GBPUSD", "XAUUSD", "USDJPY", "BTCUSD", "CL1!"]
+    from app.services.instrument_config import get_all_instruments
+    symbols = list(get_all_instruments().keys())
     held = _held_map()
     results = []
     for sym in symbols:

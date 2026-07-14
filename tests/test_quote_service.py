@@ -95,3 +95,17 @@ def test_single_and_bulk_price_endpoints_agree(client, monkeypatch):
     bulk_xau = bulk["prices"][0]
     assert single["source"] == bulk_xau["source"] == "mt5"
     assert single["price"] == bulk_xau["price"] == 4096.7
+
+
+def test_price_feed_restricted_to_configured_symbols(client):
+    """The feed must ignore symbols outside the app's instrument list."""
+    body = client.get("/market/prices?symbols=XAUUSD,NQ1!,BTCUSD,FOOBAR").json()
+    returned = {p["symbol"] for p in body["prices"]}
+    assert "XAUUSD" in returned
+    assert returned.isdisjoint({"NQ1!", "BTCUSD", "FOOBAR"})
+
+
+def test_price_feed_default_is_the_six_supported(client):
+    body = client.get("/market/prices").json()
+    returned = {p["symbol"] for p in body["prices"]}
+    assert returned == {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "NZDUSD", "XAUUSD"}

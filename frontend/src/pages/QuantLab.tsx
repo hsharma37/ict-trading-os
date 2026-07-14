@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { researchApi, quantApi } from '@/api/client'
@@ -61,7 +62,7 @@ const AGENTS = [
   { key: 'session', label: 'Session Analyzer', icon: Clock, desc: 'Best trading hours per instrument' },
 ]
 
-const SYMBOLS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
+const SYMBOLS = SUPPORTED_SYMBOLS
 
 export default function QuantLab() {
   const [instruments, setInstruments] = useState<InstrumentAnalysis[]>([])

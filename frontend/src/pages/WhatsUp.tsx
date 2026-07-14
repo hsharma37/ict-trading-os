@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -328,7 +329,7 @@ export default function WhatsUp() {
               onChange={(e) => setManualSymbol(e.target.value)}
             >
               <option value="">Select symbol</option>
-              {['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'NQ1!', 'ES1!', 'CL1!', 'BTCUSD'].map((s) => (
+              {SUPPORTED_SYMBOLS.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>

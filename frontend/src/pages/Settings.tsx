@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { apiClient } from '@/api/client'
@@ -26,7 +27,7 @@ const DEFAULTS: AppSettings = {
   layout: 'default',
 }
 
-const SYMBOLS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
+const SYMBOLS = SUPPORTED_SYMBOLS
 
 interface BridgeConfig {
   mt5_bridge_url: string

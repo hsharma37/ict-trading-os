@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { signalsApi } from '@/api/client'
@@ -23,7 +24,7 @@ interface Signal {
   expires_at: string
 }
 
-const INSTRUMENTS = ['NQ1!', 'ES1!', 'EURUSD', 'GBPUSD', 'XAUUSD', 'USDJPY', 'BTCUSD', 'CL1!']
+const INSTRUMENTS = SUPPORTED_SYMBOLS
 
 export default function Suggestions() {
   const [signals, setSignals] = useState<Signal[]>([])
