@@ -207,8 +207,14 @@ cd mt5-bridge
 pip install -r requirements.txt        # installs MetaTrader5 on Windows
 copy .env.example .env                  # fill MT5_LOGIN/PASSWORD/SERVER + MT5_BRIDGE_API_KEY
 python mt5_bridge.py
-ngrok http 5000                         # or Cloudflare Tunnel (stable URL, recommended)
+cloudflared tunnel --url http://localhost:5000   # or ngrok; paste the URL in Settings
 ```
+
+> **To place orders, enable Algo Trading in the MT5 terminal** (Ctrl+E → button
+> green). It's a MetaQuotes safety switch no API can toggle; while off, every
+> order is rejected (the app shows a clear message). Order execution auto-selects
+> a broker-supported filling mode, and `POST /api/mt5/order-check` validates an
+> order without placing it (for safe diagnosis).
 
 Then set `MT5_BRIDGE_URL` (the tunnel URL) and `MT5_BRIDGE_API_KEY` (matching the
 bridge) on the app, and `MARKET_DATA_PROVIDER=mt5` to price from the broker feed.

@@ -22,6 +22,12 @@ connected when it isn't.
 
 1. Install and log into **MetaTrader 5** desktop with your broker's demo or
    live credentials, and leave it running.
+   - **Enable Algo Trading** (required to place orders): click the **Algo
+     Trading** toolbar button so it's green, or press **Ctrl+E**, or
+     *Tools → Options → Expert Advisors → Allow Algorithmic Trading*. While
+     this is off, MetaQuotes rejects every order the bridge sends (retcode
+     10027) — no API can toggle it, so it must be enabled once here. The app
+     surfaces a clear "AutoTrading is disabled…" message when it's off.
 2. Install Python 3.10+ and this bridge's dependencies:
    ```powershell
    cd mt5-bridge
