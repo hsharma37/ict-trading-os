@@ -122,7 +122,7 @@ INSTRUMENTS: Dict[str, Dict[str, Any]] = {
         "kind": "metal",
         "digits": 2,
         "pip_digits": 2,
-        "pip_val": 10.0,
+        "pip_val": 1.0,  # gold: $1 per 0.01 move per 1.0 lot (100 oz) — not the FX $10
         "mult": 100,
         "contract_size": 100,
         "leverage": 10,

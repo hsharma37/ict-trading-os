@@ -112,23 +112,35 @@ class Mt5TradesService:
         # Risk = SL distance × the money value of one price unit per lot × lots.
         # Deterministic (the old live-P&L-ratio approach produced nonsense like
         # $93M risk when captured at a tiny price move). Prefer the broker's real
-        # tick value; fall back to the static contract spec.
+        # tick value, but sanity-check it against the static contract spec — a
+        # broker that understates a symbol's tick_value/tick_size ratio (seen on
+        # XAUUSD) would otherwise inflate the lot/deflate the risk. For USD-quoted
+        # symbols the static contract spec is exact, so trust the broker figure
+        # only within a 0.5×–2× band of static; for non-USD-quoted pairs (USDCAD,
+        # USDJPY) the broker value is the authority and is taken as-is.
         symbol = str(pos.get("symbol", "")).upper()
+        usd_quoted = symbol.endswith("USD")
+        from app.services.instrument_config import get_instrument
+        cfg = get_instrument(symbol)
+        static_per_lot = None
+        if cfg and cfg.get("tick_size"):
+            try:
+                per_price_per_lot = float(cfg["tick_value"]) / float(cfg["tick_size"])
+                static_per_lot = dist * per_price_per_lot
+            except (TypeError, ValueError, ZeroDivisionError):
+                static_per_lot = None
         try:
             from app.services.broker_specs import money_per_lot
             mpl = money_per_lot(symbol, dist)  # money for `dist` move, per 1.0 lot
             if mpl and mpl > 0:
-                return round(mpl * lot, 2)
+                if usd_quoted and static_per_lot and not (0.5 * static_per_lot <= mpl <= 2.0 * static_per_lot):
+                    pass  # implausible broker value — fall through to static
+                else:
+                    return round(mpl * lot, 2)
         except Exception:
             pass
-        from app.services.instrument_config import get_instrument
-        cfg = get_instrument(symbol)
-        if cfg and cfg.get("tick_size"):
-            try:
-                per_price_per_lot = float(cfg["tick_value"]) / float(cfg["tick_size"])
-                return round(dist * per_price_per_lot * lot, 2)
-            except (TypeError, ValueError, ZeroDivisionError):
-                return None
+        if static_per_lot and static_per_lot > 0:
+            return round(static_per_lot * lot, 2)
         return None
 
     @staticmethod

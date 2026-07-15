@@ -105,6 +105,11 @@ export default function Execute() {
   const [priceLoading, setPriceLoading] = useState(false)
   const [orderType, setOrderType] = useState<OrderType>('market')
   const [manualLot, setManualLot] = useState('')
+  // Scale-out is OPT-IN. When off, one market order with a single TP is placed.
+  // When on, the lot is split into one broker position per TP (TP1/TP2/TP3).
+  // Previously this fired automatically whenever TP2/TP3 were populated — and
+  // since auto-fill fills all three, a single click silently opened 2-3 orders.
+  const [scaleOut, setScaleOut] = useState(false)
 
   // Live MT5 state — when the terminal is connected, orders route to the broker.
   const mt5 = useMt5()
@@ -179,16 +184,18 @@ export default function Execute() {
     const rDist = getRDistance(symbol, price)
     const digits = symbol === 'BTCUSD' ? 0 : symbol === 'USDJPY' ? 3 : symbol === 'EURUSD' || symbol === 'GBPUSD' ? 5 : 2
 
+    // Only auto-fill TP2/TP3 when the user has opted into scaling out; otherwise
+    // leave them blank so a single order is placed (no surprise extra positions).
     if (side === 'BUY') {
       setStopLoss((price - rDist).toFixed(digits))
       setTp1((price + rDist).toFixed(digits))
-      setTp2((price + 2 * rDist).toFixed(digits))
-      setTp3((price + 3 * rDist).toFixed(digits))
+      setTp2(scaleOut ? (price + 2 * rDist).toFixed(digits) : '')
+      setTp3(scaleOut ? (price + 3 * rDist).toFixed(digits) : '')
     } else {
       setStopLoss((price + rDist).toFixed(digits))
       setTp1((price - rDist).toFixed(digits))
-      setTp2((price - 2 * rDist).toFixed(digits))
-      setTp3((price - 3 * rDist).toFixed(digits))
+      setTp2(scaleOut ? (price - 2 * rDist).toFixed(digits) : '')
+      setTp3(scaleOut ? (price - 3 * rDist).toFixed(digits) : '')
     }
   }
 
@@ -284,10 +291,10 @@ export default function Execute() {
     }
     const direction = side === 'BUY' ? 'long' : 'short'
 
-    // Multiple take-profits on a market order → scale out: one broker position
-    // per TP (an MT5 position has only one TP, so a single order would close
-    // entirely at TP1). Each leg exits at its own target; SL is shared.
-    if (orderType === 'market' && allTps.length >= 2) {
+    // Scale out ONLY when explicitly enabled: one broker position per TP (an MT5
+    // position has only one TP). Without the opt-in, a single market order with
+    // TP1 is placed — so the user never gets surprise extra positions.
+    if (orderType === 'market' && scaleOut && allTps.length >= 2) {
       const res = await mt5Api.scaledTrade({
         symbol, direction, lot_size: lot, take_profits: allTps.join(','), stop_loss: sl,
       })
@@ -414,9 +421,9 @@ export default function Execute() {
       {mt5.connected && (
         <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-emerald-300/90 text-xs">
           Orders below are sent <strong>directly to your MT5 account</strong>. Market orders fill immediately;
-          limit/stop orders rest as pending until price is reached. <strong>Set TP1 + TP2/TP3 to scale out</strong> —
-          the lot is split into one position per target (each exits at its own TP), since a single MT5 position
-          can only hold one take-profit. Guardrails (symbol allow-list, max lot, side-aware SL/TP) are enforced server-side.
+          limit/stop orders rest as pending until price is reached. By default <strong>one order</strong> is placed at TP1;
+          tick <strong>Scale out</strong> to split the lot into one position per target (each exits at its own TP), since a
+          single MT5 position can only hold one take-profit. Guardrails (symbol allow-list, max lot, side-aware SL/TP) are enforced server-side.
         </div>
       )}
 
@@ -571,6 +578,32 @@ export default function Execute() {
                 />
               </div>
             </div>
+
+            {orderType === 'market' && (
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={scaleOut}
+                  onChange={(e) => {
+                    const on = e.target.checked
+                    setScaleOut(on)
+                    // Fill or clear TP2/TP3 to match what will actually be placed.
+                    const ep = parseFloat(entryPrice)
+                    if (ep > 0) {
+                      const rDist = getRDistance(symbol, ep)
+                      const digits = symbol === 'BTCUSD' ? 0 : symbol === 'USDJPY' ? 3 : symbol === 'EURUSD' || symbol === 'GBPUSD' ? 5 : 2
+                      const sign = side === 'BUY' ? 1 : -1
+                      setTp2(on ? (ep + sign * 2 * rDist).toFixed(digits) : '')
+                      setTp3(on ? (ep + sign * 3 * rDist).toFixed(digits) : '')
+                    }
+                  }}
+                />
+                <span>
+                  <strong>Scale out</strong> — split the lot into one position per TP (opens multiple orders).
+                  {scaleOut ? ' On: TP1/TP2/TP3 each get their own position.' : ' Off: one order at TP1.'}
+                </span>
+              </label>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
