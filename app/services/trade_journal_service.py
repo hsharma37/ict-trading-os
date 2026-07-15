@@ -51,16 +51,13 @@ class TradeJournalService:
             entry["note"] = self._auto_note(entry)  # auto-journal each trade
             if existing:
                 patch = {}
-                # Backfill R/risk once captured later (was None at first sight).
-                if existing.get("r") is None and entry.get("r") is not None:
-                    patch["r"] = entry["r"]
-                    patch["risk_money"] = entry["risk_money"]
-                # Backfill the auto-note for entries journaled before notes existed.
-                if not existing.get("note"):
-                    patch["note"] = entry["note"]
-                elif "r" in patch:  # R changed -> regenerate the note
+                # Refresh R/risk/SL from the (now correct) computation — this also
+                # overwrites the old garbage values from the buggy risk method.
+                for k in ("r", "risk_money", "sl", "tp"):
+                    if entry.get(k) is not None and existing.get(k) != entry.get(k):
+                        patch[k] = entry[k]
+                if patch or not existing.get("note"):
                     patch["note"] = self._auto_note({**existing, **patch})
-                if patch:
                     db.update(_COLL, ticket, patch)
                 continue
             entry["journaled_at"] = _now()

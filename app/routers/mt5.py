@@ -260,6 +260,12 @@ async def get_history():
     return await _bridge_get("/history")
 
 
+@router.get("/history-summary", summary="Balance reconciliation (deposits vs realized)")
+async def get_history_summary():
+    """Diagnose missing trades: balance ≈ deposits + realized P&L + floating."""
+    return await _bridge_get("/history-summary")
+
+
 # ── Generic proxy helpers for the read/manage endpoints ──────────
 
 async def _bridge_get(path: str, params: dict = None, timeout: float = 20, retries: int = 2):

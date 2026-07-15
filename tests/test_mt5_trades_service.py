@@ -121,35 +121,34 @@ def test_risk_money_and_open_r(monkeypatch):
     assert mt5_trades_service._normalize_open(pos)["r"] == 0.5
 
 
-def test_closed_r_uses_recorded_risk(monkeypatch):
+def test_fixed_risk_per_trade_drives_r(monkeypatch):
     _wire(monkeypatch)
     from app.core.database import db
-    # Simulate risk captured while the position (ticket 9) was open.
-    db.insert("mt5_position_risk", {"id": "9", "risk_money": 35.9})
+    db.insert("settings", {"id": "global", "risk_per_trade": 70})  # user risks $70/trade
     closed = mt5_trades_service._normalize_closed(
         {"ticket": "9", "symbol": "XAUUSD", "direction": "short", "lot_size": 0.2,
-         "open_price": 4063.3, "close_price": 4059.71, "profit": 71.8, "closed_at": "2026-07-15T01:00:01"})
-    assert closed["r"] == round(71.8 / 35.9, 2)  # ~2.0R
-    assert closed["risk_money"] == 35.9
+         "open_price": 4063.3, "close_price": 4059.71, "profit": 140.0, "closed_at": "2026-07-15T01:00:01"})
+    assert closed["r"] == 2.0  # 140 / 70
+    assert closed["risk_money"] == 70
 
 
-def test_closed_r_is_none_without_recorded_risk(monkeypatch):
+def test_closed_r_from_recovered_sl(monkeypatch):
+    _wire(monkeypatch)
+    # XAUUSD: SL 6.7 away, 0.2 lots -> risk ≈ 6.7 * 100 * 0.2 = $134 (static spec).
+    closed = mt5_trades_service._normalize_closed(
+        {"ticket": "9", "symbol": "XAUUSD", "direction": "short", "lot_size": 0.2,
+         "open_price": 4063.3, "sl": 4070.0, "close_price": 4059.71, "profit": 134.0,
+         "closed_at": "2026-07-15T01:00:01"})
+    assert closed["risk_money"] == 134.0
+    assert closed["r"] == 1.0
+
+
+def test_closed_r_is_none_without_risk_or_sl(monkeypatch):
     _wire(monkeypatch)
     closed = mt5_trades_service._normalize_closed(
         {"ticket": "999", "symbol": "EURUSD", "direction": "long", "lot_size": 0.1,
          "open_price": 1.1, "close_price": 1.11, "profit": 10.0, "closed_at": "2026-07-15T01:00:01"})
-    assert closed["r"] is None  # honest: not a fabricated 0
-
-
-def test_stats_r_only_over_tracked_trades(monkeypatch):
-    _wire(monkeypatch)
-    from app.core.database import db
-    # Record risk for one of the two closed history tickets (9), not the other (8).
-    db.insert("mt5_position_risk", {"id": "9", "risk_money": 35.9})
-    s = mt5_trades_service.get_stats()
-    assert s["r_tracked_trades"] == 1
-    assert s["total_r"] == round(71.8 / 35.9, 2)
-    assert s["avg_r"] == s["total_r"]  # only one tracked
+    assert closed["r"] is None  # no fixed risk, no SL -> honest "—"
 
 
 def test_trade_lifecycle_delegates_to_mt5(monkeypatch):

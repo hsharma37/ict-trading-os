@@ -11,6 +11,7 @@ interface AppSettings {
   theme: string
   default_symbol: string
   risk_pct: number
+  risk_per_trade: number
   account_balance: number
   auto_trade: boolean
   notifications: boolean
@@ -21,6 +22,7 @@ const DEFAULTS: AppSettings = {
   theme: 'dark',
   default_symbol: 'EURUSD',
   risk_pct: 1.0,
+  risk_per_trade: 0,
   account_balance: 10000.0,
   auto_trade: false,
   notifications: true,
@@ -190,6 +192,21 @@ export default function SettingsPage() {
                 onChange={(e) => updateField('risk_pct', parseFloat(e.target.value))}
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm"
               />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Fixed risk per trade ($)</label>
+              <input
+                type="number"
+                step="1"
+                min="0"
+                value={settings.risk_per_trade}
+                onChange={(e) => updateField('risk_per_trade', parseFloat(e.target.value) || 0)}
+                className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                If you risk the same $ on every trade, set it here — R is computed as P&L ÷ this
+                (e.g. 70 → a $140 win is 2R). Leave 0 to derive R from each trade's stop-loss.
+              </p>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Account Balance ($)</label>
