@@ -279,6 +279,17 @@ class TelegramService:
             })
         return messages
 
+    def _prune_low_conf(self) -> int:
+        """Remove already-stored low-confidence, image-less, un-actioned signals so
+        the feed doesn't pile up with noise (respects 'reject all low confidence')."""
+        removed = 0
+        for s in db.get_collection("telegram_signals"):
+            if (s.get("confidence") == "low" and not s.get("has_image")
+                    and not s.get("acknowledged") and not s.get("planned") and not s.get("auto_traded")):
+                if db.delete("telegram_signals", s["id"]):
+                    removed += 1
+        return removed
+
     def poll_source_channel(self, channel: Optional[str] = None, limit: int = 50) -> Dict[str, Any]:
         """Fetch a public channel's recent posts via its web preview, parse them
         into signals, and store new ones. Works without a bot token/membership."""
@@ -294,6 +305,7 @@ class TelegramService:
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "error": f"Fetch failed: {e}", "new_signals": 0}
 
+        pruned = self._prune_low_conf()
         messages = self._parse_channel_html(r.text)[-limit:]
         new_signals = []
         rejected = 0
@@ -337,7 +349,8 @@ class TelegramService:
 
         self._last_poll_time = datetime.utcnow().isoformat()
         return {"ok": True, "channel": channel, "scanned": len(messages),
-                "new_signals": len(new_signals), "rejected_low_conf": rejected, "signals": new_signals}
+                "new_signals": len(new_signals), "rejected_low_conf": rejected,
+                "pruned": pruned, "signals": new_signals}
 
     def poll_all(self) -> Dict[str, Any]:
         """Poll both the bot updates (if configured) and the public source
