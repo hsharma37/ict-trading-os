@@ -134,6 +134,18 @@ class ResearchService:
         dist_to_support = round((price - sr["support"]) / price * 100, 2) if price and sr["support"] else None
         dist_to_resistance = round((sr["resistance"] - price) / price * 100, 2) if price and sr["resistance"] else None
 
+        digits = config.get("digits", 5)
+        support = round(sr["support"], digits) if sr["support"] else None
+        resistance = round(sr["resistance"], digits) if sr["resistance"] else None
+        sma20r = round(sma20, digits) if sma20 else None
+        sma50r = round(sma50, digits) if sma50 else None
+
+        news = self._relevant_news(symbol)
+        reasoning = self._build_reasoning(
+            symbol, price, live.get("change_pct", 0), trend, sentiment, sma20r, sma50r,
+            support, resistance, dist_to_support, dist_to_resistance, vol, news, digits,
+        )
+
         return {
             "symbol": symbol,
             "label": config.get("label", symbol),
@@ -143,16 +155,70 @@ class ResearchService:
             "change_pct": live.get("change_pct"),
             "trend": trend,
             "sentiment": sentiment,
+            "reasoning": reasoning,
             "volatility": vol,
-            "support": round(sr["support"], config.get("digits", 5)) if sr["support"] else None,
-            "resistance": round(sr["resistance"], config.get("digits", 5)) if sr["resistance"] else None,
+            "support": support,
+            "resistance": resistance,
             "dist_to_support": dist_to_support,
             "dist_to_resistance": dist_to_resistance,
             "key_levels": key_levels,
-            "sma20": round(sma20, config.get("digits", 5)) if sma20 else None,
-            "sma50": round(sma50, config.get("digits", 5)) if sma50 else None,
+            "sma20": sma20r,
+            "sma50": sma50r,
+            "news": news,
             "timestamp": datetime.utcnow().isoformat(),
         }
+
+    def _relevant_news(self, symbol: str, limit: int = 3) -> List[Dict]:
+        """Recent headlines that can move this instrument (title/impact/source)."""
+        try:
+            from app.services.news_service import news_service
+            items = news_service.get_news(limit=limit, symbol=symbol)
+            return [{"title": n["title"], "impact": n["impact"], "source": n["source"],
+                     "link": n.get("link", "")} for n in items]
+        except Exception:
+            return []
+
+    def _build_reasoning(self, symbol, price, change_pct, trend, sentiment, sma20, sma50,
+                         support, resistance, dist_sup, dist_res, vol, news, digits) -> str:
+        """A precise, evidence-grounded explanation of the current read — every
+        clause cites the actual number behind it (no vague 'looks bullish')."""
+        parts = []
+        # Structure vs moving averages.
+        if sma20 and sma50 and price:
+            rel = []
+            rel.append(f"above its 20-SMA ({sma20})" if price > sma20 else f"below its 20-SMA ({sma20})")
+            rel.append(f"above the 50-SMA ({sma50})" if price > sma50 else f"below the 50-SMA ({sma50})")
+            parts.append(f"Price {price} is {rel[0]} and {rel[1]} → {trend.lower()} structure.")
+        else:
+            parts.append(f"{trend.title()} structure.")
+        # Momentum.
+        if change_pct is not None:
+            arrow = "up" if change_pct >= 0 else "down"
+            parts.append(f"24h momentum is {arrow} {abs(change_pct):.2f}%.")
+        # Levels with distances.
+        if support is not None and dist_sup is not None:
+            parts.append(f"Nearest support {support} ({dist_sup:.2f}% below).")
+        if resistance is not None and dist_res is not None:
+            parts.append(f"Resistance {resistance} ({dist_res:.2f}% above).")
+        # Volatility context.
+        vpct = (vol or {}).get("volatility_pct")
+        if vpct is not None:
+            note = "elevated — wider stops warranted" if vpct > 2.0 else "normal"
+            parts.append(f"Volatility {vpct:.2f}% ({note}).")
+        # Bias conclusion.
+        bias = {
+            "BULLISH": "Net bias bullish while price holds above the 20-SMA and support.",
+            "BEARISH": "Net bias bearish while price stays below the 20-SMA and resistance.",
+            "VOLATILE": "No clean bias — volatility is high; wait for a level to break and hold.",
+            "NEUTRAL": "No clean bias — price is between levels; wait for a break of support/resistance.",
+        }.get(sentiment, "")
+        if bias:
+            parts.append(bias)
+        # News overlay.
+        if news:
+            top = news[0]
+            parts.append(f"News to watch: \"{top['title']}\" ({top['impact']} impact, {top['source']}).")
+        return " ".join(parts)
 
     def analyze_all(self) -> List[Dict]:
         """Analyze all instruments."""

@@ -1,7 +1,9 @@
-"""News feed router - returns curated market news."""
+"""News feed router - real-time market news relevant to traded instruments."""
 from fastapi import APIRouter
 from datetime import datetime
 from typing import List, Dict
+
+from app.services.news_service import news_service
 
 router = APIRouter(prefix="/news", tags=["News"])
 
@@ -68,20 +70,23 @@ MARKET_NEWS: List[Dict] = [
 
 
 @router.get("/latest")
-def get_latest_news():
-    """Return curated market news feed."""
+def get_latest_news(limit: int = 25, relevant_only: bool = False):
+    """Real-time market news, tagged with the supported symbols each item can move."""
+    news = news_service.get_news(limit=limit)
+    if relevant_only:
+        news = [n for n in news if n.get("relevant")]
     return {
-        "news": MARKET_NEWS,
-        "count": len(MARKET_NEWS),
+        "news": news,
+        "count": len(news),
         "updated_at": datetime.utcnow().isoformat(),
     }
 
 
 @router.get("/symbol/{symbol}")
-def get_news_for_symbol(symbol: str):
-    """Return news filtered by symbol."""
+def get_news_for_symbol(symbol: str, limit: int = 25):
+    """Return news that can move a specific instrument."""
     symbol = symbol.upper()
-    filtered = [n for n in MARKET_NEWS if symbol in [s.upper() for s in n.get("symbols", [])]]
+    filtered = news_service.get_news(limit=limit, symbol=symbol)
     return {
         "symbol": symbol,
         "news": filtered,

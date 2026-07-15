@@ -112,6 +112,46 @@ def test_context_block_mentions_account_and_positions(monkeypatch):
     assert "10391.74" in block
 
 
+def test_risk_money_and_open_r(monkeypatch):
+    _wire(monkeypatch)
+    # EURUSD 0.10 lot, 20-pip SL, +10 float -> risk $20, R = 0.5
+    pos = {"ticket": "5", "symbol": "EURUSD", "direction": "long", "lot_size": 0.10,
+           "open_price": 1.1400, "sl": 1.1380, "current_price": 1.1410, "profit": 10.0}
+    assert mt5_trades_service._risk_money(pos) == 20.0
+    assert mt5_trades_service._normalize_open(pos)["r"] == 0.5
+
+
+def test_closed_r_uses_recorded_risk(monkeypatch):
+    _wire(monkeypatch)
+    from app.core.database import db
+    # Simulate risk captured while the position (ticket 9) was open.
+    db.insert("mt5_position_risk", {"id": "9", "risk_money": 35.9})
+    closed = mt5_trades_service._normalize_closed(
+        {"ticket": "9", "symbol": "XAUUSD", "direction": "short", "lot_size": 0.2,
+         "open_price": 4063.3, "close_price": 4059.71, "profit": 71.8, "closed_at": "2026-07-15T01:00:01"})
+    assert closed["r"] == round(71.8 / 35.9, 2)  # ~2.0R
+    assert closed["risk_money"] == 35.9
+
+
+def test_closed_r_is_none_without_recorded_risk(monkeypatch):
+    _wire(monkeypatch)
+    closed = mt5_trades_service._normalize_closed(
+        {"ticket": "999", "symbol": "EURUSD", "direction": "long", "lot_size": 0.1,
+         "open_price": 1.1, "close_price": 1.11, "profit": 10.0, "closed_at": "2026-07-15T01:00:01"})
+    assert closed["r"] is None  # honest: not a fabricated 0
+
+
+def test_stats_r_only_over_tracked_trades(monkeypatch):
+    _wire(monkeypatch)
+    from app.core.database import db
+    # Record risk for one of the two closed history tickets (9), not the other (8).
+    db.insert("mt5_position_risk", {"id": "9", "risk_money": 35.9})
+    s = mt5_trades_service.get_stats()
+    assert s["r_tracked_trades"] == 1
+    assert s["total_r"] == round(71.8 / 35.9, 2)
+    assert s["avg_r"] == s["total_r"]  # only one tracked
+
+
 def test_trade_lifecycle_delegates_to_mt5(monkeypatch):
     _wire(monkeypatch)
     from app.services.trade_lifecycle_service import trade_lifecycle_service

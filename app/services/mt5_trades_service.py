@@ -86,7 +86,79 @@ class Mt5TradesService:
 
     def fetch_positions(self) -> List[Dict]:
         data = self._cached("positions", "/positions")
-        return (data or {}).get("positions", []) if isinstance(data, dict) else []
+        positions = (data or {}).get("positions", []) if isinstance(data, dict) else []
+        # Record each open position's money-at-risk so R is computable when it closes.
+        self._record_risk(positions)
+        return positions
+
+    # ── R-multiple risk tracking ─────────────────────────────────────
+    # The broker's closed-deal ledger has no stop-loss, so R can't be recovered
+    # after the fact. While a position is OPEN it carries its SL and the broker's
+    # live P&L — from which we derive the exact money-at-risk and persist it per
+    # ticket. On close, R = realized P&L / that risk.
+
+    def _risk_money(self, pos: Dict) -> Optional[float]:
+        try:
+            open_p = float(pos.get("open_price") or 0)
+            sl = float(pos.get("sl") or 0)
+            lot = float(pos.get("lot_size") or 0)
+        except (TypeError, ValueError):
+            return None
+        if not open_p or not sl:
+            return None
+        dist = abs(open_p - sl)
+        if dist <= 0:
+            return None
+        # Preferred: derive money-per-price from the broker's own P&L (currency-
+        # agnostic, exact) when there's a meaningful price move.
+        try:
+            cur = float(pos.get("current_price") or 0)
+            profit = float(pos.get("profit") or 0)
+            move = cur - open_p
+            if cur and abs(move) > open_p * 1e-5 and profit != 0:
+                return round(dist * abs(profit / move), 2)
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+        # Fallback: contract spec (tick value per price unit) × lot.
+        from app.services.instrument_config import get_instrument
+        cfg = get_instrument(str(pos.get("symbol", "")).upper())
+        if cfg and cfg.get("tick_size"):
+            try:
+                per_price_per_lot = float(cfg["tick_value"]) / float(cfg["tick_size"])
+                return round(dist * per_price_per_lot * lot, 2)
+            except (TypeError, ValueError, ZeroDivisionError):
+                return None
+        return None
+
+    def _record_risk(self, positions: List[Dict]) -> None:
+        try:
+            from app.core.database import db
+        except Exception:
+            return
+        for p in positions:
+            ticket = str(p.get("ticket", ""))
+            if not ticket:
+                continue
+            rm = self._risk_money(p)
+            if rm is None or rm <= 0:
+                continue
+            row = {"id": ticket, "symbol": p.get("symbol"), "open_price": p.get("open_price"),
+                   "sl": p.get("sl"), "lot_size": p.get("lot_size"), "risk_money": rm}
+            try:
+                if db.find_one("mt5_position_risk", ticket):
+                    db.update("mt5_position_risk", ticket, row)
+                else:
+                    db.insert("mt5_position_risk", row)
+            except Exception:
+                continue
+
+    def _stored_risk(self, ticket: str) -> Optional[float]:
+        try:
+            from app.core.database import db
+            row = db.find_one("mt5_position_risk", str(ticket))
+            return float(row["risk_money"]) if row and row.get("risk_money") else None
+        except Exception:
+            return None
 
     def fetch_history(self) -> List[Dict]:
         data = self._cached("history", "/history")
@@ -122,9 +194,14 @@ class Mt5TradesService:
         synthetic-ledger aliases the frontend/analytics already read."""
         profit = float(t.get("profit", 0) or 0)
         direction = t.get("direction", "")
+        ticket = str(t.get("ticket", ""))
+        risk = self._stored_risk(ticket)
+        # Real R when we captured the position's risk while it was open; None
+        # (shown as "—") otherwise — never a fabricated 0.
+        r = round(profit / risk, 2) if risk else None
         return {
-            "id": str(t.get("ticket", "")),
-            "ticket": str(t.get("ticket", "")),
+            "id": ticket,
+            "ticket": ticket,
             "symbol": t.get("symbol", ""),
             "direction": direction,
             "side": "BUY" if direction == "long" else "SELL",
@@ -137,7 +214,9 @@ class Mt5TradesService:
             "exit_price": t.get("close_price", 0),
             "profit": round(profit, 2),
             "realized_pnl": round(profit, 2),
-            "total_r": 0,  # broker ledger has no SL -> R not derivable
+            "risk_money": risk,
+            "total_r": r if r is not None else 0,
+            "r": r,
             "created_at": t.get("closed_at", ""),
             "closed_at": t.get("closed_at", ""),
             "source": "mt5",
@@ -146,6 +225,8 @@ class Mt5TradesService:
     def _normalize_open(self, p: Dict) -> Dict:
         profit = float(p.get("profit", 0) or 0)
         direction = p.get("direction", "")
+        risk = self._risk_money(p)
+        r = round(profit / risk, 2) if risk else None
         return {
             "id": str(p.get("ticket", "")),
             "ticket": str(p.get("ticket", "")),
@@ -163,6 +244,8 @@ class Mt5TradesService:
             "take_profit_1": p.get("tp", 0),
             "profit": round(profit, 2),
             "unrealized_pnl": round(profit, 2),
+            "risk_money": risk,
+            "r": r,
             "swap": p.get("swap", 0),
             "source": "mt5",
         }
@@ -214,6 +297,13 @@ class Mt5TradesService:
 
         streaks = self._calc_streaks(closed)
         dd = self._calc_drawdown(closed, account)
+
+        # R-multiples over the closed trades whose risk we captured while open.
+        r_vals = [t["r"] for t in closed if t.get("r") is not None]
+        total_r = round(sum(r_vals), 2)
+        avg_r = round(total_r / len(r_vals), 2) if r_vals else 0
+        best_r = round(max(r_vals), 2) if r_vals else 0
+        worst_r = round(min(r_vals), 2) if r_vals else 0
 
         by_symbol: Dict[str, Any] = {}
         monthly: Dict[str, Any] = {}
@@ -269,10 +359,11 @@ class Mt5TradesService:
             "expectancy": expectancy,
             "best_trade": round(max((t["realized_pnl"] for t in closed), default=0), 2),
             "worst_trade": round(min((t["realized_pnl"] for t in closed), default=0), 2),
-            "avg_r": 0,
-            "total_r": 0,
-            "best_r": 0,
-            "worst_r": 0,
+            "avg_r": avg_r,
+            "total_r": total_r,
+            "best_r": best_r,
+            "worst_r": worst_r,
+            "r_tracked_trades": len(r_vals),  # of how many closed trades R is real
             "max_win_streak": streaks["max_win"],
             "max_loss_streak": streaks["max_loss"],
             "current_streak": streaks["current"],

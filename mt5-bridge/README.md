@@ -137,6 +137,7 @@ disable. The bridge must be restarted to pick up the change.
 | `POST /pending/cancel` | `X-Bridge-Key` | Cancel a pending order (`order_ticket`) |
 | `GET /transcript/<video_id>` | `X-Bridge-Key` | Fetch a YouTube transcript from this machine's (residential) IP — used by the app's KB auto-transcribe, since YouTube blocks cloud/serverless IPs |
 | `GET /video-meta/<video_id>` | `X-Bridge-Key` | Fetch a YouTube video's title/author (oembed) from the residential IP, for proper KB source names |
+| `GET /fetch?url=` | `X-Bridge-Key` | Fetch a public URL from the residential IP — used for forex news/RSS feeds (e.g. FXStreet) that block datacenter IPs |
 | `POST /test-telegram` | `X-Bridge-Key` | Sends a test Telegram message |
 
 To price the app from the broker's own feed (so displayed prices match your
