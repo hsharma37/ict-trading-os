@@ -48,10 +48,18 @@ class TradeJournalService:
             }
             entry["note"] = self._auto_note(entry)  # auto-journal each trade
             if existing:
-                # Backfill R/risk (and the note) once risk is captured later.
+                patch = {}
+                # Backfill R/risk once captured later (was None at first sight).
                 if existing.get("r") is None and entry.get("r") is not None:
-                    db.update(_COLL, ticket, {"r": entry["r"], "risk_money": entry["risk_money"],
-                                              "note": entry["note"]})
+                    patch["r"] = entry["r"]
+                    patch["risk_money"] = entry["risk_money"]
+                # Backfill the auto-note for entries journaled before notes existed.
+                if not existing.get("note"):
+                    patch["note"] = entry["note"]
+                elif "r" in patch:  # R changed -> regenerate the note
+                    patch["note"] = self._auto_note({**existing, **patch})
+                if patch:
+                    db.update(_COLL, ticket, patch)
                 continue
             entry["journaled_at"] = _now()
             db.insert(_COLL, entry)
