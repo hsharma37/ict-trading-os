@@ -75,6 +75,12 @@ export function useMt5() {
 
   const positionsData = positions.data || []
 
+  // Freshness: when did we last get a good positions read, and is it stale?
+  // Orders should be gated on live, fresh connectivity — not a cached "connected"
+  // from a minute ago while the tunnel is actually down.
+  const lastUpdated = positions.dataUpdatedAt || 0
+  const stale = !!lastUpdated && Date.now() - lastUpdated > 30000
+
   return {
     connected: !!status.data?.reachable && !!(status.data?.bridge_response?.mt5_connected),
     reachable: !!status.data?.reachable,
@@ -83,6 +89,8 @@ export function useMt5() {
     history: (history.data || []) as any[],
     totalProfit: positionsData.reduce((s, p) => s + (p.profit || 0), 0),
     loading: positions.isLoading,
+    lastUpdated,
+    stale,
     error: (positions.error as any)?.response?.data?.detail || (status.error as any)?.message || null,
     refetch: invalidate,
     close,

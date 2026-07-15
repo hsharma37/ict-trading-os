@@ -147,7 +147,35 @@ async def _execute_market(symbol, direction, lot_size, stop_loss, take_profit, r
             resp = await client.post(f"{_base()}/trade", json=payload, headers=_bridge_headers(), timeout=30)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
-    return _result_or_raise(resp)
+    result = _result_or_raise(resp)
+    result["confirmation"] = await _confirm_position(result.get("order"))
+    return result
+
+
+async def _confirm_position(order_ticket) -> dict:
+    """Independently read the position back from MT5 after an order so the UI can
+    show a verified fill (ticket, entry, SL/TP, volume) rather than trusting the
+    order_send reply alone. A market order's opening position shares the order's
+    ticket as its position_id. Returns {confirmed: False} if it can't be seen yet
+    (the caller then tells the user to check the terminal) — never raises."""
+    if not order_ticket:
+        return {"confirmed": False, "reason": "no order ticket returned"}
+    try:
+        data = await _bridge_get("/positions", timeout=8, retries=1)
+        for p in (data or {}).get("positions", []):
+            if str(p.get("ticket")) == str(order_ticket):
+                return {
+                    "confirmed": True,
+                    "ticket": p.get("ticket"),
+                    "open_price": p.get("open_price"),
+                    "sl": p.get("sl"),
+                    "tp": p.get("tp"),
+                    "lot_size": p.get("lot_size"),
+                    "symbol": p.get("symbol"),
+                }
+        return {"confirmed": False, "reason": "order accepted but position not yet visible"}
+    except Exception as e:  # noqa: BLE001
+        return {"confirmed": False, "reason": f"read-back failed: {type(e).__name__}"}
 
 
 @router.post("/trade", summary="Send trade to MT5")

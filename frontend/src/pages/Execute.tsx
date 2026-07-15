@@ -310,9 +310,21 @@ export default function Execute() {
     if (orderType === 'market') {
       const res = await mt5Api.trade({ symbol, direction, lot_size: lot, stop_loss: sl, take_profit: tp })
       const d = res.data || {}
-      const at = d.price ? ` @ ${d.price}` : ''
-      const ref = d.order ? ` (ticket ${d.order})` : ''
-      setSuccess(`✅ Live MT5 market order filled: ${symbol} ${direction} ${lot} lots${at}${ref}`)
+      const c = d.confirmation || {}
+      if (c.confirmed) {
+        // Independently read back from MT5 — a verified fill, not just the reply.
+        const parts = [
+          `✅ Confirmed in MT5: ${symbol} ${direction} ${c.lot_size ?? lot} lots @ ${c.open_price ?? d.price}`,
+          `ticket #${c.ticket}`,
+        ]
+        if (c.sl) parts.push(`SL ${c.sl}`)
+        if (c.tp) parts.push(`TP ${c.tp}`)
+        setSuccess(parts.join(' · '))
+      } else {
+        const ref = d.order ? ` (ticket ${d.order})` : ''
+        const at = d.price ? ` @ ${d.price}` : ''
+        setError(`⚠️ Broker accepted the order${ref}${at}, but it is NOT yet visible in MT5 positions — open your MT5 terminal and verify before doing anything else. (${c.reason || 'read-back inconclusive'})`)
+      }
     } else {
       const price = parseFloat(entryPrice)
       if (!price || price <= 0) {
@@ -355,20 +367,40 @@ export default function Execute() {
   }
 
   const placeOrder = async () => {
-    setOrderLoading(true)
     setError(null)
     setSuccess(null)
+    // Hard gate: never send a real order when the bridge is unreachable or the
+    // live data is stale (tunnel down / terminal logged out). Silently falling
+    // back to a paper-ledger entry that looks like a fill is the dangerous case.
+    if (!mt5.connected) {
+      setError('MT5 bridge is offline — order NOT sent. Reconnect the bridge (and confirm the terminal is logged in) before placing real orders.')
+      return
+    }
+    if (mt5.stale) {
+      setError('Live MT5 data is stale — the bridge is not responding right now. Order blocked; refresh and confirm the connection is green before retrying.')
+      return
+    }
+    setOrderLoading(true)
     try {
-      if (mt5.connected) {
-        await placeMt5Order()
-      } else {
-        await placeSyntheticOrder()
-      }
+      await placeMt5Order()
       setLotCalc(null)
       setManualLot('')
       setTp1(''); setTp2(''); setTp3(''); setStopLoss('')
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Order placement failed')
+    } finally {
+      setOrderLoading(false)
+    }
+  }
+
+  const logPaperTrade = async () => {
+    setOrderLoading(true); setError(null); setSuccess(null)
+    try {
+      await placeSyntheticOrder()
+      setLotCalc(null); setManualLot('')
+      setTp1(''); setTp2(''); setTp3(''); setStopLoss('')
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Could not log paper trade')
     } finally {
       setOrderLoading(false)
     }
@@ -417,6 +449,29 @@ export default function Execute() {
           </span>
         )}
       </div>
+
+      {/* Connection-health banner — orders are gated on a live, fresh bridge. */}
+      {!mt5.connected ? (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            <strong>MT5 bridge {mt5.reachable ? 'reachable but terminal not logged in' : 'offline'}.</strong> Real
+            orders are disabled until the connection is restored. {mt5.reachable
+              ? 'Log in to the MT5 terminal on the bridge machine.'
+              : 'Start/restart the bridge and check the tunnel URL in Settings.'}
+          </span>
+        </div>
+      ) : mt5.stale ? (
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span><strong>Live data is stale</strong> — the bridge hasn't responded in ~30s. Orders are blocked until it refreshes green.</span>
+        </div>
+      ) : (
+        <div className="p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-emerald-300/90 text-xs flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span>MT5 connected · live (updated {mt5.lastUpdated ? new Date(mt5.lastUpdated).toLocaleTimeString() : '—'})</span>
+        </div>
+      )}
 
       {mt5.connected && (
         <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-emerald-300/90 text-xs">
@@ -671,18 +726,30 @@ export default function Execute() {
                 <BarChart3 className="w-4 h-4 mr-2" />
                 {lotLoading ? 'Calculating...' : 'Calculate Lot'}
               </Button>
-              <Button
-                onClick={placeOrder}
-                disabled={orderLoading}
-                className="flex-1"
-              >
-                <Zap className="w-4 h-4 mr-2" />
-                {orderLoading
-                  ? 'Placing...'
-                  : mt5.connected
-                    ? `Send ${orderType} to MT5`
-                    : 'Plan Order (ledger)'}
-              </Button>
+              {mt5.connected && !mt5.stale ? (
+                <Button
+                  onClick={placeOrder}
+                  disabled={orderLoading}
+                  className="flex-1"
+                >
+                  <Zap className="w-4 h-4 mr-2" />
+                  {orderLoading ? 'Placing…' : `Send ${orderType} to MT5`}
+                </Button>
+              ) : (
+                <div className="flex-1 flex flex-col gap-1">
+                  <Button disabled className="w-full" title="Bridge offline — reconnect to place real orders">
+                    <Zap className="w-4 h-4 mr-2" />
+                    {mt5.stale ? 'Bridge not responding' : 'Bridge offline'}
+                  </Button>
+                  <button
+                    onClick={logPaperTrade}
+                    disabled={orderLoading}
+                    className="text-[11px] text-muted-foreground underline hover:text-foreground"
+                  >
+                    Log as paper trade instead (not sent to broker)
+                  </button>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

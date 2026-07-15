@@ -62,6 +62,49 @@ def test_non_json_raises():
     assert ei.value.status_code == 502
 
 
+# ── Post-trade read-back confirmation ────────────────────────────
+
+def test_confirm_position_reads_back(monkeypatch):
+    import asyncio, app.routers.mt5 as mt5mod
+
+    async def fake_get(path, **kw):
+        return {"positions": [{"ticket": 777, "open_price": 1.23, "sl": 1.20,
+                               "tp": 1.30, "lot_size": 0.1, "symbol": "EURUSD"}]}
+
+    monkeypatch.setattr(mt5mod, "_bridge_get", fake_get)
+    out = asyncio.run(mt5mod._confirm_position(777))
+    assert out["confirmed"] is True
+    assert out["ticket"] == 777 and out["open_price"] == 1.23 and out["sl"] == 1.20
+
+
+def test_confirm_position_not_visible(monkeypatch):
+    import asyncio, app.routers.mt5 as mt5mod
+
+    async def fake_get(path, **kw):
+        return {"positions": []}
+
+    monkeypatch.setattr(mt5mod, "_bridge_get", fake_get)
+    out = asyncio.run(mt5mod._confirm_position(999))
+    assert out["confirmed"] is False and "not yet visible" in out["reason"]
+
+
+def test_confirm_position_no_ticket():
+    import asyncio, app.routers.mt5 as mt5mod
+    out = asyncio.run(mt5mod._confirm_position(None))
+    assert out["confirmed"] is False
+
+
+def test_confirm_position_swallows_bridge_error(monkeypatch):
+    import asyncio, app.routers.mt5 as mt5mod
+
+    async def boom(path, **kw):
+        raise RuntimeError("tunnel down")
+
+    monkeypatch.setattr(mt5mod, "_bridge_get", boom)
+    out = asyncio.run(mt5mod._confirm_position(555))
+    assert out["confirmed"] is False  # never raises — order already placed
+
+
 # ── Scaled (staged) profit-booking ───────────────────────────────
 
 def test_scaled_trade_splits_lot_across_targets(client, monkeypatch):
