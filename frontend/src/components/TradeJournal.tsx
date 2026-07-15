@@ -5,13 +5,13 @@ import { BookOpen, RefreshCw, DownloadCloud } from 'lucide-react'
 
 interface JournalTrade {
   id: string; symbol: string; side: string; direction: string; lot_size: number
-  open_price: number; close_price: number; profit: number; r: number | null; closed_at: string
+  open_price: number; close_price: number; profit: number; profit_norm?: number; r: number | null; closed_at: string
   note?: string
 }
 interface Summary {
   symbol: string; closed_trades: number; winning_trades: number; losing_trades: number
   win_rate: number; total_pnl: number; avg_pnl: number; best_trade: number; worst_trade: number
-  total_r: number; avg_r: number; r_tracked_trades: number
+  total_r: number; avg_r: number; r_tracked_trades: number; stats_basis?: string
 }
 interface SymRow { symbol: string; trades: number; total_pnl: number }
 
@@ -112,10 +112,15 @@ export default function TradeJournal() {
             {stat('Trades', String(summary.closed_trades))}
             {stat('Win rate', `${summary.win_rate}%`)}
             {stat('Net P&L', money(summary.total_pnl), summary.total_pnl >= 0 ? 'text-emerald-400' : 'text-red-400')}
-            {stat('Avg', money(summary.avg_pnl))}
-            {stat('Best / Worst', `${money(summary.best_trade)} / ${money(summary.worst_trade)}`)}
+            {stat('Avg /lot', money(summary.avg_pnl))}
+            {stat('Best / Worst /lot', `${money(summary.best_trade)} / ${money(summary.worst_trade)}`)}
             {stat('Avg R', summary.r_tracked_trades ? `${summary.avg_r}R` : '—')}
           </div>
+        )}
+        {summary?.stats_basis === 'per_standard_lot' && (
+          <p className="text-[11px] text-muted-foreground -mt-1">
+            Avg / Best / Worst are per your standard lot (XAUUSD 0.25, EUR/JPY 0.53, CAD 0.30); Net P&L is actual money.
+          </p>
         )}
 
         {/* Trades table */}
@@ -128,8 +133,8 @@ export default function TradeJournal() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-xs text-muted-foreground">
-                  {['Symbol', 'Dir', 'Lots', 'Open', 'Close', 'P&L', 'R', 'Closed'].map((h, i) => (
-                    <th key={h} className={`p-2 ${i < 2 ? 'text-left' : i === 7 ? 'text-left' : 'text-right'}`}>{h}</th>
+                  {['Symbol', 'Dir', 'Lots', 'Open', 'Close', 'P&L', 'P&L/lot', 'R', 'Closed'].map((h, i, arr) => (
+                    <th key={h} className={`p-2 ${i < 2 || i === arr.length - 1 ? 'text-left' : 'text-right'}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -145,6 +150,7 @@ export default function TradeJournal() {
                       <td className="p-2 text-right font-mono">{t.open_price}</td>
                       <td className="p-2 text-right font-mono">{t.close_price}</td>
                       <td className={`p-2 text-right font-mono font-semibold ${pos ? 'text-emerald-400' : 'text-red-400'}`}>{money(t.profit ?? 0)}</td>
+                      <td className={`p-2 text-right font-mono ${(t.profit_norm ?? t.profit ?? 0) >= 0 ? 'text-emerald-400/80' : 'text-red-400/80'}`}>{money(t.profit_norm ?? t.profit ?? 0)}</td>
                       <td className="p-2 text-right font-mono">
                         {t.r != null ? `${t.r}R` : (
                           <button
@@ -157,7 +163,7 @@ export default function TradeJournal() {
                     </tr>,
                     expanded === t.id && t.note && (
                       <tr key={`${t.id}-note`} className="bg-muted/20">
-                        <td colSpan={8} className="p-2 text-xs text-muted-foreground italic">📓 {t.note}</td>
+                        <td colSpan={9} className="p-2 text-xs text-muted-foreground italic">📓 {t.note}</td>
                       </tr>
                     ),
                   ]

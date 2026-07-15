@@ -29,6 +29,46 @@ _CONN_TTL = 10.0
 
 _STARTING_EQUITY_FALLBACK = 10000.0
 
+# The trader risks a flat $75 per trade, and these are the lots they use for that
+# risk on each instrument. Both R and the size-normalized ("per standard lot")
+# stats are built on this single calibration so the whole app is consistent.
+CALIBRATION_RISK = 75.0
+STANDARD_LOT = {
+    "XAUUSD": 0.25,
+    "USDJPY": 0.53,
+    "EURUSD": 0.53,
+    "USDCAD": 0.30,
+}
+
+
+def calibrated_risk(symbol: str, lot: float) -> Optional[float]:
+    """Risk $ for a trade from the per-instrument lot→$75 calibration:
+    (75 / standard_lot) × actual_lot. None when the symbol isn't calibrated."""
+    std = STANDARD_LOT.get(str(symbol or "").upper())
+    try:
+        lot = float(lot)
+    except (TypeError, ValueError):
+        return None
+    if not std or std <= 0 or lot <= 0:
+        return None
+    return round((CALIBRATION_RISK / std) * lot, 2)
+
+
+def normalized_profit(symbol: str, profit: float, lot: float) -> float:
+    """P&L rescaled to the instrument's standard lot: profit × (standard/actual).
+    Makes trades of different sizes comparable — e.g. a 0.50-lot XAUUSD win shows
+    what it would have made at the standard 0.25 lot. Uncalibrated symbols (or a
+    missing/zero lot) return the raw profit unchanged."""
+    try:
+        profit = float(profit)
+        lot = float(lot)
+    except (TypeError, ValueError):
+        return profit if isinstance(profit, (int, float)) else 0.0
+    std = STANDARD_LOT.get(str(symbol or "").upper())
+    if not std or std <= 0 or lot <= 0:
+        return round(profit, 2)
+    return round(profit * (std / lot), 2)
+
 
 def _monotonic() -> float:
     return time.monotonic()
@@ -156,8 +196,12 @@ class Mt5TradesService:
             return None
 
     def compute_r(self, profit: float, pos: Dict) -> tuple:
-        """Return (r, risk_money). Prefers the user's fixed per-trade risk, else
-        the stop-loss-derived risk. None when neither is available."""
+        """Return (r, risk_money). Priority: the per-instrument lot→$75
+        calibration (scales with the trade's lot), then the user's fixed
+        per-trade risk, then the stop-loss-derived risk. None when none apply."""
+        calibrated = calibrated_risk(pos.get("symbol"), pos.get("lot_size"))
+        if calibrated and calibrated > 0:
+            return round(profit / calibrated, 2), calibrated
         fixed = self.fixed_risk_per_trade()
         if fixed:
             return round(profit / fixed, 2), fixed
@@ -252,6 +296,9 @@ class Mt5TradesService:
             "exit_price": t.get("close_price", 0),
             "profit": round(profit, 2),
             "realized_pnl": round(profit, 2),
+            # P&L rescaled to the instrument's standard lot — the size-normalized
+            # figure the analytics stats are built on.
+            "profit_norm": normalized_profit(t.get("symbol"), profit, t.get("lot_size")),
             "risk_money": risk,
             "total_r": r if r is not None else 0,
             "r": r,
@@ -281,6 +328,7 @@ class Mt5TradesService:
             "take_profit_1": p.get("tp", 0),
             "profit": round(profit, 2),
             "unrealized_pnl": round(profit, 2),
+            "profit_norm": normalized_profit(p.get("symbol"), profit, p.get("lot_size")),
             "risk_money": risk,
             "r": r,
             "swap": p.get("swap", 0),
@@ -334,13 +382,22 @@ class Mt5TradesService:
         unrealized = round(sum(float(p.get("profit", 0) or 0) for p in positions), 2)
         total_pnl = round(realized + unrealized, 2)
 
+        # Per-trade money stats are size-normalized: each trade's P&L is rescaled
+        # to its instrument's standard lot (profit_norm) so a big-lot trade
+        # doesn't dominate the averages. Totals/realized stay raw (actual money).
+        def _pn(t: Dict) -> float:
+            return float(t.get("profit_norm", t["realized_pnl"]))
+
         wins = [t for t in closed if t["realized_pnl"] > 0]
         losses = [t for t in closed if t["realized_pnl"] <= 0]
         n_closed = len(closed)
         win_rate = round(len(wins) / n_closed * 100, 1) if n_closed else 0
-        avg_win = round(sum(t["realized_pnl"] for t in wins) / len(wins), 2) if wins else 0
-        avg_loss = round(sum(t["realized_pnl"] for t in losses) / len(losses), 2) if losses else 0
+        avg_win = round(sum(_pn(t) for t in wins) / len(wins), 2) if wins else 0
+        avg_loss = round(sum(_pn(t) for t in losses) / len(losses), 2) if losses else 0
         expectancy = round((win_rate / 100 * avg_win) + ((1 - win_rate / 100) * avg_loss), 2) if n_closed else 0
+        avg_pnl_norm = round(sum(_pn(t) for t in closed) / n_closed, 2) if n_closed else 0
+        best_norm = round(max((_pn(t) for t in closed), default=0), 2)
+        worst_norm = round(min((_pn(t) for t in closed), default=0), 2)
 
         streaks = self._calc_streaks(closed)
         dd = self._calc_drawdown(closed, account)
@@ -357,13 +414,15 @@ class Mt5TradesService:
         sessions: Dict[str, Any] = {}
         for t in closed:
             pnl = t["realized_pnl"]
+            pn = _pn(t)  # size-normalized P&L (per standard lot)
             sym = t["symbol"]
-            s = by_symbol.setdefault(sym, {"trades": 0, "wins": 0, "losses": 0, "total_pnl": 0, "best": 0, "worst": 0})
+            s = by_symbol.setdefault(sym, {"trades": 0, "wins": 0, "losses": 0, "total_pnl": 0, "norm_pnl": 0.0, "best": 0, "worst": 0})
             s["trades"] += 1
-            s["total_pnl"] += pnl
+            s["total_pnl"] += pnl            # raw actual money for the symbol
+            s["norm_pnl"] += pn              # normalized, for avg per standard lot
             s["wins" if pnl > 0 else "losses"] += 1
-            s["best"] = max(s["best"], pnl)
-            s["worst"] = min(s["worst"], pnl)
+            s["best"] = max(s["best"], pn)   # best/worst on the normalized basis
+            s["worst"] = min(s["worst"], pn)
 
             ts = t.get("closed_at", "") or ""
             month = ts[:7] if ts else "unknown"
@@ -381,8 +440,11 @@ class Mt5TradesService:
 
         for s in by_symbol.values():
             s["win_rate"] = round(s["wins"] / s["trades"] * 100, 1) if s["trades"] else 0
-            s["avg_pnl"] = round(s["total_pnl"] / s["trades"], 2) if s["trades"] else 0
-            s["total_pnl"] = round(s["total_pnl"], 2)
+            s["avg_pnl"] = round(s["norm_pnl"] / s["trades"], 2) if s["trades"] else 0  # per standard lot
+            s["total_pnl"] = round(s["total_pnl"], 2)          # raw actual money
+            s["norm_pnl"] = round(s["norm_pnl"], 2)
+            s["best"] = round(s["best"], 2)
+            s["worst"] = round(s["worst"], 2)
         for m in monthly.values():
             m["win_rate"] = round(m["wins"] / m["trades"] * 100, 1) if m["trades"] else 0
             m["pnl"] = round(m["pnl"], 2)
@@ -400,12 +462,15 @@ class Mt5TradesService:
             "total_pnl": total_pnl,
             "realized_pnl": round(realized, 2),
             "unrealized_pnl": unrealized,
-            "avg_pnl": round(realized / n_closed, 2) if n_closed else 0,
+            "avg_pnl": avg_pnl_norm,
             "avg_win": avg_win,
             "avg_loss": avg_loss,
             "expectancy": expectancy,
-            "best_trade": round(max((t["realized_pnl"] for t in closed), default=0), 2),
-            "worst_trade": round(min((t["realized_pnl"] for t in closed), default=0), 2),
+            "best_trade": best_norm,
+            "worst_trade": worst_norm,
+            # Per-trade money stats above (avg/expectancy/best/worst) are rescaled
+            # to each instrument's standard lot; totals/realized are actual money.
+            "stats_basis": "per_standard_lot",
             "avg_r": avg_r,
             "total_r": total_r,
             "best_r": best_r,

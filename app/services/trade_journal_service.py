@@ -31,6 +31,8 @@ class TradeJournalService:
             if not ticket:
                 continue
             existing = db.find_one(_COLL, ticket)
+            profit_val = t.get("realized_pnl", t.get("profit", 0))
+            from app.services.mt5_trades_service import normalized_profit
             entry = {
                 "id": ticket,
                 "ticket": ticket,
@@ -42,7 +44,9 @@ class TradeJournalService:
                 "close_price": t.get("close_price"),
                 "sl": t.get("sl"),
                 "tp": t.get("tp"),
-                "profit": t.get("realized_pnl", t.get("profit", 0)),
+                "profit": profit_val,
+                # P&L rescaled to the instrument's standard lot (size-normalized).
+                "profit_norm": t.get("profit_norm", normalized_profit(t.get("symbol"), profit_val, t.get("lot_size"))),
                 "r": t.get("r"),
                 "risk_money": t.get("risk_money"),
                 "closed_at": t.get("closed_at") or t.get("created_at"),
@@ -53,7 +57,7 @@ class TradeJournalService:
                 patch = {}
                 # Refresh R/risk/SL from the (now correct) computation — this also
                 # overwrites the old garbage values from the buggy risk method.
-                for k in ("r", "risk_money", "sl", "tp"):
+                for k in ("r", "risk_money", "sl", "tp", "profit_norm"):
                     if entry.get(k) is not None and existing.get(k) != entry.get(k):
                         patch[k] = entry[k]
                 if patch or not existing.get("note"):
@@ -181,28 +185,43 @@ class TradeJournalService:
         rows = self.list_trades(symbol, limit=100000)
         return self._summarize(rows, symbol)
 
+    @staticmethod
+    def _norm(r: Dict[str, Any]) -> float:
+        """A row's size-normalized P&L (per standard lot). Uses the stored value
+        when present, else computes it on the fly so rows journaled before the
+        field existed still normalize correctly."""
+        if r.get("profit_norm") is not None:
+            return float(r["profit_norm"])
+        from app.services.mt5_trades_service import normalized_profit
+        return normalized_profit(r.get("symbol"), r.get("profit") or 0, r.get("lot_size"))
+
     def _summarize(self, rows: List[Dict[str, Any]], symbol: Optional[str]) -> Dict[str, Any]:
         n = len(rows)
-        pnls = [float(r.get("profit") or 0) for r in rows]
-        wins = [p for p in pnls if p > 0]
-        losses = [p for p in pnls if p <= 0]
+        pnls = [float(r.get("profit") or 0) for r in rows]        # raw actual money
+        norms = [self._norm(r) for r in rows]                     # per standard lot
+        win_norms = [nm for nm, raw in zip(norms, pnls) if raw > 0]
+        loss_norms = [nm for nm, raw in zip(norms, pnls) if raw <= 0]
+        n_win = sum(1 for p in pnls if p > 0)
+        n_loss = n - n_win
         r_vals = [float(r["r"]) for r in rows if r.get("r") is not None]
         total_pnl = round(sum(pnls), 2)
         return {
             "symbol": symbol.upper() if symbol else "ALL",
             "closed_trades": n,
-            "winning_trades": len(wins),
-            "losing_trades": len(losses),
-            "win_rate": round(len(wins) / n * 100, 1) if n else 0,
-            "total_pnl": total_pnl,
-            "avg_pnl": round(total_pnl / n, 2) if n else 0,
-            "avg_win": round(sum(wins) / len(wins), 2) if wins else 0,
-            "avg_loss": round(sum(losses) / len(losses), 2) if losses else 0,
-            "best_trade": round(max(pnls), 2) if pnls else 0,
-            "worst_trade": round(min(pnls), 2) if pnls else 0,
+            "winning_trades": n_win,
+            "losing_trades": n_loss,
+            "win_rate": round(n_win / n * 100, 1) if n else 0,
+            "total_pnl": total_pnl,                                # raw actual money
+            # Per-trade money stats below are size-normalized (per standard lot).
+            "avg_pnl": round(sum(norms) / n, 2) if n else 0,
+            "avg_win": round(sum(win_norms) / len(win_norms), 2) if win_norms else 0,
+            "avg_loss": round(sum(loss_norms) / len(loss_norms), 2) if loss_norms else 0,
+            "best_trade": round(max(norms), 2) if norms else 0,
+            "worst_trade": round(min(norms), 2) if norms else 0,
             "total_r": round(sum(r_vals), 2) if r_vals else 0,
             "avg_r": round(sum(r_vals) / len(r_vals), 2) if r_vals else 0,
             "r_tracked_trades": len(r_vals),
+            "stats_basis": "per_standard_lot",
         }
 
     def stats(self) -> Dict[str, Any]:
@@ -216,17 +235,22 @@ class TradeJournalService:
         by_symbol: Dict[str, Any] = {}
         for r in rows:
             sym = (r.get("symbol") or "?").upper()
-            b = by_symbol.setdefault(sym, {"trades": 0, "wins": 0, "losses": 0, "total_pnl": 0.0, "best": 0, "worst": 0})
+            b = by_symbol.setdefault(sym, {"trades": 0, "wins": 0, "losses": 0, "total_pnl": 0.0, "norm_pnl": 0.0, "best": 0, "worst": 0})
             pnl = float(r.get("profit") or 0)
+            pn = self._norm(r)
             b["trades"] += 1
             b["wins" if pnl > 0 else "losses"] += 1
-            b["total_pnl"] += pnl
-            b["best"] = max(b["best"], pnl)
-            b["worst"] = min(b["worst"], pnl)
+            b["total_pnl"] += pnl        # raw actual money
+            b["norm_pnl"] += pn          # normalized (per standard lot)
+            b["best"] = max(b["best"], pn)
+            b["worst"] = min(b["worst"], pn)
         for b in by_symbol.values():
             b["win_rate"] = round(b["wins"] / b["trades"] * 100, 1) if b["trades"] else 0
-            b["avg_pnl"] = round(b["total_pnl"] / b["trades"], 2) if b["trades"] else 0
+            b["avg_pnl"] = round(b["norm_pnl"] / b["trades"], 2) if b["trades"] else 0  # per standard lot
             b["total_pnl"] = round(b["total_pnl"], 2)
+            b["norm_pnl"] = round(b["norm_pnl"], 2)
+            b["best"] = round(b["best"], 2)
+            b["worst"] = round(b["worst"], 2)
         return {
             "total_trades": s["closed_trades"], "open_trades": 0,
             "closed_trades": s["closed_trades"],
@@ -241,6 +265,7 @@ class TradeJournalService:
             "max_win_streak": 0, "max_loss_streak": 0, "current_streak": 0,
             "max_drawdown": 0, "max_drawdown_duration": 0, "equity_curve": [],
             "by_symbol": by_symbol, "monthly": {}, "sessions": {},
+            "stats_basis": "per_standard_lot",
             "source": "journal",
         }
 

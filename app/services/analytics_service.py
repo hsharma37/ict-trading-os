@@ -31,6 +31,7 @@ class AnalyticsService:
             "r_factor": stats.get("avg_r", 0),
             "total_pnl": stats.get("total_pnl", 0),
             "source": stats.get("source", "ledger"),
+            "stats_basis": stats.get("stats_basis"),
         }
 
     def get_heatmap(self) -> Dict:
