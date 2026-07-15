@@ -56,6 +56,17 @@ interface NewsItem {
   link: string
 }
 
+function relativeTime(ts: string): string {
+  const diffMs = Date.now() - new Date(ts).getTime()
+  if (isNaN(diffMs)) return ''
+  const mins = Math.round(diffMs / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.round(hrs / 24)}d ago`
+}
+
 export default function Dashboard() {
   const [stats, setStats] = useState<TradeStats | null>(null)
   const [movers, setMovers] = useState<MarketMover[]>([])
@@ -246,8 +257,8 @@ export default function Dashboard() {
                     </span>
                     <span className="text-xs text-muted-foreground">{item.source}</span>
                     {item.timestamp && (
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(item.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      <span className="text-xs text-muted-foreground" title={new Date(item.timestamp).toLocaleString()}>
+                        {relativeTime(item.timestamp)} · {new Date(item.timestamp).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
                     )}
                   </div>

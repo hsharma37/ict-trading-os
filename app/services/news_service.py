@@ -11,7 +11,7 @@ import html as html_lib
 import re
 import time
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from typing import Dict, List, Optional
 
@@ -19,11 +19,17 @@ import httpx
 
 from app.services.instrument_config import get_all_instruments
 
+# Fresh, forex-focused feeds only. (Dropped feeds.a.dj.com/RSSMarketsMain — it
+# serves stale cached items to datacenter IPs.) FXStreet is cloud-blocked, so it
+# loads via the residential bridge; Investing.com loads directly.
 _FEEDS = [
     "https://www.fxstreet.com/rss/news",
     "https://www.investing.com/rss/news_1.rss",
-    "https://feeds.a.dj.com/rss/RSSMarketsMain.xml",
+    "https://www.fxstreet.com/rss/majors",
 ]
+
+# Only show news from the last few days — never stale items.
+_MAX_AGE_HOURS = 72
 
 # Per-currency focus keywords (currency name + its central bank). A passing "USD"
 # mention is deliberately NOT here — only genuine USD-macro events (below) fan out
@@ -133,6 +139,27 @@ class NewsService:
         fragment = re.sub(r"<[^>]+>", "", fragment or "")
         return html_lib.unescape(fragment).strip()
 
+    @staticmethod
+    def _parse_date(pub: str):
+        """Parse the several pubDate formats feeds use -> tz-aware UTC datetime."""
+        pub = (pub or "").strip()
+        if not pub:
+            return None
+        # RFC-822 (FXStreet: "Wed, 15 Jul 2026 05:26:01 Z" / WSJ with offset).
+        try:
+            dt = parsedate_to_datetime(pub)
+            if dt:
+                return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            pass
+        # Plain "YYYY-MM-DD HH:MM:SS" (Investing.com) and ISO variants.
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(pub, fmt).replace(tzinfo=timezone.utc)
+            except ValueError:
+                continue
+        return None
+
     def _parse_feed(self, xml_text: str, source_hint: str) -> List[Dict]:
         try:
             root = ET.fromstring(xml_text)
@@ -145,14 +172,10 @@ class NewsService:
                 continue
             desc = self._clean(it.findtext("description") or "")
             link = (it.findtext("link") or "").strip()
-            pub = (it.findtext("pubDate") or "").strip()
-            ts = None
-            try:
-                ts = parsedate_to_datetime(pub).astimezone(timezone.utc).isoformat() if pub else None
-            except Exception:
-                ts = None
+            dt = self._parse_date(it.findtext("pubDate") or it.findtext("{http://purl.org/dc/elements/1.1/}date") or "")
             items.append({"title": title, "summary": desc[:400], "link": link,
-                          "timestamp": ts, "source": source_hint})
+                          "_dt": dt, "timestamp": dt.astimezone(timezone.utc).isoformat() if dt else None,
+                          "source": source_hint})
         return items
 
     def _fetch_direct(self, url: str) -> Optional[str]:
@@ -224,9 +247,14 @@ class NewsService:
                 item["reason"] = self._reason(symbols, blob)
                 item["relevant"] = bool(symbols)
                 raw.append(item)
-        # Relevant (tagged) first, then by recency.
-        raw.sort(key=lambda n: (n.get("relevant", False), n.get("timestamp") or ""), reverse=True)
-        return raw or self._static_fallback()
+
+        # Keep only dated, recent items (never stale), newest first.
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=_MAX_AGE_HOURS)
+        fresh = [n for n in raw if n.get("_dt") and n["_dt"] >= cutoff]
+        fresh.sort(key=lambda n: n["_dt"], reverse=True)
+        for n in fresh:
+            n.pop("_dt", None)  # internal only; don't serialize
+        return fresh or self._static_fallback()
 
     def _static_fallback(self) -> List[Dict]:
         """Last resort if every feed is unreachable — keeps the panel non-empty."""
