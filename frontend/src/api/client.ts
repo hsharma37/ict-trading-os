@@ -133,6 +133,8 @@ export const signalsApi = {
   active: (symbol?: string) => apiClient.get('/signals/active', { params: { symbol } }),
   stats: (symbol: string) => apiClient.get(`/signals/stats/${symbol}`),
   scan: () => apiClient.post('/signals/scan'),
+  intelligence: (symbol: string) => apiClient.get(`/signals/intelligence/${symbol}`),
+  intelligenceAll: () => apiClient.get('/signals/intelligence'),
 }
 
 // Alerts API

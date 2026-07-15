@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
+import SignalIntelligence from '@/components/SignalIntelligence'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { signalsApi } from '@/api/client'
@@ -343,6 +344,9 @@ export default function Signals() {
           {symbolSignal && renderPartial(symbolSignal)}
         </CardContent>
       </Card>
+
+      {/* News-driven signal intelligence for the selected symbol */}
+      <SignalIntelligence symbol={selectedSymbol} />
 
       {/* Scan Results */}
       {scanResults.length > 0 && (
