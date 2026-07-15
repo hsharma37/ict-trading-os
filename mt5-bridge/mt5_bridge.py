@@ -231,6 +231,16 @@ def history():
     return jsonify({"history": trades, "count": len(trades), "status": "connected"})
 
 
+@app.route("/history-summary", methods=["GET"])
+@require_bridge_key
+def history_summary():
+    """Balance reconciliation (deposits vs realized P&L) to diagnose missing trades."""
+    try:
+        return jsonify(mt5_client.history_summary())
+    except Mt5ConnectionError as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+
+
 # ────────────────────────────────────────────────
 # Market Data
 # ────────────────────────────────────────────────

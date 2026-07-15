@@ -109,22 +109,14 @@ class Mt5TradesService:
         dist = abs(open_p - sl)
         if dist <= 0:
             return None
-        # Preferred: derive money-per-price from the broker's own P&L (currency-
-        # agnostic, exact) when there's a meaningful price move.
-        try:
-            cur = float(pos.get("current_price") or 0)
-            profit = float(pos.get("profit") or 0)
-            move = cur - open_p
-            if cur and abs(move) > open_p * 1e-5 and profit != 0:
-                return round(dist * abs(profit / move), 2)
-        except (TypeError, ValueError, ZeroDivisionError):
-            pass
-        # Fallback: the broker's real tick value (exact for any quote currency);
-        # then the static contract spec if the bridge spec is unavailable.
+        # Risk = SL distance × the money value of one price unit per lot × lots.
+        # Deterministic (the old live-P&L-ratio approach produced nonsense like
+        # $93M risk when captured at a tiny price move). Prefer the broker's real
+        # tick value; fall back to the static contract spec.
         symbol = str(pos.get("symbol", "")).upper()
         try:
             from app.services.broker_specs import money_per_lot
-            mpl = money_per_lot(symbol, dist)
+            mpl = money_per_lot(symbol, dist)  # money for `dist` move, per 1.0 lot
             if mpl and mpl > 0:
                 return round(mpl * lot, 2)
         except Exception:
@@ -138,6 +130,29 @@ class Mt5TradesService:
             except (TypeError, ValueError, ZeroDivisionError):
                 return None
         return None
+
+    @staticmethod
+    def fixed_risk_per_trade() -> Optional[float]:
+        """A user-set fixed $ risk per trade (they size every trade to the same
+        risk). When set, R = P&L / this — matching how the trader thinks."""
+        try:
+            from app.core.database import db
+            row = db.find_one("settings", "global") or {}
+            v = row.get("risk_per_trade")
+            return float(v) if v not in (None, "", 0, "0") and float(v) > 0 else None
+        except Exception:
+            return None
+
+    def compute_r(self, profit: float, pos: Dict) -> tuple:
+        """Return (r, risk_money). Prefers the user's fixed per-trade risk, else
+        the stop-loss-derived risk. None when neither is available."""
+        fixed = self.fixed_risk_per_trade()
+        if fixed:
+            return round(profit / fixed, 2), fixed
+        risk = self._risk_money(pos)
+        if risk and risk > 0:
+            return round(profit / risk, 2), risk
+        return None, None
 
     def _record_risk(self, positions: List[Dict]) -> None:
         try:
@@ -204,23 +219,12 @@ class Mt5TradesService:
         profit = float(t.get("profit", 0) or 0)
         direction = t.get("direction", "")
         ticket = str(t.get("ticket", ""))
-        risk = self._stored_risk(ticket)
-        # If we didn't capture risk live, recover it from the SL the bridge pulled
-        # off the opening order (deals don't carry SL) — fills R for older trades.
-        if not risk and t.get("sl") and t.get("open_price"):
-            try:
-                dist = abs(float(t["open_price"]) - float(t["sl"]))
-                lot = float(t.get("lot_size") or 0)
-                if dist > 0 and lot > 0:
-                    from app.services.broker_specs import money_per_lot
-                    mpl = money_per_lot(t.get("symbol", ""), dist)
-                    if mpl and mpl > 0:
-                        risk = round(mpl * lot, 2)
-            except (TypeError, ValueError):
-                pass
-        # Real R when risk is known (live-captured or recovered from SL); None
-        # (shown as "—") otherwise — never a fabricated 0.
-        r = round(profit / risk, 2) if risk else None
+        # R from the user's fixed per-trade risk, else the SL recovered off the
+        # opening order (deals carry no SL). None when neither — never faked.
+        r, risk = self.compute_r(profit, {
+            "symbol": t.get("symbol"), "open_price": t.get("open_price"),
+            "sl": t.get("sl"), "lot_size": t.get("lot_size"),
+        })
         return {
             "id": ticket,
             "ticket": ticket,
@@ -247,8 +251,7 @@ class Mt5TradesService:
     def _normalize_open(self, p: Dict) -> Dict:
         profit = float(p.get("profit", 0) or 0)
         direction = p.get("direction", "")
-        risk = self._risk_money(p)
-        r = round(profit / risk, 2) if risk else None
+        r, risk = self.compute_r(profit, p)
         return {
             "id": str(p.get("ticket", "")),
             "ticket": str(p.get("ticket", "")),

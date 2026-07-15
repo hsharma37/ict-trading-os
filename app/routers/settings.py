@@ -18,6 +18,7 @@ class SettingsUpdate(BaseModel):
     theme: Optional[str] = None
     default_symbol: Optional[str] = None
     risk_pct: Optional[float] = None
+    risk_per_trade: Optional[float] = None   # fixed $ risk per trade (for R math)
     account_balance: Optional[float] = None
     auto_trade: Optional[bool] = None
     notifications: Optional[bool] = None

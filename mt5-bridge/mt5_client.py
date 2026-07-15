@@ -261,6 +261,35 @@ class Mt5Client:
             pass
         return pair_deals_into_trades([d._asdict() for d in deals], sltp)
 
+    def history_summary(self, days: int = 365) -> Dict[str, Any]:
+        """Reconciliation: how the account balance is composed — deposits/credits
+        vs realized trade P&L — so 'missing trades' can be diagnosed (balance ≈
+        deposits + realized + floating)."""
+        self._ensure_connected()
+        now = datetime.now()
+        deals = mt5.history_deals_get(now - timedelta(days=days), now) or ()
+        trade_deals, deposits, realized, closes = 0, 0.0, 0.0, 0
+        for x in deals:
+            d = x._asdict()
+            if d.get("type") in (_TYPE_BUY, _TYPE_SELL):
+                trade_deals += 1
+                if d.get("entry") != _DEAL_ENTRY_IN:
+                    closes += 1
+                    realized += (d.get("profit", 0) or 0) + (d.get("swap", 0) or 0) + (d.get("commission", 0) or 0)
+            else:
+                deposits += d.get("profit", 0) or 0  # balance/credit/bonus ops
+        info = mt5.account_info()
+        return {
+            "days": days,
+            "deal_count": len(deals),
+            "trade_deal_count": trade_deals,
+            "closed_trades": closes,
+            "deposits": round(deposits, 2),
+            "realized_pnl": round(realized, 2),
+            "balance": round(getattr(info, "balance", 0), 2) if info else None,
+            "equity": round(getattr(info, "equity", 0), 2) if info else None,
+        }
+
     def send_order(
         self,
         symbol: str,
