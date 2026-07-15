@@ -26,6 +26,11 @@ class _Resp:
 
 
 def _wire(monkeypatch):
+    from app.core.config import settings
+    from app.services import bridge_config
+    # Force the direct-fetch path (no residential bridge) for deterministic tests.
+    monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "")
+    bridge_config.clear_cache()
     news_service.clear_cache()
     calls = {"n": 0}
 

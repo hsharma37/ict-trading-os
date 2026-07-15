@@ -155,7 +155,7 @@ class NewsService:
 
     def _fetch_direct(self, url: str) -> Optional[str]:
         try:
-            r = httpx.get(url, timeout=12, follow_redirects=True,
+            r = httpx.get(url, timeout=8, follow_redirects=True,
                           headers={"User-Agent": "Mozilla/5.0 (compatible; ICTradingOS/1.0)"})
             if r.status_code == 200 and r.text:
                 return r.text
@@ -174,7 +174,7 @@ class NewsService:
         if key:
             headers["X-Bridge-Key"] = key
         try:
-            r = httpx.get(f"{base}/fetch", params={"url": url}, headers=headers, timeout=20)
+            r = httpx.get(f"{base}/fetch", params={"url": url}, headers=headers, timeout=12)
             if r.status_code == 200:
                 data = r.json()
                 return data.get("body")
@@ -198,9 +198,16 @@ class NewsService:
         supported = {s.upper() for s in get_all_instruments()}
         raw: List[Dict] = []
         seen_titles = set()
+        # Forex-specific feeds (FXStreet/Investing) block datacenter IPs, so when
+        # the residential bridge is available fetch through it first; else direct.
+        from app.services.bridge_config import get_bridge_url
+        bridge_ready = bool(get_bridge_url())
         for url in _FEEDS:
             src = "FXStreet" if "fxstreet" in url else ("Investing.com" if "investing" in url else "WSJ Markets")
-            xml_text = self._fetch_direct(url) or self._fetch_via_bridge(url)
+            if bridge_ready:
+                xml_text = self._fetch_via_bridge(url) or self._fetch_direct(url)
+            else:
+                xml_text = self._fetch_direct(url)
             if not xml_text:
                 continue
             for item in self._parse_feed(xml_text, src):

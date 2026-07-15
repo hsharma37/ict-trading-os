@@ -94,6 +94,22 @@ def health():
 # ────────────────────────────────────────────────
 
 
+@app.route("/fetch", methods=["GET"])
+@require_bridge_key
+def fetch_url():
+    """Fetch a public URL from this machine's (residential) IP and return the
+    body — used by the app to reach news/RSS feeds that block cloud/datacenter
+    IPs (same reason as YouTube transcripts). Read-only, http(s) only."""
+    url = request.args.get("url", "")
+    if not url.startswith(("http://", "https://")):
+        return jsonify({"error": "url must be http(s)"}), 400
+    try:
+        r = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        return jsonify({"status": r.status_code, "body": r.text[:500000]})
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"error": str(e)}), 502
+
+
 @app.route("/order-check", methods=["POST"])
 @require_bridge_key
 def order_check():
