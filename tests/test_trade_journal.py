@@ -53,3 +53,12 @@ def test_backfills_r_on_later_sighting():
     assert j.list_trades()[0]["r"] is None
     j.record_closed([_closed("9", "XAUUSD", 70.0, r=2.0)])  # risk captured later
     assert j.list_trades()[0]["r"] == 2.0
+
+
+def test_auto_note_generated():
+    j.record_closed([_closed("1", "XAUUSD", 71.8, r=2.0)])
+    t = j.list_trades()[0]
+    assert t.get("note")
+    assert "XAUUSD" in t["note"]
+    assert "win" in t["note"].lower()
+    assert "2.0R" in t["note"] or "+2.00R" in t["note"]

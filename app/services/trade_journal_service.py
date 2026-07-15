@@ -46,15 +46,53 @@ class TradeJournalService:
                 "closed_at": t.get("closed_at") or t.get("created_at"),
                 "source": t.get("source", "mt5"),
             }
+            entry["note"] = self._auto_note(entry)  # auto-journal each trade
             if existing:
-                # Backfill R/risk once we've captured it (was None at first sight).
+                # Backfill R/risk (and the note) once risk is captured later.
                 if existing.get("r") is None and entry.get("r") is not None:
-                    db.update(_COLL, ticket, {"r": entry["r"], "risk_money": entry["risk_money"]})
+                    db.update(_COLL, ticket, {"r": entry["r"], "risk_money": entry["risk_money"],
+                                              "note": entry["note"]})
                 continue
             entry["journaled_at"] = _now()
             db.insert(_COLL, entry)
             added += 1
         return added
+
+    @staticmethod
+    def _auto_note(e: Dict[str, Any]) -> str:
+        """Deterministic auto-journal commentary for a closed trade."""
+        sym = e.get("symbol", "?")
+        side = e.get("side") or ("BUY" if e.get("direction") == "long" else "SELL")
+        profit = float(e.get("profit") or 0)
+        r = e.get("r")
+        outcome = "win" if profit > 0 else "loss" if profit < 0 else "scratch"
+        move = f"{e.get('open_price')}→{e.get('close_price')}"
+        rtxt = f", {r:+.2f}R" if r is not None else ""
+        head = f"{sym} {side} {e.get('lot_size')} lots {move}: {profit:+.2f}{rtxt} ({outcome})."
+        if r is not None and r >= 2:
+            takeaway = "Strong winner (≥2R) — the plan worked; keep letting winners run to target."
+        elif r is not None and r <= -1:
+            takeaway = "Full stop taken — review entry timing/confluence; risk was contained to plan."
+        elif profit > 0:
+            takeaway = "Profit booked before full target — fine if it was managed, but check if it ran further."
+        elif profit < 0:
+            takeaway = "Small loss — acceptable if it followed the plan; avoid revenge trading."
+        else:
+            takeaway = "Scratch — break-even exit."
+        return f"{head} {takeaway}"
+
+    def sync_from_mt5(self) -> Dict[str, Any]:
+        """Explicitly pull the broker's closed-trade history and store it in the
+        journal. Safe to call repeatedly / on a schedule (deduped by ticket)."""
+        try:
+            from app.services.mt5_trades_service import mt5_trades_service
+            if not mt5_trades_service.is_active():
+                return {"ok": False, "reason": "MT5 not connected", "added": 0}
+            closed = [mt5_trades_service._normalize_closed(t) for t in mt5_trades_service.fetch_history()]
+            added = self.record_closed(closed)
+            return {"ok": True, "fetched": len(closed), "added": added, "total": len(self.list_trades(limit=100000))}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "reason": str(e), "added": 0}
 
     def list_trades(self, symbol: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
         rows = db.get_collection(_COLL)

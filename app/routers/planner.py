@@ -118,4 +118,12 @@ def run_due(request: Request):
     if secret:
         if request.headers.get("authorization", "") != f"Bearer {secret}":
             raise HTTPException(status_code=401, detail="Unauthorized")
-    return planner_service.run_due()
+    result = planner_service.run_due()
+    # Piggyback on the bridge's 60s tick to keep the trade journal current even
+    # when nobody has the app open.
+    try:
+        from app.services.trade_journal_service import trade_journal_service
+        result["journal"] = trade_journal_service.sync_from_mt5()
+    except Exception:
+        pass
+    return result

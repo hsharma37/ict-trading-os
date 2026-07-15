@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { journalApi } from '@/api/client'
-import { BookOpen, RefreshCw } from 'lucide-react'
+import { BookOpen, RefreshCw, DownloadCloud } from 'lucide-react'
 
 interface JournalTrade {
   id: string; symbol: string; side: string; direction: string; lot_size: number
   open_price: number; close_price: number; profit: number; r: number | null; closed_at: string
+  note?: string
 }
 interface Summary {
   symbol: string; closed_trades: number; winning_trades: number; losing_trades: number
@@ -22,6 +23,8 @@ export default function TradeJournal() {
   const [trades, setTrades] = useState<JournalTrade[]>([])
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -38,6 +41,12 @@ export default function TradeJournal() {
 
   useEffect(() => { load() }, [load])
 
+  const syncFromMt5 = async () => {
+    setSyncing(true)
+    try { await journalApi.sync(); await load() }
+    catch { /* ignore */ } finally { setSyncing(false) }
+  }
+
   const stat = (label: string, value: string, cls = '') => (
     <div className="p-2.5 rounded-lg bg-muted">
       <div className="text-xs text-muted-foreground">{label}</div>
@@ -52,9 +61,16 @@ export default function TradeJournal() {
           <BookOpen className="w-4 h-4 text-primary" /> Trade Journal
           <span className="text-xs font-normal text-muted-foreground">durable · per instrument</span>
         </CardTitle>
-        <button onClick={load} className="text-muted-foreground hover:text-foreground">
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={syncFromMt5} disabled={syncing}
+            className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border text-muted-foreground hover:text-foreground">
+            <DownloadCloud className={`w-3.5 h-3.5 ${syncing ? 'animate-pulse' : ''}`} />
+            {syncing ? 'Syncing…' : 'Sync from MT5'}
+          </button>
+          <button onClick={load} className="text-muted-foreground hover:text-foreground">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Instrument filter */}
@@ -101,8 +117,9 @@ export default function TradeJournal() {
               <tbody>
                 {trades.map((t) => {
                   const pos = (t.profit ?? 0) >= 0
-                  return (
-                    <tr key={t.id} className="border-b border-border/50 hover:bg-muted/30">
+                  return [
+                    <tr key={t.id} className="border-b border-border/50 hover:bg-muted/30 cursor-pointer"
+                        onClick={() => setExpanded(expanded === t.id ? null : t.id)}>
                       <td className="p-2 font-medium">{t.symbol}</td>
                       <td className="p-2"><span className={t.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}>{(t.direction || t.side || '-').toUpperCase()}</span></td>
                       <td className="p-2 text-right font-mono">{t.lot_size}</td>
@@ -111,8 +128,13 @@ export default function TradeJournal() {
                       <td className={`p-2 text-right font-mono font-semibold ${pos ? 'text-emerald-400' : 'text-red-400'}`}>{money(t.profit ?? 0)}</td>
                       <td className="p-2 text-right font-mono">{t.r != null ? `${t.r}R` : '—'}</td>
                       <td className="p-2 text-xs text-muted-foreground">{t.closed_at ? new Date(t.closed_at).toLocaleString() : '-'}</td>
-                    </tr>
-                  )
+                    </tr>,
+                    expanded === t.id && t.note && (
+                      <tr key={`${t.id}-note`} className="bg-muted/20">
+                        <td colSpan={8} className="p-2 text-xs text-muted-foreground italic">📓 {t.note}</td>
+                      </tr>
+                    ),
+                  ]
                 })}
               </tbody>
             </table>

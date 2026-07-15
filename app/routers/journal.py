@@ -24,3 +24,9 @@ def journal_symbols():
 @router.get("/summary")
 def journal_summary(symbol: Optional[str] = None):
     return trade_journal_service.summary(symbol)
+
+
+@router.post("/sync", summary="Fetch MT5 closed-trade history and store it")
+def sync_journal():
+    """Pull the broker's history into the durable journal on demand."""
+    return trade_journal_service.sync_from_mt5()

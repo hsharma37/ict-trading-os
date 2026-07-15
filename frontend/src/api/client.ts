@@ -142,6 +142,7 @@ export const journalApi = {
   list: (symbol?: string, limit = 200) => apiClient.get('/journal', { params: { symbol, limit } }),
   symbols: () => apiClient.get('/journal/symbols'),
   summary: (symbol?: string) => apiClient.get('/journal/summary', { params: { symbol } }),
+  sync: () => apiClient.post('/journal/sync'),
 }
 
 // Planner API
