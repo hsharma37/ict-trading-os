@@ -132,6 +132,22 @@ def test_lot_calibrated_r(monkeypatch):
     assert c3["risk_money"] == 75.0 and c3["r"] == 1.0
 
 
+def test_profit_norm_and_normalized_stats(monkeypatch):
+    _wire(monkeypatch)
+    recent = {t["ticket"]: t for t in mt5_trades_service.get_recent_trades(5)}
+    # XAUUSD 0.2 lot, +71.8 -> rescaled to std 0.25 lot: 71.8 * (0.25/0.2) = 89.75
+    assert recent["9"]["profit_norm"] == 89.75
+    # EURUSD 0.5 lot, -50 -> std 0.53: -50 * (0.53/0.5) = -53.0
+    assert recent["8"]["profit_norm"] == -53.0
+
+    s = mt5_trades_service.get_stats()
+    assert s["stats_basis"] == "per_standard_lot"
+    assert s["realized_pnl"] == 21.8          # totals stay raw actual money
+    assert s["avg_win"] == 89.75              # per-trade stats normalized
+    assert s["avg_loss"] == -53.0
+    assert s["best_trade"] == 89.75 and s["worst_trade"] == -53.0
+
+
 def test_risk_money_and_open_r(monkeypatch):
     _wire(monkeypatch)
     # GBPUSD (not lot-calibrated) 0.10 lot, 20-pip SL, +10 float -> risk $20, R = 0.5

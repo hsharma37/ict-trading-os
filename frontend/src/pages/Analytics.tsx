@@ -213,7 +213,9 @@ Lessons learned:
             <div className={`text-2xl font-bold ${isPositive(expectancy?.expectancy || 0) ? 'text-green-400' : 'text-red-400'}`}>
               ${(expectancy?.expectancy || 0).toFixed(2)}
             </div>
-            <p className="text-xs text-muted-foreground">Per trade</p>
+            <p className="text-xs text-muted-foreground">
+              {expectancy?.stats_basis === 'per_standard_lot' ? 'Per trade · per standard lot' : 'Per trade'}
+            </p>
           </CardContent>
         </Card>
         <Card>

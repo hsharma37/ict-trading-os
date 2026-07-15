@@ -64,6 +64,20 @@ def test_auto_note_generated():
     assert "2.0R" in t["note"] or "+2.00R" in t["note"]
 
 
+def test_journal_stats_normalized_per_standard_lot():
+    # XAUUSD 0.5 lot, +150 raw -> rescaled to std 0.25 lot: 150 * (0.25/0.5) = 75
+    j.record_closed([{"ticket": "1", "symbol": "XAUUSD", "side": "SELL", "direction": "short",
+                      "lot_size": 0.5, "open_price": 4000, "close_price": 3990,
+                      "realized_pnl": 150.0, "r": 1.0, "closed_at": "2026-07-15T01:00:00", "source": "mt5"}])
+    s = j.summary("XAUUSD")
+    assert s["total_pnl"] == 150.0          # raw actual money
+    assert s["best_trade"] == 75.0          # normalized to standard lot
+    assert s["avg_win"] == 75.0
+    assert s["stats_basis"] == "per_standard_lot"
+    st = j.stats()
+    assert st["avg_win"] == 75.0 and st["by_symbol"]["XAUUSD"]["total_pnl"] == 150.0
+
+
 def test_manual_set_risk_by_sl(monkeypatch):
     # No broker specs in tests -> uses the rough fallback; R sign/magnitude sane.
     j.record_closed([{"ticket": "50", "symbol": "EURUSD", "side": "BUY", "direction": "long",
