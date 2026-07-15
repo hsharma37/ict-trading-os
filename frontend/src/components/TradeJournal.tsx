@@ -1,0 +1,124 @@
+import { useState, useEffect, useCallback } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
+import { journalApi } from '@/api/client'
+import { BookOpen, RefreshCw } from 'lucide-react'
+
+interface JournalTrade {
+  id: string; symbol: string; side: string; direction: string; lot_size: number
+  open_price: number; close_price: number; profit: number; r: number | null; closed_at: string
+}
+interface Summary {
+  symbol: string; closed_trades: number; winning_trades: number; losing_trades: number
+  win_rate: number; total_pnl: number; avg_pnl: number; best_trade: number; worst_trade: number
+  total_r: number; avg_r: number; r_tracked_trades: number
+}
+interface SymRow { symbol: string; trades: number; total_pnl: number }
+
+const money = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}`
+
+export default function TradeJournal() {
+  const [symbols, setSymbols] = useState<SymRow[]>([])
+  const [selected, setSelected] = useState<string>('') // '' = all
+  const [trades, setTrades] = useState<JournalTrade[]>([])
+  const [summary, setSummary] = useState<Summary | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [symRes, listRes] = await Promise.all([
+        journalApi.symbols(),
+        journalApi.list(selected || undefined, 300),
+      ])
+      setSymbols(symRes.data?.symbols || [])
+      setTrades(listRes.data?.trades || [])
+      setSummary(listRes.data?.summary || null)
+    } catch { /* ignore */ } finally { setLoading(false) }
+  }, [selected])
+
+  useEffect(() => { load() }, [load])
+
+  const stat = (label: string, value: string, cls = '') => (
+    <div className="p-2.5 rounded-lg bg-muted">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={`text-base font-bold ${cls}`}>{value}</div>
+    </div>
+  )
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <BookOpen className="w-4 h-4 text-primary" /> Trade Journal
+          <span className="text-xs font-normal text-muted-foreground">durable · per instrument</span>
+        </CardTitle>
+        <button onClick={load} className="text-muted-foreground hover:text-foreground">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Instrument filter */}
+        <div className="flex gap-1.5 flex-wrap">
+          <button onClick={() => setSelected('')}
+            className={`text-xs px-2.5 py-1 rounded-md border ${selected === '' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}>
+            All ({symbols.reduce((s, x) => s + x.trades, 0)})
+          </button>
+          {symbols.map((s) => (
+            <button key={s.symbol} onClick={() => setSelected(s.symbol)}
+              className={`text-xs px-2.5 py-1 rounded-md border ${selected === s.symbol ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}>
+              {s.symbol} ({s.trades}) <span className={s.total_pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}>{money(s.total_pnl)}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Summary for the selection */}
+        {summary && (
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            {stat('Trades', String(summary.closed_trades))}
+            {stat('Win rate', `${summary.win_rate}%`)}
+            {stat('Net P&L', money(summary.total_pnl), summary.total_pnl >= 0 ? 'text-emerald-400' : 'text-red-400')}
+            {stat('Avg', money(summary.avg_pnl))}
+            {stat('Best / Worst', `${money(summary.best_trade)} / ${money(summary.worst_trade)}`)}
+            {stat('Avg R', summary.r_tracked_trades ? `${summary.avg_r}R` : '—')}
+          </div>
+        )}
+
+        {/* Trades table */}
+        {trades.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            No journaled trades yet. Closed MT5 trades are recorded here automatically.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs text-muted-foreground">
+                  {['Symbol', 'Dir', 'Lots', 'Open', 'Close', 'P&L', 'R', 'Closed'].map((h, i) => (
+                    <th key={h} className={`p-2 ${i < 2 ? 'text-left' : i === 7 ? 'text-left' : 'text-right'}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {trades.map((t) => {
+                  const pos = (t.profit ?? 0) >= 0
+                  return (
+                    <tr key={t.id} className="border-b border-border/50 hover:bg-muted/30">
+                      <td className="p-2 font-medium">{t.symbol}</td>
+                      <td className="p-2"><span className={t.direction === 'long' ? 'text-emerald-400' : 'text-red-400'}>{(t.direction || t.side || '-').toUpperCase()}</span></td>
+                      <td className="p-2 text-right font-mono">{t.lot_size}</td>
+                      <td className="p-2 text-right font-mono">{t.open_price}</td>
+                      <td className="p-2 text-right font-mono">{t.close_price}</td>
+                      <td className={`p-2 text-right font-mono font-semibold ${pos ? 'text-emerald-400' : 'text-red-400'}`}>{money(t.profit ?? 0)}</td>
+                      <td className="p-2 text-right font-mono">{t.r != null ? `${t.r}R` : '—'}</td>
+                      <td className="p-2 text-xs text-muted-foreground">{t.closed_at ? new Date(t.closed_at).toLocaleString() : '-'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

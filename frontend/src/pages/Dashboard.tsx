@@ -133,10 +133,18 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">Overview of your trading activity and market news</p>
         </div>
-        {stats?.source === 'mt5' && (
+        {stats?.source === 'mt5' ? (
           <span className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Live · MT5 terminal
+          </span>
+        ) : stats?.source === 'journal' ? (
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 border border-amber-500/20 text-amber-400" title="MT5 bridge unreachable — showing the durable journal of your last closed trades">
+            Journal · MT5 offline
+          </span>
+        ) : (
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted border border-border text-muted-foreground">
+            Internal ledger
           </span>
         )}
       </div>

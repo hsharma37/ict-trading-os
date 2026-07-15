@@ -137,6 +137,13 @@ export const signalsApi = {
   intelligenceAll: () => apiClient.get('/signals/intelligence'),
 }
 
+// Journal API (durable closed-trade journal, per instrument)
+export const journalApi = {
+  list: (symbol?: string, limit = 200) => apiClient.get('/journal', { params: { symbol, limit } }),
+  symbols: () => apiClient.get('/journal/symbols'),
+  summary: (symbol?: string) => apiClient.get('/journal/summary', { params: { symbol } }),
+}
+
 // Planner API
 export const plannerApi = {
   list: (status?: string) => apiClient.get('/planner/plans', { params: { status } }),

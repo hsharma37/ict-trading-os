@@ -464,6 +464,14 @@ class TradeLifecycleService:
         if mt5_trades_service.is_active():
             return mt5_trades_service.get_stats()
 
+        # MT5 offline: use the durable journal of real closed trades before the
+        # synthetic ledger, so the numbers reflect actual trading (last known),
+        # not stale demo data.
+        from app.services.trade_journal_service import trade_journal_service
+        jstats = trade_journal_service.stats()
+        if jstats:
+            return jstats
+
         trades = db.get_collection("trades")
         closed = [t for t in trades if t.get("status") == "CLOSED"]
         open_trades = [t for t in trades if t.get("status") != "CLOSED"]
@@ -677,6 +685,11 @@ class TradeLifecycleService:
         from app.services.mt5_trades_service import mt5_trades_service
         if mt5_trades_service.is_active():
             return mt5_trades_service.get_recent_trades(limit)
+
+        from app.services.trade_journal_service import trade_journal_service
+        journal = trade_journal_service.list_trades(limit=limit)
+        if journal:
+            return journal
 
         trades = db.get_collection("trades")
         closed = sorted([t for t in trades if t.get("status") == "CLOSED"], key=lambda x: x.get("created_at", ""), reverse=True)

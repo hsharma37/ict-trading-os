@@ -7,6 +7,7 @@ from app.core.spa import spa_index_response
 from app.routers import market, ict, signals, trades, quant, orders, plans, kb, bot, analytics, alerts, research, telegram, mt5, news
 from app.routers import settings as settings_router
 from app.routers import planner
+from app.routers import journal
 
 validate_auth_config()
 
@@ -55,6 +56,7 @@ app.include_router(mt5.router)
 app.include_router(news.router)
 app.include_router(settings_router.router)
 app.include_router(planner.router)
+app.include_router(journal.router)
 
 @app.get("/health")
 def health():

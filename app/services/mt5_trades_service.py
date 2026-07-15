@@ -266,8 +266,17 @@ class Mt5TradesService:
 
     def get_recent_trades(self, limit: int = 10) -> List[Dict]:
         closed = [self._normalize_closed(t) for t in self.fetch_history()]
+        self._journal(closed)
         closed.sort(key=lambda x: x.get("closed_at", ""), reverse=True)
         return closed[:limit]
+
+    def _journal(self, closed: List[Dict]) -> None:
+        """Persist closed trades to the durable journal (best-effort)."""
+        try:
+            from app.services.trade_journal_service import trade_journal_service
+            trade_journal_service.record_closed(closed)
+        except Exception:
+            pass
 
     # ── stats (same schema as trade_lifecycle_service.get_trade_stats) ─
 
@@ -290,6 +299,7 @@ class Mt5TradesService:
         account = self.fetch_account() or {}
 
         closed = [self._normalize_closed(t) for t in history]
+        self._journal(closed)
         closed.sort(key=lambda x: x.get("closed_at", ""))
 
         realized = sum(t["realized_pnl"] for t in closed)
