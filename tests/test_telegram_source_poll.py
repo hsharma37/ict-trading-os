@@ -57,7 +57,10 @@ def test_poll_source_stores_and_dedupes(monkeypatch):
     r1 = telegram_service.poll_source_channel()
     assert r1["ok"] is True
     assert r1["channel"] == "xxictxx"
-    assert r1["new_signals"] == 2
+    # The clean signal is stored; the "good morning / CPI" chatter is low-confidence
+    # with no chart image, so it's rejected (doesn't pile up the feed).
+    assert r1["new_signals"] == 1
+    assert r1["rejected_low_conf"] == 1
 
     # The clean signal parsed symbol+side+SL.
     sig = db.find_one("telegram_signals", "xxictxx/100")

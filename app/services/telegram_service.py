@@ -263,12 +263,18 @@ class TelegramService:
             if not text_m:
                 continue
             text = self._html_to_text(text_m.group(1))
-            if not text:
-                continue
             time_m = re.search(r'<time[^>]*datetime="([^"]+)"', block)
+            # Chart images: Telegram serves message photos from telesco.pe as
+            # CSS background-image (emoji come from telegram.org — excluded).
+            images = [u for u in re.findall(r"background-image:url\('(https://[^']+)'\)", block)
+                      if "telesco.pe" in u or "/file/" in u]
+            # Keep an image-only post (chart with no caption) — the user wants to analyse it.
+            if not text and not images:
+                continue
             messages.append({
                 "post": post.group(1),          # e.g. "xxictxx/1234"
                 "text": text,
+                "images": images[:4],
                 "datetime": time_m.group(1) if time_m else None,
             })
         return messages
@@ -290,17 +296,26 @@ class TelegramService:
 
         messages = self._parse_channel_html(r.text)[-limit:]
         new_signals = []
+        rejected = 0
         for m in messages:
             msg_id = m["post"]  # channel/msgid — globally unique, stable
             if db.find_one("telegram_signals", msg_id):
                 continue
             text = m["text"]
+            images = m.get("images", [])
             parsed = self._parse_signal(text)
+            # Reject low-confidence noise — unless the post carries a chart image
+            # (which is worth analysing even with little text).
+            if parsed["confidence"] == "low" and not images:
+                rejected += 1
+                continue
             signal = {
                 "id": msg_id,
                 "source_channel": channel,
                 "source": "web_preview",
                 "raw_text": text,
+                "images": images,
+                "has_image": bool(images),
                 "parsed": parsed["symbol"] is not None and parsed["side"] is not None,
                 "symbol": parsed["symbol"],
                 "side": parsed["side"],
@@ -311,6 +326,7 @@ class TelegramService:
                 "confidence": parsed["confidence"],
                 "acknowledged": False,
                 "auto_traded": False,
+                "planned": False,
                 "trade_id": None,
                 "message_time": m.get("datetime"),
                 "created_at": m.get("datetime") or datetime.utcnow().isoformat(),
@@ -321,7 +337,7 @@ class TelegramService:
 
         self._last_poll_time = datetime.utcnow().isoformat()
         return {"ok": True, "channel": channel, "scanned": len(messages),
-                "new_signals": len(new_signals), "signals": new_signals}
+                "new_signals": len(new_signals), "rejected_low_conf": rejected, "signals": new_signals}
 
     def poll_all(self) -> Dict[str, Any]:
         """Poll both the bot updates (if configured) and the public source

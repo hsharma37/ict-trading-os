@@ -137,6 +137,17 @@ export const signalsApi = {
   intelligenceAll: () => apiClient.get('/signals/intelligence'),
 }
 
+// Planner API
+export const plannerApi = {
+  list: (status?: string) => apiClient.get('/planner/plans', { params: { status } }),
+  create: (data: any) => apiClient.post('/planner/plans', data),
+  fromSignal: (signalId: string, data?: any) => apiClient.post(`/planner/from-signal/${signalId}`, data || {}),
+  update: (id: string, data: any) => apiClient.post(`/planner/plans/${id}/update`, data),
+  arm: (id: string) => apiClient.post(`/planner/plans/${id}/arm`),
+  cancel: (id: string) => apiClient.post(`/planner/plans/${id}/cancel`),
+  remove: (id: string) => apiClient.delete(`/planner/plans/${id}`),
+}
+
 // Alerts API
 export const alertsApi = {
   create: (data: any) => apiClient.post('/alerts', data),
