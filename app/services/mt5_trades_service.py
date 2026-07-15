@@ -119,9 +119,18 @@ class Mt5TradesService:
                 return round(dist * abs(profit / move), 2)
         except (TypeError, ValueError, ZeroDivisionError):
             pass
-        # Fallback: contract spec (tick value per price unit) × lot.
+        # Fallback: the broker's real tick value (exact for any quote currency);
+        # then the static contract spec if the bridge spec is unavailable.
+        symbol = str(pos.get("symbol", "")).upper()
+        try:
+            from app.services.broker_specs import money_per_lot
+            mpl = money_per_lot(symbol, dist)
+            if mpl and mpl > 0:
+                return round(mpl * lot, 2)
+        except Exception:
+            pass
         from app.services.instrument_config import get_instrument
-        cfg = get_instrument(str(pos.get("symbol", "")).upper())
+        cfg = get_instrument(symbol)
         if cfg and cfg.get("tick_size"):
             try:
                 per_price_per_lot = float(cfg["tick_value"]) / float(cfg["tick_size"])

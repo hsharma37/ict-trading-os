@@ -51,6 +51,7 @@ interface LotCalc {
   margin_required: number
   actual_risk: number
   actual_risk_pct: number
+  rate_source?: string
   tick_size: number
   tick_value: number
   digits: number
@@ -693,9 +694,11 @@ export default function Execute() {
                     <div>Actual Risk: {lotCalc.actual_risk_pct}%</div>
                   </div>
 
-                  <div className="p-2 rounded bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-400">
-                    <Shield className="w-3 h-3 inline mr-1" />
-                    Tick size: {lotCalc.tick_size}, Tick value: ${lotCalc.tick_value}
+                  <div className="p-2 rounded bg-yellow-500/10 border border-yellow-500/20 text-xs text-yellow-400 flex items-center justify-between gap-2">
+                    <span><Shield className="w-3 h-3 inline mr-1" />Tick size: {lotCalc.tick_size}, Tick value: ${lotCalc.tick_value}</span>
+                    <span className={`px-1.5 py-0.5 rounded font-medium ${lotCalc.rate_source === 'mt5' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground'}`}>
+                      {lotCalc.rate_source === 'mt5' ? 'sized from MT5 rates' : 'static rates'}
+                    </span>
                   </div>
                 </div>
               )

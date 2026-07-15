@@ -394,7 +394,6 @@ class Mt5Client:
             "type_time": mt5.ORDER_TIME_GTC,
         }
         return self._send_deal(request, pos.symbol)
-        return result._asdict()
 
     # ── Market data ──────────────────────────────────────────────
 
@@ -458,6 +457,11 @@ class Mt5Client:
             "currency_profit": d.get("currency_profit"),
             "trade_mode": d.get("trade_mode"),
             "filling_mode": d.get("filling_mode"),
+            # Broker's real per-tick value in the ACCOUNT currency + tick size —
+            # the exact basis for lot/risk sizing (no static approximation).
+            "tick_value": d.get("trade_tick_value"),
+            "tick_size": d.get("trade_tick_size"),
+            "contract_size": d.get("trade_contract_size"),
         }
 
     def list_symbols(self) -> List[str]:
