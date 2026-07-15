@@ -82,8 +82,9 @@ class NewsService:
                     out.setdefault(ccy, []).append(sym)
         return out
 
-    def _tag_symbols(self, text: str, ccy_map: Dict[str, List[str]], supported: set) -> List[str]:
-        low = text.lower()
+    def _tag_symbols(self, title: str, blob: str, ccy_map: Dict[str, List[str]], supported: set) -> List[str]:
+        low = blob.lower()
+        title_low = title.lower()
         symbols: set = set()
 
         # 1) Explicit pair mentions (EUR/USD, XAU/USD, GBPUSD) -> that exact pair.
@@ -98,8 +99,9 @@ class NewsService:
             if any(w in low for w in words):
                 hit_ccys.add(ccy)
 
-        # 3) USD-macro events move every dollar pair (and gold).
-        if any(w in low for w in _USD_MACRO):
+        # 3) USD-macro events move every dollar pair (and gold) — judged from the
+        # TITLE only, so a passing mention in a long summary doesn't tag all 6.
+        if any(w in title_low for w in _USD_MACRO):
             hit_ccys.update(_ALL_CCYS)
             hit_ccys.add("XAU")
 
@@ -216,7 +218,7 @@ class NewsService:
                     continue
                 seen_titles.add(key)
                 blob = f"{item['title']} {item['summary']}"
-                symbols = self._tag_symbols(blob, ccy_map, supported)
+                symbols = self._tag_symbols(item["title"], blob, ccy_map, supported)
                 item["symbols"] = symbols
                 item["impact"] = self._impact(blob)
                 item["reason"] = self._reason(symbols, blob)
