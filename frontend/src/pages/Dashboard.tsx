@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import {
-  TrendingUp, DollarSign, Activity, Target, AlertTriangle, Newspaper, Globe, BarChart3
+  TrendingUp, DollarSign, Activity, Target, AlertTriangle, Newspaper, BarChart3
 } from 'lucide-react'
 import { tradesApi, researchApi, newsApi } from '@/api/client'
 import { useMt5 } from '@/hooks/useMt5'
@@ -18,6 +18,7 @@ interface TradeStats {
   avg_pnl: number
   avg_r: number
   total_r: number
+  r_tracked_trades?: number
   best_trade: number
   worst_trade: number
   max_drawdown: number
@@ -44,12 +45,15 @@ interface Instrument {
 }
 
 interface NewsItem {
-  headline: string
+  title: string
   source: string
-  category: string
+  impact: string
   symbols: string[]
+  reason: string
+  relevant: boolean
   timestamp: string
   summary: string
+  link: string
 }
 
 export default function Dashboard() {
@@ -94,9 +98,13 @@ export default function Dashboard() {
 
   const filteredNews = newsFilter === 'All'
     ? news
-    : news.filter(n => n.category === newsFilter || n.symbols.includes(newsFilter))
+    : newsFilter === 'High impact'
+      ? news.filter(n => n.impact === 'high')
+      : news.filter(n => n.symbols.includes(newsFilter))
 
-  const newsCategories = ['All', ...Array.from(new Set(news.map(n => n.category)))]
+  // Filter chips: All, High impact, then each symbol that appears in the feed.
+  const newsSymbols = Array.from(new Set(news.flatMap(n => n.symbols))).sort()
+  const newsCategories = ['All', 'High impact', ...newsSymbols]
 
   if (loading) {
     return (
@@ -180,62 +188,84 @@ export default function Dashboard() {
             <Target className="w-4 h-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${isPositive(stats?.avg_r || 0) ? 'text-green-400' : 'text-red-400'}`}>
-              {(stats?.avg_r || 0).toFixed(2)}R
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Total: {(stats?.total_r || 0).toFixed(2)}R
-            </p>
+            {stats?.r_tracked_trades && stats.r_tracked_trades > 0 ? (
+              <>
+                <div className={`text-2xl font-bold ${isPositive(stats?.avg_r || 0) ? 'text-green-400' : 'text-red-400'}`}>
+                  {(stats?.avg_r || 0).toFixed(2)}R
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Total {(stats?.total_r || 0).toFixed(2)}R · from {stats.r_tracked_trades} tracked trade{stats.r_tracked_trades === 1 ? '' : 's'}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-muted-foreground">—</div>
+                <p className="text-xs text-muted-foreground">
+                  R is measured on trades placed/seen with a stop-loss. New trades will populate it.
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* News Feed Section */}
+      {/* Real-time market news, tagged with the instruments each item can move */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             <Newspaper className="w-4 h-4" />
             Market News
+            <span className="text-xs font-normal text-muted-foreground">— live, tagged by affected pair</span>
           </CardTitle>
-          <div className="flex items-center gap-2">
-            <select
-              className="px-2 py-1 text-xs border rounded-md bg-background"
-              value={newsFilter}
-              onChange={(e) => setNewsFilter(e.target.value)}
-            >
-              {newsCategories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <Globe className="w-4 h-4 text-muted-foreground" />
+          <div className="flex items-center gap-1 flex-wrap justify-end">
+            {newsCategories.map((c) => (
+              <button
+                key={c}
+                onClick={() => setNewsFilter(c)}
+                className={`text-xs px-2 py-1 rounded-md border transition-colors ${
+                  newsFilter === c ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {c}
+              </button>
+            ))}
           </div>
         </CardHeader>
         <CardContent>
           {filteredNews.length === 0 ? (
             <p className="text-muted-foreground text-sm text-center py-4">No news available</p>
           ) : (
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            <div className="space-y-2.5 max-h-[440px] overflow-y-auto">
               {filteredNews.map((item, i) => (
                 <div key={i} className="p-3 rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-semibold text-primary">{item.category}</span>
-                        <span className="text-xs text-muted-foreground">{item.source}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {new Date(item.timestamp).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <h3 className="text-sm font-semibold leading-tight">{item.headline}</h3>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.summary}</p>
-                      <div className="flex gap-1 mt-1">
-                        {item.symbols.map((s) => (
-                          <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
-                            {s}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                      item.impact === 'high' ? 'bg-red-500/15 text-red-400' : item.impact === 'medium' ? 'bg-amber-500/15 text-amber-400' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {item.impact} impact
+                    </span>
+                    <span className="text-xs text-muted-foreground">{item.source}</span>
+                    {item.timestamp && (
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(item.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </div>
+                  {item.link ? (
+                    <a href={item.link} target="_blank" rel="noreferrer" className="text-sm font-semibold leading-tight hover:text-primary">
+                      {item.title}
+                    </a>
+                  ) : (
+                    <h3 className="text-sm font-semibold leading-tight">{item.title}</h3>
+                  )}
+                  {item.summary && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.summary}</p>}
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    {item.symbols.map((s) => (
+                      <span key={s} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                        {s}
+                      </span>
+                    ))}
+                    {item.reason && <span className="text-[11px] text-muted-foreground italic">{item.reason}</span>}
                   </div>
                 </div>
               ))}

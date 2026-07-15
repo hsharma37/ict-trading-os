@@ -14,6 +14,8 @@ interface InstrumentAnalysis {
   change_pct: number
   trend: string
   sentiment: string
+  reasoning?: string
+  news?: { title: string; impact: string; source: string; link: string }[]
   volatility: { atr: number | null; daily_range: number | null; volatility_pct: number | null }
   support: number | null
   resistance: number | null
@@ -160,6 +162,30 @@ export default function Research() {
                 <div className="text-lg font-bold">{selected.sentiment}</div>
               </div>
             </div>
+
+            {selected.reasoning && (
+              <div className="mb-6 p-4 rounded-lg border border-primary/20 bg-primary/5">
+                <div className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">Reasoning</div>
+                <p className="text-sm leading-relaxed">{selected.reasoning}</p>
+              </div>
+            )}
+
+            {selected.news && selected.news.length > 0 && (
+              <div className="mb-6">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">News that can move {selected.symbol}</div>
+                <div className="space-y-1.5">
+                  {selected.news.map((n, i) => (
+                    <a key={i} href={n.link || '#'} target={n.link ? '_blank' : undefined} rel="noreferrer"
+                       className="flex items-start gap-2 text-sm hover:text-primary">
+                      <span className={`shrink-0 mt-0.5 text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                        n.impact === 'high' ? 'bg-red-500/15 text-red-400' : n.impact === 'medium' ? 'bg-amber-500/15 text-amber-400' : 'bg-muted text-muted-foreground'
+                      }`}>{n.impact}</span>
+                      <span className="leading-tight">{n.title} <span className="text-muted-foreground">· {n.source}</span></span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="p-3 rounded-lg bg-muted">

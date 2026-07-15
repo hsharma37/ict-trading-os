@@ -57,6 +57,7 @@ def clean_db():
         "risk_settings",
         "audit_logs",
         "market_snapshots",
+        "mt5_position_risk",
     ]
     for collection in collections:
         for doc in db.find(collection):
