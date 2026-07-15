@@ -573,3 +573,22 @@ def test_protected_endpoint_accepts_correct_key_but_mt5_not_connected(app_client
     resp = app_client.get("/account", headers={"X-Bridge-Key": "test-bridge-key"})
     assert resp.status_code == 503
     assert "error" in resp.get_json()
+
+
+def test_close_retries_filling_mode(connected_client):
+    client, fake = connected_client
+    fake.positions_result = (_FakeResult(**_RAW_POSITION),)
+    fake.reject_fillings = {fake.ORDER_FILLING_FOK}  # broker rejects FOK on close
+    res = client.close_position(9557569537)
+    assert res["retcode"] == 10009  # retried another mode and closed
+    assert fake.last_order_request["type_filling"] != fake.ORDER_FILLING_FOK
+
+
+def test_partial_close_retries_filling_mode(connected_client):
+    client, fake = connected_client
+    fake.positions_result = (_FakeResult(**_RAW_POSITION),)  # volume 0.1
+    fake.reject_fillings = {fake.ORDER_FILLING_FOK}
+    res = client.partial_close(9557569537, 0.05)
+    assert res["retcode"] == 10009
+    assert fake.last_order_request["volume"] == 0.05
+    assert fake.last_order_request["type_filling"] != fake.ORDER_FILLING_FOK

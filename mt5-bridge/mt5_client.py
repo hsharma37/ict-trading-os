@@ -276,9 +276,15 @@ class Mt5Client:
         if take_profit is not None:
             base["tp"] = float(take_profit)
 
-        # Filling mode must match what the symbol/broker supports, or order_send
-        # returns retcode 10030 (Unsupported filling mode) and nothing books.
-        # Try the symbol's advertised modes, then fall back, until one is accepted.
+        return self._send_deal(base, symbol, info)
+
+    def _send_deal(self, base: Dict[str, Any], symbol: str, info=None) -> Dict[str, Any]:
+        """order_send a deal, trying each supported filling mode until one is
+        accepted. The broker rejects a wrong filling mode with retcode 10030
+        (Unsupported filling) — which is why market/close/partial orders silently
+        failed before. Used by open, close, and partial-close."""
+        if info is None:
+            info = mt5.symbol_info(symbol)
         last = None
         for fill in self._filling_modes(info):
             result = mt5.order_send({**base, "type_filling": fill})
@@ -386,12 +392,8 @@ class Mt5Client:
             "magic": 90100,
             "comment": "ict-trading-os-close",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
         }
-        result = mt5.order_send(request)
-        if result is None:
-            self._mark_disconnected()
-            raise Mt5ConnectionError(f"order_send() (close) returned nothing: {mt5.last_error()}")
+        return self._send_deal(request, pos.symbol)
         return result._asdict()
 
     # ── Market data ──────────────────────────────────────────────
@@ -526,13 +528,8 @@ class Mt5Client:
             "magic": 90100,
             "comment": "ict-trading-os-partial",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
         }
-        result = mt5.order_send(request)
-        if result is None:
-            self._mark_disconnected()
-            raise Mt5ConnectionError(f"order_send() (partial) returned nothing: {mt5.last_error()}")
-        return result._asdict()
+        return self._send_deal(request, pos.symbol)
 
     def place_pending(
         self, symbol: str, direction: str, order_kind: str, volume: float, price: float,
