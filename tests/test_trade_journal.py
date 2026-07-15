@@ -75,6 +75,35 @@ def test_manual_set_risk_by_sl(monkeypatch):
     assert out["sl"] == 1.0950
 
 
+def test_sync_mirrors_mt5_and_prunes_stale(monkeypatch):
+    # Journal starts with a broker row MT5 no longer reports, plus a manual one.
+    j.record_closed([_closed("OLD", "XAUUSD", 40.0)])
+    j.record_closed([{"ticket": "MANUAL", "symbol": "EURUSD", "side": "BUY", "direction": "long",
+                      "lot_size": 0.1, "open_price": 1.1, "close_price": 1.11,
+                      "realized_pnl": 10.0, "closed_at": "2026-07-15T02:00:00", "source": "manual"}])
+
+    from app.services import mt5_trades_service as mod
+    fresh = [_closed("A", "XAUUSD", 50.0), _closed("B", "EURUSD", -20.0)]
+    monkeypatch.setattr(mod.mt5_trades_service, "is_active", lambda: True)
+    monkeypatch.setattr(mod.mt5_trades_service, "fetch_history", lambda: fresh)
+    monkeypatch.setattr(mod.mt5_trades_service, "_normalize_closed", lambda t: t)
+
+    res = j.sync_from_mt5()
+    assert res["ok"] and res["added"] == 2 and res["removed"] == 1  # OLD pruned, MANUAL kept
+    tickets = {t["ticket"] for t in j.list_trades()}
+    assert tickets == {"A", "B", "MANUAL"}  # exact mirror of MT5 + manual entry
+
+
+def test_sync_never_prunes_on_empty_fetch(monkeypatch):
+    j.record_closed([_closed("A", "XAUUSD", 50.0)])
+    from app.services import mt5_trades_service as mod
+    monkeypatch.setattr(mod.mt5_trades_service, "is_active", lambda: True)
+    monkeypatch.setattr(mod.mt5_trades_service, "fetch_history", lambda: [])  # bridge blip
+    monkeypatch.setattr(mod.mt5_trades_service, "_normalize_closed", lambda t: t)
+    res = j.sync_from_mt5()
+    assert res["removed"] == 0 and len(j.list_trades()) == 1  # durable record survives
+
+
 def test_manual_set_risk_direct():
     j.record_closed([{"ticket": "51", "symbol": "XAUUSD", "side": "SELL", "direction": "short",
                       "lot_size": 0.1, "open_price": 4000, "close_price": 3990,

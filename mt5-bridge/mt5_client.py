@@ -129,7 +129,13 @@ def pair_deals_into_trades(deals: List[Dict[str, Any]], sltp: Dict[Any, Dict[str
         # Realized P&L as MT5 books it = deal profit + swap + commission.
         net = (d.get("profit", 0) or 0) + (d.get("swap", 0) or 0) + (d.get("commission", 0) or 0)
         trades.append({
-            "ticket": str(pid or d.get("ticket", "")),
+            # Key by the *deal* ticket (unique per close), NOT position_id: a
+            # partially-closed position emits several OUT deals that all share one
+            # position_id, so keying by position_id silently collapsed them into a
+            # single row (8 closes in the terminal showing as 7). The deal ticket
+            # is unique, so every realized close survives as its own row.
+            "ticket": str(d.get("ticket") or pid or ""),
+            "position_id": pid,
             "symbol": d.get("symbol", ""),
             # An OUT deal's type is the *closing* side; the position it closed
             # was the opposite direction.

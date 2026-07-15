@@ -116,17 +116,44 @@ class TradeJournalService:
         return db.find_one(_COLL, str(ticket))
 
     def sync_from_mt5(self) -> Dict[str, Any]:
-        """Explicitly pull the broker's closed-trade history and store it in the
-        journal. Safe to call repeatedly / on a schedule (deduped by ticket)."""
+        """Mirror the broker's closed-trade history into the journal: upsert every
+        current MT5 close, then prune stale broker-sourced rows so the journal is
+        an exact reflection of the terminal (same trade count, same totals).
+
+        Safe to call repeatedly / on a schedule. Pruning only runs when MT5 is
+        connected and returned a non-empty history, so a bridge blip never wipes
+        the durable record. Manually-entered rows (source != "mt5") are never
+        pruned."""
         try:
             from app.services.mt5_trades_service import mt5_trades_service
             if not mt5_trades_service.is_active():
                 return {"ok": False, "reason": "MT5 not connected", "added": 0}
             closed = [mt5_trades_service._normalize_closed(t) for t in mt5_trades_service.fetch_history()]
             added = self.record_closed(closed)
-            return {"ok": True, "fetched": len(closed), "added": added, "total": len(self.list_trades(limit=100000))}
+            removed = self._reconcile(closed)
+            return {
+                "ok": True, "fetched": len(closed), "added": added,
+                "removed": removed, "total": len(self.list_trades(limit=100000)),
+            }
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "reason": str(e), "added": 0}
+
+    def _reconcile(self, closed: List[Dict[str, Any]]) -> int:
+        """Drop broker-sourced journal rows that MT5 no longer reports, so the
+        journal stays a 1:1 mirror of the terminal's history. No-op on an empty
+        fetch (treated as an unreliable snapshot, not "all trades gone")."""
+        if not closed:
+            return 0
+        live = {str(t.get("ticket") or t.get("id") or "") for t in closed}
+        removed = 0
+        for r in db.get_collection(_COLL):
+            if (r.get("source") or "mt5") != "mt5":
+                continue  # never prune manual entries
+            tid = str(r.get("id") or r.get("ticket") or "")
+            if tid and tid not in live:
+                db.delete(_COLL, tid)
+                removed += 1
+        return removed
 
     def list_trades(self, symbol: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
         rows = db.get_collection(_COLL)
