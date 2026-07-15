@@ -249,14 +249,20 @@ class Mt5Client:
         self._ensure_connected()
         now = datetime.now()
         since = now - timedelta(days=days)
-        deals = mt5.history_deals_get(since, now)
+        # Upper bound is pushed 2 days into the future on purpose: MT5 deal
+        # timestamps are in BROKER-SERVER time (often UTC+2/+3), which runs ahead
+        # of the local machine clock. Querying up to a local `now` silently drops
+        # trades that were just closed — their server timestamp is past local now.
+        # A generous future bound captures them regardless of the timezone offset.
+        until = now + timedelta(days=2)
+        deals = mt5.history_deals_get(since, until)
         if deals is None:
             self._mark_disconnected()
             raise Mt5ConnectionError(f"history_deals_get() failed: {mt5.last_error()}")
         # Opening orders carry the SL/TP the deal ledger lacks — map by position.
         sltp: Dict[Any, Dict[str, Any]] = {}
         try:
-            orders = mt5.history_orders_get(since, now) or ()
+            orders = mt5.history_orders_get(since, until) or ()
             for o in orders:
                 od = o._asdict()
                 pid = od.get("position_id")
@@ -273,7 +279,9 @@ class Mt5Client:
         deposits + realized + floating)."""
         self._ensure_connected()
         now = datetime.now()
-        deals = mt5.history_deals_get(now - timedelta(days=days), now) or ()
+        # Future upper bound so broker-server-time deals just closed aren't
+        # dropped by a local-clock `now` (see history_deals).
+        deals = mt5.history_deals_get(now - timedelta(days=days), now + timedelta(days=2)) or ()
         trade_deals, deposits, realized, closes = 0, 0.0, 0.0, 0
         for x in deals:
             d = x._asdict()
