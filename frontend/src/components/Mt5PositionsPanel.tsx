@@ -21,9 +21,13 @@ export default function Mt5PositionsPanel({
 
   const busy = close.isPending || modify.isPending || partialClose.isPending
 
+  // Surface the broker/bridge reason instead of failing silently.
+  const errMsg = (e: any) => e?.response?.data?.detail || e?.message || 'Action failed'
+  const onErr = (label: string) => (e: any) => alert(`${label} failed: ${errMsg(e)}`)
+
   const onClose = (p: Mt5Position) => {
     if (window.confirm(`Close ${p.symbol} ${p.direction} ${p.lot_size} lots at market?`)) {
-      close.mutate(p.ticket)
+      close.mutate(p.ticket, { onError: onErr('Close') })
     }
   }
   const onModify = (p: Mt5Position) => {
@@ -31,7 +35,8 @@ export default function Mt5PositionsPanel({
     if (sl === null) return
     const tp = window.prompt(`New Take Profit for ${p.symbol} (blank keeps ${p.tp ?? '-'})`, String(p.tp ?? ''))
     if (tp === null) return
-    modify.mutate({ ticket: p.ticket, stop_loss: sl ? Number(sl) : undefined, take_profit: tp ? Number(tp) : undefined })
+    modify.mutate({ ticket: p.ticket, stop_loss: sl ? Number(sl) : undefined, take_profit: tp ? Number(tp) : undefined },
+      { onError: onErr('Modify') })
   }
   const onPartial = (p: Mt5Position) => {
     const raw = window.prompt(`Volume to close for ${p.symbol} (max ${p.lot_size})`, String((p.lot_size || 0) / 2))
@@ -41,7 +46,7 @@ export default function Mt5PositionsPanel({
       alert(`Enter a volume between 0 and ${p.lot_size}`)
       return
     }
-    partialClose.mutate({ ticket: p.ticket, volume: vol })
+    partialClose.mutate({ ticket: p.ticket, volume: vol }, { onError: onErr('Partial close') })
   }
 
   const shown = limit ? positions.slice(0, limit) : positions

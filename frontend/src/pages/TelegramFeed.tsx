@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { telegramApi } from '@/api/client'
+import TradePlanner from '@/components/TradePlanner'
+import PlanModal, { PlanSeed } from '@/components/PlanModal'
 import {
   CheckCircle2, Bot, RefreshCw, ArrowUpRight, ArrowDownRight, AlertTriangle,
   TrendingUp, Hash, FileText, Zap, MessageSquare, Send
@@ -24,6 +26,8 @@ interface TelegramSignal {
   trade_id: string | null
   created_at: string
   parsed_at: string | null
+  images?: string[]
+  has_image?: boolean
 }
 
 interface SignalStats {
@@ -48,6 +52,8 @@ export default function TelegramFeed() {
   const [configuring, setConfiguring] = useState(false)
   const [riskPct, setRiskPct] = useState(1.0)
   const [accountBalance, setAccountBalance] = useState(10000)
+  const [planSeed, setPlanSeed] = useState<PlanSeed | null>(null)
+  const [plannerRefresh, setPlannerRefresh] = useState(0)
 
   const fetchSignals = useCallback(async () => {
     try {
@@ -103,14 +109,12 @@ export default function TelegramFeed() {
     }
   }
 
-  const autoTrade = async (id: string) => {
-    try {
-      await telegramApi.autoTrade(id, { account_balance: accountBalance, risk_pct: riskPct })
-      setSignals(prev => prev.map(s => s.id === id ? { ...s, auto_traded: true } : s))
-      await fetchStats()
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Auto-trade failed')
-    }
+  // Called after a signal is turned into a plan: remove it from the feed and
+  // refresh the plans list (planned signals don't pile up).
+  const onPlanned = async () => {
+    setPlanSeed(null)
+    await fetchSignals()
+    setPlannerRefresh((k) => k + 1)
   }
 
   const configure = async () => {
@@ -310,6 +314,9 @@ export default function TelegramFeed() {
         </CardContent>
       </Card>
 
+      {/* Trade plans (armed → auto-execute on price/time) */}
+      <TradePlanner refreshKey={plannerRefresh} />
+
       {/* Signals */}
       <div className="space-y-3">
         {signals.length === 0 && (
@@ -381,11 +388,41 @@ export default function TelegramFeed() {
               ))}
             </div>
 
-            <div className="p-2 rounded bg-muted/50 text-xs text-muted-foreground mb-3 line-clamp-3">
-              {signal.raw_text}
-            </div>
+            {signal.raw_text && (
+              <div className="p-2 rounded bg-muted/50 text-xs text-muted-foreground mb-3 line-clamp-3">
+                {signal.raw_text}
+              </div>
+            )}
+
+            {/* Chart image(s) attached to the post — review to plan the trade. */}
+            {signal.images && signal.images.length > 0 && (
+              <div className="mb-3 space-y-1">
+                <div className="flex gap-2 flex-wrap">
+                  {signal.images.map((img, i) => (
+                    <a key={i} href={img} target="_blank" rel="noreferrer" className="block">
+                      <img src={img} alt="chart" className="max-h-40 rounded border border-border hover:opacity-90" />
+                    </a>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground italic">Chart attached — review it and plan accordingly (auto chart-reading pending a vision model).</p>
+              </div>
+            )}
 
             <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                onClick={() => setPlanSeed({
+                  signalId: signal.id,
+                  symbol: signal.symbol || 'EURUSD',
+                  side: (signal.side as 'BUY' | 'SELL') || 'BUY',
+                  entry_price: signal.entry_prices?.[0] ?? null,
+                  stop_loss: signal.stop_loss,
+                  take_profits: signal.take_profits,
+                })}
+              >
+                <Zap className="w-4 h-4 mr-1" />
+                Plan Trade
+              </Button>
               {!signal.acknowledged && (
                 <Button
                   variant="outline"
@@ -394,16 +431,6 @@ export default function TelegramFeed() {
                 >
                   <CheckCircle2 className="w-4 h-4 mr-1" />
                   Acknowledge
-                </Button>
-              )}
-              {!signal.auto_traded && signal.parsed && (
-                <Button
-                  size="sm"
-                  onClick={() => autoTrade(signal.id)}
-                  disabled={!signal.symbol || !signal.side}
-                >
-                  <Zap className="w-4 h-4 mr-1" />
-                  Auto-Trade
                 </Button>
               )}
               {signal.trade_id && (
@@ -420,6 +447,10 @@ export default function TelegramFeed() {
           </div>
         ))}
       </div>
+
+      {planSeed && (
+        <PlanModal seed={planSeed} onClose={() => setPlanSeed(null)} onDone={onPlanned} />
+      )}
     </div>
   )
 }

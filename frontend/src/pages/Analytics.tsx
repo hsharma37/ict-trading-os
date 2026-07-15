@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { analyticsApi } from '@/api/client'
+import TradeJournal from '@/components/TradeJournal'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area, PieChart, Pie, Cell
@@ -171,10 +172,18 @@ Lessons learned:
           <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
           <p className="text-muted-foreground">Performance metrics and insights</p>
         </div>
-        {expectancy?.source === 'mt5' && (
+        {expectancy?.source === 'mt5' ? (
           <span className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Live · MT5 terminal
+          </span>
+        ) : expectancy?.source === 'journal' ? (
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 border border-amber-500/20 text-amber-400">
+            Journal · MT5 offline (last-known closed trades)
+          </span>
+        ) : (
+          <span className="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted border border-border text-muted-foreground">
+            Internal ledger
           </span>
         )}
       </div>
@@ -393,12 +402,15 @@ Lessons learned:
         </CardContent>
       </Card>
 
-      {/* Auto-Journal: Closed Trades */}
+      {/* Durable, per-instrument closed-trade journal */}
+      <TradeJournal />
+
+      {/* Auto-Journal notes (AI-generated commentary per closed trade) */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <BookOpen className="w-5 h-5" />
-            Trade Journal
+            Journal Notes (auto-generated)
           </CardTitle>
           <div className="text-sm text-muted-foreground">
             {closedTrades.length} closed trades

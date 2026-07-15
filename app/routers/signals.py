@@ -50,3 +50,21 @@ def scan_all():
         sig = signal_engine.analyze(sym)
         if sig: results.append(_annotate(sig, held))
     return {"scanned": len(symbols), "signals_found": len(results), "signals": results}
+
+
+@router.get("/intelligence/{symbol}", summary="News+technical+ICT fused signal")
+def intelligence(symbol: str):
+    """A reasoned signal for one instrument: news sentiment fused with technicals
+    and ICT knowledge, with factor breakdown, reasoning, and suggestions."""
+    from app.services.signal_intelligence import signal_intelligence
+    return signal_intelligence.generate(symbol)
+
+
+@router.get("/intelligence", summary="Fused signals for all supported instruments")
+def intelligence_all():
+    from app.services.instrument_config import get_all_instruments
+    from app.services.signal_intelligence import signal_intelligence
+    signals = [signal_intelligence.generate(sym) for sym in get_all_instruments()]
+    # Strongest conviction first.
+    signals.sort(key=lambda s: s.get("confidence_score", 0), reverse=True)
+    return {"signals": signals, "count": len(signals)}

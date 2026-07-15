@@ -133,6 +133,28 @@ export const signalsApi = {
   active: (symbol?: string) => apiClient.get('/signals/active', { params: { symbol } }),
   stats: (symbol: string) => apiClient.get(`/signals/stats/${symbol}`),
   scan: () => apiClient.post('/signals/scan'),
+  intelligence: (symbol: string) => apiClient.get(`/signals/intelligence/${symbol}`),
+  intelligenceAll: () => apiClient.get('/signals/intelligence'),
+}
+
+// Journal API (durable closed-trade journal, per instrument)
+export const journalApi = {
+  list: (symbol?: string, limit = 200) => apiClient.get('/journal', { params: { symbol, limit } }),
+  symbols: () => apiClient.get('/journal/symbols'),
+  summary: (symbol?: string) => apiClient.get('/journal/summary', { params: { symbol } }),
+  sync: () => apiClient.post('/journal/sync'),
+  setRisk: (ticket: string, data: { sl?: number; r?: number }) => apiClient.post(`/journal/${ticket}/risk`, data),
+}
+
+// Planner API
+export const plannerApi = {
+  list: (status?: string) => apiClient.get('/planner/plans', { params: { status } }),
+  create: (data: any) => apiClient.post('/planner/plans', data),
+  fromSignal: (signalId: string, data?: any) => apiClient.post(`/planner/from-signal/${signalId}`, data || {}),
+  update: (id: string, data: any) => apiClient.post(`/planner/plans/${id}/update`, data),
+  arm: (id: string) => apiClient.post(`/planner/plans/${id}/arm`),
+  cancel: (id: string) => apiClient.post(`/planner/plans/${id}/cancel`),
+  remove: (id: string) => apiClient.delete(`/planner/plans/${id}`),
 }
 
 // Alerts API
@@ -182,6 +204,8 @@ export const mt5Api = {
   positions: () => apiClient.get('/mt5/positions'),
   trade: (data: { symbol: string; direction: string; lot_size: number; stop_loss?: number; take_profit?: number }) =>
     apiClient.post('/mt5/trade', null, { params: data }),
+  scaledTrade: (data: { symbol: string; direction: string; lot_size: number; take_profits: string; stop_loss?: number }) =>
+    apiClient.post('/mt5/scaled-trade', null, { params: data }),
   close: (ticket_id: string) => apiClient.post('/mt5/close', null, { params: { ticket_id } }),
   history: () => apiClient.get('/mt5/history'),
   // Market data

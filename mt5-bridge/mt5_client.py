@@ -95,7 +95,7 @@ def normalize_position(raw: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def pair_deals_into_trades(deals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def pair_deals_into_trades(deals: List[Dict[str, Any]], sltp: Dict[Any, Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Reconstruct closed-trade records from MT5's deal ledger.
 
     MetaTrader5's history_deals_get() returns individual deals, not trades.
@@ -119,12 +119,17 @@ def pair_deals_into_trades(deals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         else:  # DEAL_ENTRY_OUT / OUT_BY / INOUT — a realized close
             closes.append(d)
 
+    sltp = sltp or {}
     trades: List[Dict[str, Any]] = []
     for d in closes:
-        in_deal = opens.get(d.get("position_id"))
+        pid = d.get("position_id")
+        in_deal = opens.get(pid)
         ts = d.get("time")
+        levels = sltp.get(pid, {})
+        # Realized P&L as MT5 books it = deal profit + swap + commission.
+        net = (d.get("profit", 0) or 0) + (d.get("swap", 0) or 0) + (d.get("commission", 0) or 0)
         trades.append({
-            "ticket": str(d.get("position_id", "") or d.get("ticket", "")),
+            "ticket": str(pid or d.get("ticket", "")),
             "symbol": d.get("symbol", ""),
             # An OUT deal's type is the *closing* side; the position it closed
             # was the opposite direction.
@@ -132,7 +137,11 @@ def pair_deals_into_trades(deals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "lot_size": d.get("volume", 0),
             "open_price": (in_deal or {}).get("price"),
             "close_price": d.get("price", 0),
-            "profit": d.get("profit", 0) or 0,
+            "profit": round(net, 2),
+            # SL/TP recovered from the opening order (deals don't carry them) so
+            # R is computable for historical trades.
+            "sl": levels.get("sl") or None,
+            "tp": levels.get("tp") or None,
             "closed_at": datetime.fromtimestamp(ts).isoformat() if ts else None,
         })
 
@@ -227,14 +236,30 @@ class Mt5Client:
             raise Mt5ConnectionError(f"positions_get() failed: {mt5.last_error()}")
         return [normalize_position(p._asdict()) for p in positions]
 
-    def history_deals(self, days: int = 30) -> List[Dict[str, Any]]:
+    def history_deals(self, days: int = 365) -> List[Dict[str, Any]]:
+        """Closed trades over the last `days` (default a year, so nothing recent
+        is dropped by a short window). SL/TP are recovered from the opening
+        orders and attached so R is computable."""
         self._ensure_connected()
-        since = datetime.now() - timedelta(days=days)
-        deals = mt5.history_deals_get(since, datetime.now())
+        now = datetime.now()
+        since = now - timedelta(days=days)
+        deals = mt5.history_deals_get(since, now)
         if deals is None:
             self._mark_disconnected()
             raise Mt5ConnectionError(f"history_deals_get() failed: {mt5.last_error()}")
-        return pair_deals_into_trades([d._asdict() for d in deals])
+        # Opening orders carry the SL/TP the deal ledger lacks — map by position.
+        sltp: Dict[Any, Dict[str, Any]] = {}
+        try:
+            orders = mt5.history_orders_get(since, now) or ()
+            for o in orders:
+                od = o._asdict()
+                pid = od.get("position_id")
+                sl, tp = od.get("sl") or 0, od.get("tp") or 0
+                if pid and (sl or tp) and pid not in sltp:
+                    sltp[pid] = {"sl": sl or None, "tp": tp or None}
+        except Exception:
+            pass
+        return pair_deals_into_trades([d._asdict() for d in deals], sltp)
 
     def send_order(
         self,
@@ -276,9 +301,15 @@ class Mt5Client:
         if take_profit is not None:
             base["tp"] = float(take_profit)
 
-        # Filling mode must match what the symbol/broker supports, or order_send
-        # returns retcode 10030 (Unsupported filling mode) and nothing books.
-        # Try the symbol's advertised modes, then fall back, until one is accepted.
+        return self._send_deal(base, symbol, info)
+
+    def _send_deal(self, base: Dict[str, Any], symbol: str, info=None) -> Dict[str, Any]:
+        """order_send a deal, trying each supported filling mode until one is
+        accepted. The broker rejects a wrong filling mode with retcode 10030
+        (Unsupported filling) — which is why market/close/partial orders silently
+        failed before. Used by open, close, and partial-close."""
+        if info is None:
+            info = mt5.symbol_info(symbol)
         last = None
         for fill in self._filling_modes(info):
             result = mt5.order_send({**base, "type_filling": fill})
@@ -386,13 +417,8 @@ class Mt5Client:
             "magic": 90100,
             "comment": "ict-trading-os-close",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
         }
-        result = mt5.order_send(request)
-        if result is None:
-            self._mark_disconnected()
-            raise Mt5ConnectionError(f"order_send() (close) returned nothing: {mt5.last_error()}")
-        return result._asdict()
+        return self._send_deal(request, pos.symbol)
 
     # ── Market data ──────────────────────────────────────────────
 
@@ -456,6 +482,11 @@ class Mt5Client:
             "currency_profit": d.get("currency_profit"),
             "trade_mode": d.get("trade_mode"),
             "filling_mode": d.get("filling_mode"),
+            # Broker's real per-tick value in the ACCOUNT currency + tick size —
+            # the exact basis for lot/risk sizing (no static approximation).
+            "tick_value": d.get("trade_tick_value"),
+            "tick_size": d.get("trade_tick_size"),
+            "contract_size": d.get("trade_contract_size"),
         }
 
     def list_symbols(self) -> List[str]:
@@ -526,13 +557,8 @@ class Mt5Client:
             "magic": 90100,
             "comment": "ict-trading-os-partial",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
         }
-        result = mt5.order_send(request)
-        if result is None:
-            self._mark_disconnected()
-            raise Mt5ConnectionError(f"order_send() (partial) returned nothing: {mt5.last_error()}")
-        return result._asdict()
+        return self._send_deal(request, pos.symbol)
 
     def place_pending(
         self, symbol: str, direction: str, order_kind: str, volume: float, price: float,

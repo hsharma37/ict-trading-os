@@ -119,9 +119,18 @@ class Mt5TradesService:
                 return round(dist * abs(profit / move), 2)
         except (TypeError, ValueError, ZeroDivisionError):
             pass
-        # Fallback: contract spec (tick value per price unit) × lot.
+        # Fallback: the broker's real tick value (exact for any quote currency);
+        # then the static contract spec if the bridge spec is unavailable.
+        symbol = str(pos.get("symbol", "")).upper()
+        try:
+            from app.services.broker_specs import money_per_lot
+            mpl = money_per_lot(symbol, dist)
+            if mpl and mpl > 0:
+                return round(mpl * lot, 2)
+        except Exception:
+            pass
         from app.services.instrument_config import get_instrument
-        cfg = get_instrument(str(pos.get("symbol", "")).upper())
+        cfg = get_instrument(symbol)
         if cfg and cfg.get("tick_size"):
             try:
                 per_price_per_lot = float(cfg["tick_value"]) / float(cfg["tick_size"])
@@ -196,7 +205,20 @@ class Mt5TradesService:
         direction = t.get("direction", "")
         ticket = str(t.get("ticket", ""))
         risk = self._stored_risk(ticket)
-        # Real R when we captured the position's risk while it was open; None
+        # If we didn't capture risk live, recover it from the SL the bridge pulled
+        # off the opening order (deals don't carry SL) — fills R for older trades.
+        if not risk and t.get("sl") and t.get("open_price"):
+            try:
+                dist = abs(float(t["open_price"]) - float(t["sl"]))
+                lot = float(t.get("lot_size") or 0)
+                if dist > 0 and lot > 0:
+                    from app.services.broker_specs import money_per_lot
+                    mpl = money_per_lot(t.get("symbol", ""), dist)
+                    if mpl and mpl > 0:
+                        risk = round(mpl * lot, 2)
+            except (TypeError, ValueError):
+                pass
+        # Real R when risk is known (live-captured or recovered from SL); None
         # (shown as "—") otherwise — never a fabricated 0.
         r = round(profit / risk, 2) if risk else None
         return {
@@ -257,8 +279,17 @@ class Mt5TradesService:
 
     def get_recent_trades(self, limit: int = 10) -> List[Dict]:
         closed = [self._normalize_closed(t) for t in self.fetch_history()]
+        self._journal(closed)
         closed.sort(key=lambda x: x.get("closed_at", ""), reverse=True)
         return closed[:limit]
+
+    def _journal(self, closed: List[Dict]) -> None:
+        """Persist closed trades to the durable journal (best-effort)."""
+        try:
+            from app.services.trade_journal_service import trade_journal_service
+            trade_journal_service.record_closed(closed)
+        except Exception:
+            pass
 
     # ── stats (same schema as trade_lifecycle_service.get_trade_stats) ─
 
@@ -281,6 +312,7 @@ class Mt5TradesService:
         account = self.fetch_account() or {}
 
         closed = [self._normalize_closed(t) for t in history]
+        self._journal(closed)
         closed.sort(key=lambda x: x.get("closed_at", ""))
 
         realized = sum(t["realized_pnl"] for t in closed)

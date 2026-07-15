@@ -454,12 +454,36 @@ def _start_telegram_scheduler():
     t.start()
 
 
+def _planner_run_due_loop():
+    """Fire the app's due TIME-triggered trade plans every minute. (Price-
+    triggered plans use native MT5 pending orders and need no polling.)"""
+    url = f"{config.app_base_url}/api/planner/run-due"
+    headers = {"Authorization": f"Bearer {config.cron_secret}"} if config.cron_secret else {}
+    while True:
+        try:
+            r = requests.get(url, headers=headers, timeout=30)
+            if r.status_code == 200 and (r.json().get("fired") or 0):
+                logger.info(f"Planner fired {r.json().get('fired')} due plan(s).")
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"Planner run-due failed: {e}")
+        time.sleep(60)
+
+
+def _start_planner_scheduler():
+    if not config.app_base_url:
+        return
+    t = threading.Thread(target=_planner_run_due_loop, name="planner-run-due", daemon=True)
+    t.start()
+    logger.info("Planner run-due scheduler on: every 60s.")
+
+
 # ────────────────────────────────────────────────
 # Main
 # ────────────────────────────────────────────────
 
 if __name__ == "__main__":
     _start_telegram_scheduler()
+    _start_planner_scheduler()
     connected = mt5_client.connect()
     if connected:
         logger.info("MT5 terminal connected at startup.")

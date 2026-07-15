@@ -105,7 +105,7 @@ def test_price_feed_restricted_to_configured_symbols(client):
     assert returned.isdisjoint({"NQ1!", "BTCUSD", "FOOBAR"})
 
 
-def test_price_feed_default_is_the_six_supported(client):
+def test_price_feed_default_is_the_supported_set(client):
     body = client.get("/market/prices").json()
     returned = {p["symbol"] for p in body["prices"]}
-    assert returned == {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "NZDUSD", "XAUUSD"}
+    assert returned == {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "NZDUSD", "USDCAD", "XAUUSD"}

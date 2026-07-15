@@ -118,6 +118,38 @@ async def get_positions():
     return await _bridge_get("/positions")
 
 
+def _reference_price(symbol: str) -> Optional[float]:
+    try:
+        from app.services.market_data import market_service
+        quote = market_service.get_price(symbol)
+        return quote.get("price") if quote else None
+    except Exception:
+        return None
+
+
+async def _execute_market(symbol, direction, lot_size, stop_loss, take_profit, ref_price):
+    """Validate + place a single market order; raise HTTPException on any failure."""
+    try:
+        validated = validate_trade(symbol, direction, lot_size, stop_loss, take_profit, reference_price=ref_price)
+    except Mt5ValidationError as e:
+        _audit_execution_intent({"symbol": symbol, "direction": direction, "lot_size": lot_size,
+                                 "stop_loss": stop_loss, "take_profit": take_profit,
+                                 "status": "rejected", "reason": str(e)})
+        raise HTTPException(status_code=400, detail=str(e))
+    payload = {"symbol": validated["symbol"], "direction": validated["direction"], "lot_size": validated["lot_size"]}
+    if stop_loss is not None:
+        payload["stop_loss"] = stop_loss
+    if take_profit is not None:
+        payload["take_profit"] = take_profit
+    _audit_execution_intent({**payload, "status": "accepted"})
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{_base()}/trade", json=payload, headers=_bridge_headers(), timeout=30)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
+    return _result_or_raise(resp)
+
+
 @router.post("/trade", summary="Send trade to MT5")
 async def proxy_trade(
     symbol: str,
@@ -126,52 +158,66 @@ async def proxy_trade(
     stop_loss: Optional[float] = None,
     take_profit: Optional[float] = None,
 ):
-    """Send a trade order to the local MT5 bridge, after safety validation."""
-    # Fetch the current price for side-aware SL/TP validation (best-effort).
-    reference_price = None
-    if stop_loss is not None or take_profit is not None:
-        try:
-            from app.services.market_data import market_service
-            quote = market_service.get_price(symbol)
-            reference_price = quote.get("price") if quote else None
-        except Exception:
-            reference_price = None
+    """Send a single market order to the local MT5 bridge, after safety validation."""
+    ref = _reference_price(symbol) if (stop_loss is not None or take_profit is not None) else None
+    return await _execute_market(symbol, direction, lot_size, stop_loss, take_profit, ref)
 
-    try:
-        validated = validate_trade(
-            symbol, direction, lot_size, stop_loss, take_profit, reference_price=reference_price
+
+@router.post("/scaled-trade", summary="Scaled market order — one position per take-profit")
+async def scaled_trade(
+    symbol: str,
+    direction: str,
+    lot_size: float,               # TOTAL lot across all targets
+    take_profits: str,             # comma-separated, e.g. "1.1450,1.1470,1.1490"
+    stop_loss: Optional[float] = None,
+):
+    """Book profit in stages: an MT5 position has only ONE take-profit, so to
+    exit at TP1/TP2/TP3 we split the total lot into one native position PER
+    target, each with the same stop-loss and its own TP. The broker then closes
+    each leg at its own level (instead of the whole trade closing at TP1)."""
+    tps = [float(t) for t in take_profits.split(",") if t.strip()]
+    if not tps:
+        raise HTTPException(status_code=400, detail="Provide at least one take-profit.")
+    n = len(tps)
+
+    # Lot must split into >= min-lot legs.
+    from app.services.instrument_config import get_instrument
+    cfg = get_instrument(symbol.upper()) or {}
+    min_lot = float(cfg.get("min_qty", 0.01) or 0.01)
+    step = float(cfg.get("qty_step", 0.01) or 0.01)
+    if lot_size < n * min_lot - 1e-9:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Lot {lot_size} is too small to split across {n} targets "
+                   f"(need ≥ {round(n * min_lot, 2)}). Increase the lot or use fewer targets.",
         )
-    except Mt5ValidationError as e:
-        _audit_execution_intent({
-            "symbol": symbol, "direction": direction, "lot_size": lot_size,
-            "stop_loss": stop_loss, "take_profit": take_profit,
-            "status": "rejected", "reason": str(e),
-        })
-        raise HTTPException(status_code=400, detail=str(e))
 
-    payload = {
-        "symbol": validated["symbol"],
-        "direction": validated["direction"],
-        "lot_size": validated["lot_size"],
-    }
-    if stop_loss is not None:
-        payload["stop_loss"] = stop_loss
-    if take_profit is not None:
-        payload["take_profit"] = take_profit
+    def _round_step(v: float) -> float:
+        return round(round(v / step) * step, 8)
 
-    _audit_execution_intent({**payload, "status": "accepted"})
+    per = _round_step(lot_size / n)
+    if per < min_lot:
+        per = min_lot
+    legs = [per] * n
+    # Put any rounding remainder on the last leg so the total matches.
+    legs[-1] = _round_step(lot_size - per * (n - 1))
+    if legs[-1] < min_lot:
+        legs[-1] = min_lot
 
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{_base()}/trade",
-                json=payload,
-                headers=_bridge_headers(),
-                timeout=30,
-            )
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {str(e)}")
-    return _result_or_raise(resp)
+    ref = _reference_price(symbol)
+    results = []
+    for lot, tp in zip(legs, sorted(tps, key=lambda x: x, reverse=(direction == "short"))):
+        # For longs, nearest TP first (ascending); for shorts, highest first.
+        try:
+            res = await _execute_market(symbol, direction, lot, stop_loss, tp, ref)
+            results.append({"take_profit": tp, "lot": lot, "status": "executed",
+                            "ticket": res.get("order"), "price": res.get("price")})
+        except HTTPException as e:
+            results.append({"take_profit": tp, "lot": lot, "status": "failed", "error": e.detail})
+    executed = [r for r in results if r["status"] == "executed"]
+    return {"symbol": symbol, "direction": direction, "legs": len(legs),
+            "executed": len(executed), "positions": results,
+            "total_lot": round(sum(r["lot"] for r in executed), 2)}
 
 
 @router.post("/order-check", summary="Validate an order without placing it")

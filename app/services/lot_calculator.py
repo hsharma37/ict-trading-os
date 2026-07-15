@@ -92,8 +92,19 @@ class LotCalculator:
         # Calculate pip distance
         pip_distance = price_distance / pip_size if pip_size > 0 else price_distance
 
-        # Total monetary risk per 1.0 lot for this SL distance
+        # Total monetary risk per 1.0 lot for this SL distance. Prefer the
+        # broker's REAL tick value (exact for any quote currency, e.g. USDCAD);
+        # fall back to the static pip value when the bridge isn't connected.
+        rate_source = "static"
         risk_per_lot = pip_distance * pip_value
+        try:
+            from app.services.broker_specs import money_per_lot
+            broker_rpl = money_per_lot(symbol, price_distance)
+            if broker_rpl and broker_rpl > 0:
+                risk_per_lot = broker_rpl
+                rate_source = "mt5"
+        except Exception:
+            pass
 
         if risk_per_lot <= 0:
             return {
@@ -110,8 +121,8 @@ class LotCalculator:
         lot_size = max(lot_cfg["min"], lot_size)
         lot_size = round(lot_size, 6)
 
-        # Actual risk with rounded lot size
-        actual_risk = pip_distance * pip_value * lot_size
+        # Actual risk with rounded lot size (uses the same broker/static basis)
+        actual_risk = risk_per_lot * lot_size
         actual_risk_pct = (actual_risk / account_balance * 100) if account_balance > 0 else 0
 
         # Notional value (position value) — for info only
@@ -142,6 +153,7 @@ class LotCalculator:
             "actual_risk": round(actual_risk, 2),
             "actual_risk_pct": round(actual_risk_pct, 2),
             "risk_per_lot": round(risk_per_lot, 2),
+            "rate_source": rate_source,  # "mt5" (broker tick value) or "static"
             "digits": digits,
             "leverage": leverage,  # for display only
         }
