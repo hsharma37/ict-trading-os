@@ -95,14 +95,28 @@ class LotCalculator:
         # Total monetary risk per 1.0 lot for this SL distance. Prefer the
         # broker's REAL tick value (exact for any quote currency, e.g. USDCAD);
         # fall back to the static pip value when the bridge isn't connected.
+        #
+        # BUT sanity-check the broker value against static — for USD-QUOTED
+        # symbols only. A broker that reports an understated tick_value/tick_size
+        # ratio (seen on XAUUSD) makes risk-per-lot too small and the lot
+        # balloons. The static pip value is EXACT for USD-quoted symbols (majors,
+        # gold), so there we trust the broker figure only within a sane band
+        # (0.5×–2×) of static and reject 10×/100× spec errors. For non-USD-quoted
+        # pairs (USDCAD, USDJPY) static is a rough default and the broker value is
+        # the authority, so we take it unconditionally.
         rate_source = "static"
-        risk_per_lot = pip_distance * pip_value
+        static_rpl = pip_distance * pip_value
+        risk_per_lot = static_rpl
+        usd_quoted = symbol.endswith("USD")
         try:
             from app.services.broker_specs import money_per_lot
             broker_rpl = money_per_lot(symbol, price_distance)
             if broker_rpl and broker_rpl > 0:
-                risk_per_lot = broker_rpl
-                rate_source = "mt5"
+                if usd_quoted and static_rpl > 0 and not (0.5 * static_rpl <= broker_rpl <= 2.0 * static_rpl):
+                    rate_source = "static (broker spec rejected)"  # implausible broker value
+                else:
+                    risk_per_lot = broker_rpl
+                    rate_source = "mt5"
         except Exception:
             pass
 

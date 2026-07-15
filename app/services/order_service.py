@@ -5,7 +5,14 @@ from app.services.market_data import MARKET_SPECS, market_service
 
 class OrderService:
     def calculate_quantity(self, symbol: str, entry_price: float, stop_loss: float, account_balance: float = 10000.0, risk_pct: float = 1.0) -> Dict:
-        spec = MARKET_SPECS.get(symbol, {"point_value": 1.0, "unit": "unit", "min_qty": 0.01, "qty_step": 0.01})
+        # Canonicalize the symbol before lookup — MARKET_SPECS is keyed by exact
+        # uppercase (e.g. "XAUUSD"). A non-canonical symbol ("xauusd") would miss
+        # and fall to point_value=1.0, sizing gold ~100× too large (distance×1
+        # instead of distance×100). Reject an unknown symbol rather than guess.
+        symbol = (symbol or "").upper()
+        spec = MARKET_SPECS.get(symbol)
+        if spec is None:
+            return {"symbol": symbol, "error": f"Unknown symbol '{symbol}' — cannot size safely without its contract spec."}
         distance = abs(entry_price - stop_loss)
         if distance <= 0:
             return {"symbol": symbol, "error": "Entry and stop loss must differ"}

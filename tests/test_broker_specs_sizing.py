@@ -21,3 +21,26 @@ def test_lot_falls_back_to_static(monkeypatch):
                                    account_balance=10000, risk_pct=1.0)
     assert out["rate_source"] == "static"
     assert out["lot_size"] > 0
+
+
+def test_gold_rejects_implausible_broker_value(monkeypatch):
+    # XAUUSD, SL $5 away, $100 risk. Correct static risk/lot = 5*100 = $500 → 0.2 lots.
+    # A broker that reports a 10×-understated tick value (→ $50/lot) would size
+    # 2.0 lots (10× too large). The USD-quoted sanity band must reject it.
+    monkeypatch.setattr("app.services.broker_specs.money_per_lot",
+                        lambda symbol, dist: 50.0 if symbol == "XAUUSD" else None)
+    out = lot_calculator.calculate("XAUUSD", entry_price=4000.0, stop_loss=3995.0,
+                                   account_balance=10000, risk_pct=1.0)
+    assert out["rate_source"] == "static (broker spec rejected)"
+    assert out["risk_per_lot"] == 500.0          # static, not the bad 50
+    assert abs(out["lot_size"] - 0.2) < 1e-6     # sane 0.2 lots, not 2.0
+
+
+def test_gold_accepts_plausible_broker_value(monkeypatch):
+    # A broker value close to static (within band) is trusted.
+    monkeypatch.setattr("app.services.broker_specs.money_per_lot",
+                        lambda symbol, dist: 505.0 if symbol == "XAUUSD" else None)
+    out = lot_calculator.calculate("XAUUSD", entry_price=4000.0, stop_loss=3995.0,
+                                   account_balance=10000, risk_pct=1.0)
+    assert out["rate_source"] == "mt5"
+    assert out["risk_per_lot"] == 505.0

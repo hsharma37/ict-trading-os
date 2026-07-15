@@ -282,7 +282,13 @@ async def _bridge_get(path: str, params: dict = None, timeout: float = 20, retri
     raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {type(last).__name__}: {last}")
 
 
-async def _bridge_post(path: str, payload: dict, timeout: float = 30, retries: int = 1):
+async def _bridge_post(path: str, payload: dict, timeout: float = 30, retries: int = 0):
+    """POST to the bridge. Defaults to NO retry: order-mutating calls (close,
+    partial-close, place-pending) are NOT idempotent — a retry after an ambiguous
+    timeout can execute the action a SECOND time (e.g. a partial-close that
+    actually succeeded, but whose response was slow, gets sent again and closes
+    more of the position, or a pending order gets placed twice). Only pass
+    retries>0 for genuinely idempotent operations (e.g. setting SL/TP)."""
     last = None
     for attempt in range(retries + 1):
         try:
@@ -338,7 +344,9 @@ async def modify_position(
         raise HTTPException(status_code=400, detail="stop_loss/take_profit must be positive prices.")
     _audit_execution_intent({"action": "modify", "ticket": ticket,
                              "stop_loss": stop_loss, "take_profit": take_profit, "status": "accepted"})
-    return await _bridge_post("/modify", {"ticket": ticket, "stop_loss": stop_loss, "take_profit": take_profit})
+    # Setting SL/TP to fixed prices is idempotent — a retry re-applies the same
+    # values, so it's safe to retry through a flaky tunnel (unlike close/partial).
+    return await _bridge_post("/modify", {"ticket": ticket, "stop_loss": stop_loss, "take_profit": take_profit}, retries=1)
 
 
 @router.post("/partial-close", summary="Close part of an open position")
