@@ -16,7 +16,11 @@ interface AppSettings {
   auto_trade: boolean
   notifications: boolean
   layout: string
+  calibration_risk: number
+  calibration_lots: Record<string, number>
 }
+
+const CALIB_SYMBOLS = ['XAUUSD', 'EURUSD', 'USDJPY', 'USDCAD']
 
 const DEFAULTS: AppSettings = {
   theme: 'dark',
@@ -27,6 +31,8 @@ const DEFAULTS: AppSettings = {
   auto_trade: false,
   notifications: true,
   layout: 'default',
+  calibration_risk: 75,
+  calibration_lots: { XAUUSD: 0.25, EURUSD: 0.53, USDJPY: 0.53, USDCAD: 0.30 },
 }
 
 const SYMBOLS = SUPPORTED_SYMBOLS
@@ -218,6 +224,47 @@ export default function SettingsPage() {
                 onChange={(e) => updateField('account_balance', parseFloat(e.target.value))}
                 className="w-full px-3 py-2 border rounded-md bg-background text-sm"
               />
+            </div>
+
+            {/* R & size-normalized-stats calibration */}
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium">R & per-lot stats calibration</label>
+              <p className="text-xs text-muted-foreground">
+                The lot you trade for a fixed $ risk on each instrument. R = P&L ÷ (risk scaled by
+                lot), and per-trade stats are normalized to these standard lots. Takes priority over
+                the fixed risk above for these symbols.
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground w-28">Risk per trade ($)</span>
+                <input
+                  type="number" step="1" min="1"
+                  value={settings.calibration_risk}
+                  onChange={(e) => updateField('calibration_risk', parseFloat(e.target.value) || 0)}
+                  className="w-32 px-3 py-2 border rounded-md bg-background text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                {CALIB_SYMBOLS.map((sym) => (
+                  <div key={sym} className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground w-20">{sym}</span>
+                    <input
+                      type="number" step="0.01" min="0"
+                      value={settings.calibration_lots?.[sym] ?? ''}
+                      onChange={(e) =>
+                        updateField('calibration_lots', {
+                          ...settings.calibration_lots,
+                          [sym]: parseFloat(e.target.value) || 0,
+                        })
+                      }
+                      className="w-24 px-3 py-2 border rounded-md bg-background text-sm"
+                    />
+                    <span className="text-xs text-muted-foreground">lots</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                e.g. XAUUSD 0.25 lots ≈ ${settings.calibration_risk} risk → a 0.50-lot trade risks ${(settings.calibration_risk * 2).toFixed(0)}.
+              </p>
             </div>
           </CardContent>
         </Card>

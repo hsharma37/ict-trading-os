@@ -2,7 +2,7 @@
 import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict
 from app.core.database import db
 from app.core.config import settings as app_settings
 from app.services.bridge_config import (
@@ -23,6 +23,10 @@ class SettingsUpdate(BaseModel):
     auto_trade: Optional[bool] = None
     notifications: Optional[bool] = None
     layout: Optional[str] = None
+    # R & size-normalized-stats calibration: the standard lots the trader uses
+    # for `calibration_risk` dollars of risk on each instrument.
+    calibration_risk: Optional[float] = None
+    calibration_lots: Optional[Dict[str, float]] = None
 
 
 class BridgeUrlUpdate(BaseModel):
@@ -42,6 +46,14 @@ def _bridge_config() -> dict:
     }
 
 
+def _calibration_config() -> dict:
+    """Effective R/stats calibration (defaults merged with any Settings override),
+    so the UI can show and edit the current per-instrument standard lots."""
+    from app.services.mt5_trades_service import get_calibration
+    risk, lots = get_calibration()
+    return {"calibration_risk": risk, "calibration_lots": lots}
+
+
 @router.get("")
 def get_settings():
     """Get current user settings."""
@@ -58,7 +70,7 @@ def get_settings():
     }
     if settings:
         base = settings
-    return {**base, **_bridge_config()}
+    return {**base, **_bridge_config(), **_calibration_config()}
 
 @router.post("")
 def update_settings(update: SettingsUpdate):
@@ -69,7 +81,12 @@ def update_settings(update: SettingsUpdate):
 
     updates = {k: v for k, v in update.dict().items() if v is not None}
     db.update("settings", "global", updates)
-    return {**db.find_one("settings", "global"), **_bridge_config()}
+    # Calibration is cached in the trades service — invalidate so lot/R edits
+    # take effect immediately rather than after the cache TTL.
+    if "calibration_risk" in updates or "calibration_lots" in updates:
+        from app.services.mt5_trades_service import clear_calibration_cache
+        clear_calibration_cache()
+    return {**db.find_one("settings", "global"), **_bridge_config(), **_calibration_config()}
 
 
 @router.get("/mt5-bridge-url", summary="Current MT5 bridge URL config")
