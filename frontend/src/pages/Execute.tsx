@@ -273,13 +273,31 @@ export default function Execute() {
 
   const placeMt5Order = async () => {
     const sl = stopLoss ? parseFloat(stopLoss) : undefined
-    const tp = tp1 ? parseFloat(tp1) : undefined  // MT5 positions carry a single TP
+    const tp = tp1 ? parseFloat(tp1) : undefined  // a single MT5 position carries one TP
+    // All TPs the user set, in order — used for scaled (staged) profit-booking.
+    const allTps = [tp1, tp2, tp3].map((t) => parseFloat(t)).filter((t) => t && t > 0)
     const lot = await resolveLot()
     if (!lot) {
       setError('Enter a stop loss (used to auto-size the lot) or type a lot size in the manual field.')
       return
     }
     const direction = side === 'BUY' ? 'long' : 'short'
+
+    // Multiple take-profits on a market order → scale out: one broker position
+    // per TP (an MT5 position has only one TP, so a single order would close
+    // entirely at TP1). Each leg exits at its own target; SL is shared.
+    if (orderType === 'market' && allTps.length >= 2) {
+      const res = await mt5Api.scaledTrade({
+        symbol, direction, lot_size: lot, take_profits: allTps.join(','), stop_loss: sl,
+      })
+      const d = res.data || {}
+      const tickets = (d.positions || []).filter((p: any) => p.status === 'executed').map((p: any) => p.ticket).join(', ')
+      const failed = (d.positions || []).filter((p: any) => p.status === 'failed')
+      setSuccess(`✅ Scaled entry: ${d.executed}/${d.legs} positions opened on ${symbol} ${direction} (${d.total_lot} lots total), each exiting at its own TP. Tickets: ${tickets}`)
+      if (failed.length) setError(`${failed.length} leg(s) failed: ${failed.map((f: any) => f.error).join('; ')}`)
+      mt5.refetch?.()
+      return
+    }
 
     if (orderType === 'market') {
       const res = await mt5Api.trade({ symbol, direction, lot_size: lot, stop_loss: sl, take_profit: tp })
@@ -395,8 +413,9 @@ export default function Execute() {
       {mt5.connected && (
         <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-emerald-300/90 text-xs">
           Orders below are sent <strong>directly to your MT5 account</strong>. Market orders fill immediately;
-          limit/stop orders rest as pending until price is reached. Guardrails (symbol allow-list, max lot,
-          side-aware SL/TP) are enforced server-side.
+          limit/stop orders rest as pending until price is reached. <strong>Set TP1 + TP2/TP3 to scale out</strong> —
+          the lot is split into one position per target (each exits at its own TP), since a single MT5 position
+          can only hold one take-profit. Guardrails (symbol allow-list, max lot, side-aware SL/TP) are enforced server-side.
         </div>
       )}
 
