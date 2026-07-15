@@ -114,22 +114,22 @@ def test_context_block_mentions_account_and_positions(monkeypatch):
 
 def test_lot_calibrated_r(monkeypatch):
     _wire(monkeypatch)
-    # XAUUSD calibrated at 0.25 lot per $100 risk -> risk-per-lot $400.
-    # 0.25 lot, +$100 -> risk $100, R = 1.0
+    # XAUUSD calibrated at 0.25 lot per $75 risk -> risk-per-lot $300.
+    # 0.25 lot, +$75 -> risk $75, R = 1.0
     c1 = mt5_trades_service._normalize_closed(
         {"ticket": "9", "symbol": "XAUUSD", "direction": "short", "lot_size": 0.25,
-         "open_price": 4063.3, "close_price": 4059.71, "profit": 100.0, "closed_at": "2026-07-15T01:00:01"})
-    assert c1["risk_money"] == 100.0 and c1["r"] == 1.0
-    # 0.50 lot (2× standard), +$200 -> risk $200, R = 1.0 (scales with lot)
+         "open_price": 4063.3, "close_price": 4059.71, "profit": 75.0, "closed_at": "2026-07-15T01:00:01"})
+    assert c1["risk_money"] == 75.0 and c1["r"] == 1.0
+    # 0.50 lot (2× standard), +$150 -> risk $150, R = 1.0 (scales with lot)
     c2 = mt5_trades_service._normalize_closed(
         {"ticket": "10", "symbol": "XAUUSD", "direction": "short", "lot_size": 0.5,
-         "open_price": 4063.3, "close_price": 4059.71, "profit": 200.0, "closed_at": "2026-07-15T01:00:01"})
-    assert c2["risk_money"] == 200.0 and c2["r"] == 1.0
-    # EURUSD calibrated at 0.53 lot per $100 -> 0.53 lot, +$50 -> risk $100, R = 0.5
+         "open_price": 4063.3, "close_price": 4059.71, "profit": 150.0, "closed_at": "2026-07-15T01:00:01"})
+    assert c2["risk_money"] == 150.0 and c2["r"] == 1.0
+    # EURUSD 0.53 lot per $75 -> risk-per-lot $141.51. 0.53 lot, +$75 -> R = 1.0
     c3 = mt5_trades_service._normalize_closed(
         {"ticket": "8", "symbol": "EURUSD", "direction": "long", "lot_size": 0.53,
-         "open_price": 1.10, "close_price": 1.11, "profit": 50.0, "closed_at": "2026-07-15T01:00:01"})
-    assert c3["risk_money"] == 100.0 and c3["r"] == 0.5
+         "open_price": 1.10, "close_price": 1.11, "profit": 75.0, "closed_at": "2026-07-15T01:00:01"})
+    assert c3["risk_money"] == 75.0 and c3["r"] == 1.0
 
 
 def test_risk_money_and_open_r(monkeypatch):

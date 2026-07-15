@@ -155,11 +155,13 @@ class Mt5TradesService:
         except Exception:
             return None
 
-    # Per-instrument lot the trader uses for a fixed $100 of risk (their own
-    # calibration). Risk-per-lot = 100 / avg_lot, so a trade's risk scales with
-    # its actual lot: e.g. XAUUSD 0.25 lot ≈ $100, 0.50 lot ≈ $200. This is the
-    # most faithful reflection of how they size, so R is computed from it first.
-    _RISK_REF_LOT_PER_100 = {
+    # The trader risks a flat $75 per trade, and these are the lots they use for
+    # that risk on each instrument. Risk-per-lot = 75 / avg_lot, so a trade's
+    # risk scales with its actual lot: e.g. XAUUSD 0.25 lot ≈ $75, 0.50 lot ≈
+    # $150. This is the most faithful reflection of how they size, so R is
+    # computed from it first.
+    _RISK_REF_DOLLARS = 75.0
+    _RISK_REF_LOT = {
         "XAUUSD": 0.25,
         "USDJPY": 0.53,
         "EURUSD": 0.53,
@@ -167,16 +169,16 @@ class Mt5TradesService:
     }
 
     def _lot_calibrated_risk(self, symbol: str, lot: float) -> Optional[float]:
-        """Risk $ for a trade from the per-instrument lot→$100 calibration:
-        (100 / avg_lot) × actual_lot. None when the symbol isn't calibrated."""
-        avg = self._RISK_REF_LOT_PER_100.get(str(symbol or "").upper())
+        """Risk $ for a trade from the per-instrument lot→$75 calibration:
+        (75 / avg_lot) × actual_lot. None when the symbol isn't calibrated."""
+        avg = self._RISK_REF_LOT.get(str(symbol or "").upper())
         try:
             lot = float(lot)
         except (TypeError, ValueError):
             return None
         if not avg or avg <= 0 or lot <= 0:
             return None
-        return round((100.0 / avg) * lot, 2)
+        return round((self._RISK_REF_DOLLARS / avg) * lot, 2)
 
     def compute_r(self, profit: float, pos: Dict) -> tuple:
         """Return (r, risk_money). Priority: the per-instrument lot→$100
