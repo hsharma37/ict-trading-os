@@ -155,9 +155,36 @@ class Mt5TradesService:
         except Exception:
             return None
 
+    # Per-instrument lot the trader uses for a fixed $100 of risk (their own
+    # calibration). Risk-per-lot = 100 / avg_lot, so a trade's risk scales with
+    # its actual lot: e.g. XAUUSD 0.25 lot ≈ $100, 0.50 lot ≈ $200. This is the
+    # most faithful reflection of how they size, so R is computed from it first.
+    _RISK_REF_LOT_PER_100 = {
+        "XAUUSD": 0.25,
+        "USDJPY": 0.53,
+        "EURUSD": 0.53,
+        "USDCAD": 0.30,
+    }
+
+    def _lot_calibrated_risk(self, symbol: str, lot: float) -> Optional[float]:
+        """Risk $ for a trade from the per-instrument lot→$100 calibration:
+        (100 / avg_lot) × actual_lot. None when the symbol isn't calibrated."""
+        avg = self._RISK_REF_LOT_PER_100.get(str(symbol or "").upper())
+        try:
+            lot = float(lot)
+        except (TypeError, ValueError):
+            return None
+        if not avg or avg <= 0 or lot <= 0:
+            return None
+        return round((100.0 / avg) * lot, 2)
+
     def compute_r(self, profit: float, pos: Dict) -> tuple:
-        """Return (r, risk_money). Prefers the user's fixed per-trade risk, else
-        the stop-loss-derived risk. None when neither is available."""
+        """Return (r, risk_money). Priority: the per-instrument lot→$100
+        calibration (scales with the trade's lot), then the user's fixed
+        per-trade risk, then the stop-loss-derived risk. None when none apply."""
+        calibrated = self._lot_calibrated_risk(pos.get("symbol"), pos.get("lot_size"))
+        if calibrated and calibrated > 0:
+            return round(profit / calibrated, 2), calibrated
         fixed = self.fixed_risk_per_trade()
         if fixed:
             return round(profit / fixed, 2), fixed

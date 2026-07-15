@@ -112,11 +112,31 @@ def test_context_block_mentions_account_and_positions(monkeypatch):
     assert "10391.74" in block
 
 
+def test_lot_calibrated_r(monkeypatch):
+    _wire(monkeypatch)
+    # XAUUSD calibrated at 0.25 lot per $100 risk -> risk-per-lot $400.
+    # 0.25 lot, +$100 -> risk $100, R = 1.0
+    c1 = mt5_trades_service._normalize_closed(
+        {"ticket": "9", "symbol": "XAUUSD", "direction": "short", "lot_size": 0.25,
+         "open_price": 4063.3, "close_price": 4059.71, "profit": 100.0, "closed_at": "2026-07-15T01:00:01"})
+    assert c1["risk_money"] == 100.0 and c1["r"] == 1.0
+    # 0.50 lot (2× standard), +$200 -> risk $200, R = 1.0 (scales with lot)
+    c2 = mt5_trades_service._normalize_closed(
+        {"ticket": "10", "symbol": "XAUUSD", "direction": "short", "lot_size": 0.5,
+         "open_price": 4063.3, "close_price": 4059.71, "profit": 200.0, "closed_at": "2026-07-15T01:00:01"})
+    assert c2["risk_money"] == 200.0 and c2["r"] == 1.0
+    # EURUSD calibrated at 0.53 lot per $100 -> 0.53 lot, +$50 -> risk $100, R = 0.5
+    c3 = mt5_trades_service._normalize_closed(
+        {"ticket": "8", "symbol": "EURUSD", "direction": "long", "lot_size": 0.53,
+         "open_price": 1.10, "close_price": 1.11, "profit": 50.0, "closed_at": "2026-07-15T01:00:01"})
+    assert c3["risk_money"] == 100.0 and c3["r"] == 0.5
+
+
 def test_risk_money_and_open_r(monkeypatch):
     _wire(monkeypatch)
-    # EURUSD 0.10 lot, 20-pip SL, +10 float -> risk $20, R = 0.5
-    pos = {"ticket": "5", "symbol": "EURUSD", "direction": "long", "lot_size": 0.10,
-           "open_price": 1.1400, "sl": 1.1380, "current_price": 1.1410, "profit": 10.0}
+    # GBPUSD (not lot-calibrated) 0.10 lot, 20-pip SL, +10 float -> risk $20, R = 0.5
+    pos = {"ticket": "5", "symbol": "GBPUSD", "direction": "long", "lot_size": 0.10,
+           "open_price": 1.2700, "sl": 1.2680, "current_price": 1.2710, "profit": 10.0}
     assert mt5_trades_service._risk_money(pos) == 20.0
     assert mt5_trades_service._normalize_open(pos)["r"] == 0.5
 
@@ -125,30 +145,33 @@ def test_fixed_risk_per_trade_drives_r(monkeypatch):
     _wire(monkeypatch)
     from app.core.database import db
     db.insert("settings", {"id": "global", "risk_per_trade": 70})  # user risks $70/trade
+    # GBPUSD isn't lot-calibrated, so the fixed per-trade risk applies.
     closed = mt5_trades_service._normalize_closed(
-        {"ticket": "9", "symbol": "XAUUSD", "direction": "short", "lot_size": 0.2,
-         "open_price": 4063.3, "close_price": 4059.71, "profit": 140.0, "closed_at": "2026-07-15T01:00:01"})
+        {"ticket": "9", "symbol": "GBPUSD", "direction": "short", "lot_size": 0.2,
+         "open_price": 1.2700, "close_price": 1.2650, "profit": 140.0, "closed_at": "2026-07-15T01:00:01"})
     assert closed["r"] == 2.0  # 140 / 70
     assert closed["risk_money"] == 70
 
 
 def test_closed_r_from_recovered_sl(monkeypatch):
     _wire(monkeypatch)
-    # XAUUSD: SL 6.7 away, 0.2 lots -> risk ≈ 6.7 * 100 * 0.2 = $134 (static spec).
+    # GBPUSD (not calibrated, no fixed risk): SL 20 pips away, 0.1 lots ->
+    # risk = 0.0020 * (1.0/0.00001) * 0.1 = $20 (static spec).
     closed = mt5_trades_service._normalize_closed(
-        {"ticket": "9", "symbol": "XAUUSD", "direction": "short", "lot_size": 0.2,
-         "open_price": 4063.3, "sl": 4070.0, "close_price": 4059.71, "profit": 134.0,
+        {"ticket": "9", "symbol": "GBPUSD", "direction": "short", "lot_size": 0.1,
+         "open_price": 1.2700, "sl": 1.2720, "close_price": 1.2680, "profit": 20.0,
          "closed_at": "2026-07-15T01:00:01"})
-    assert closed["risk_money"] == 134.0
+    assert closed["risk_money"] == 20.0
     assert closed["r"] == 1.0
 
 
 def test_closed_r_is_none_without_risk_or_sl(monkeypatch):
     _wire(monkeypatch)
+    # GBPUSD: not calibrated, no fixed risk, no SL -> honest "—"
     closed = mt5_trades_service._normalize_closed(
-        {"ticket": "999", "symbol": "EURUSD", "direction": "long", "lot_size": 0.1,
-         "open_price": 1.1, "close_price": 1.11, "profit": 10.0, "closed_at": "2026-07-15T01:00:01"})
-    assert closed["r"] is None  # no fixed risk, no SL -> honest "—"
+        {"ticket": "999", "symbol": "GBPUSD", "direction": "long", "lot_size": 0.1,
+         "open_price": 1.27, "close_price": 1.28, "profit": 10.0, "closed_at": "2026-07-15T01:00:01"})
+    assert closed["r"] is None
 
 
 def test_trade_lifecycle_delegates_to_mt5(monkeypatch):
