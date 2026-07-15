@@ -41,6 +41,7 @@ _CCY_KEYWORDS = {
     "JPY": ["yen", " boj", "bank of japan", "ueda"],
     "AUD": ["aussie", " rba", "reserve bank of australia", "australian dollar"],
     "NZD": ["kiwi", "rbnz", "reserve bank of new zealand", "new zealand dollar"],
+    "CAD": ["loonie", " boc", "bank of canada", "canadian dollar"],
     "XAU": ["xau", "gold", "bullion", "precious metal", "safe haven", "safe-haven"],
 }
 
@@ -51,7 +52,7 @@ _USD_MACRO = [
     "dollar index", "dxy", "treasury yields", "rate decision", "jackson hole",
 ]
 
-_ALL_CCYS = ["EUR", "USD", "GBP", "JPY", "AUD", "NZD"]
+_ALL_CCYS = ["EUR", "USD", "GBP", "JPY", "AUD", "NZD", "CAD"]
 
 # High-impact scheduled/econ events.
 _HIGH_IMPACT = [

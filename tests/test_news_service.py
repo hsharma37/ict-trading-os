@@ -68,7 +68,7 @@ def test_gold_tags_xauusd(monkeypatch):
 def test_usd_macro_fans_out_to_all(monkeypatch):
     _wire(monkeypatch)
     cpi = next(n for n in news_service.get_news(limit=20) if "CPI" in n["title"])
-    assert set(cpi["symbols"]) == {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "NZDUSD", "XAUUSD"}
+    assert set(cpi["symbols"]) == {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "NZDUSD", "USDCAD", "XAUUSD"}
     assert cpi["impact"] == "high"
 
 

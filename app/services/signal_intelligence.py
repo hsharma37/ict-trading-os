@@ -39,6 +39,7 @@ _WORD_CCY = {
     "yen": "JPY", "jpy": "JPY", "boj": "JPY",
     "aussie": "AUD", "aud": "AUD", "rba": "AUD",
     "kiwi": "NZD", "nzd": "NZD", "rbnz": "NZD",
+    "loonie": "CAD", "cad": "CAD", "boc": "CAD",
 }
 _WINDOW = 4  # words on each side of a currency mention to attribute sentiment
 
