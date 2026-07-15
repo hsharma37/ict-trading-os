@@ -133,6 +133,9 @@ class _FakeMt5:
     def history_deals_get(self, since, until):
         return ()
 
+    def history_orders_get(self, since, until):
+        return getattr(self, "orders_history", ())
+
     def symbol_info(self, symbol):
         return self.symbol_info_result
 
@@ -326,6 +329,20 @@ def test_history_deals_returns_paired_trades_not_raw_deal_records(connected_clie
     assert len(trades) == 1
     assert trades[0]["direction"] == "short"
     assert trades[0]["close_price"] == 110.0
+
+
+def test_history_recovers_sl_tp_from_opening_order(connected_client):
+    client, fake = connected_client
+    fake.history_deals_get = lambda since, until: (
+        _FakeResult(position_id=7, entry=0, type=0, symbol="XAUUSD", volume=0.1, price=4000.0, profit=0.0, swap=0, commission=0, time=1),
+        _FakeResult(position_id=7, entry=1, type=1, symbol="XAUUSD", volume=0.1, price=4020.0, profit=200.0, swap=-1.0, commission=-2.0, time=2),
+    )
+    # Opening order for position 7 carried an SL/TP.
+    fake.orders_history = (_FakeResult(position_id=7, sl=3990.0, tp=4030.0),)
+    t = client.history_deals()[0]
+    assert t["sl"] == 3990.0 and t["tp"] == 4030.0
+    # profit includes swap + commission: 200 - 1 - 2 = 197.
+    assert t["profit"] == 197.0
 
 
 # ── Market data ──────────────────────────────────────────────

@@ -1,10 +1,16 @@
 """Journal Router — durable per-instrument closed-trade journal."""
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from typing import Optional
 
 from app.services.trade_journal_service import trade_journal_service
 
 router = APIRouter(prefix="/journal", tags=["Journal"])
+
+
+class RiskFill(BaseModel):
+    sl: Optional[float] = None
+    r: Optional[float] = None
 
 
 @router.get("")
@@ -30,3 +36,11 @@ def journal_summary(symbol: Optional[str] = None):
 def sync_journal():
     """Pull the broker's history into the durable journal on demand."""
     return trade_journal_service.sync_from_mt5()
+
+
+@router.post("/{ticket:path}/risk", summary="Manually fill R (via SL or directly)")
+def set_risk(ticket: str, body: RiskFill):
+    result = trade_journal_service.set_risk(ticket, sl=body.sl, r=body.r)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result

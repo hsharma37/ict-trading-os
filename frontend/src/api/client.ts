@@ -143,6 +143,7 @@ export const journalApi = {
   symbols: () => apiClient.get('/journal/symbols'),
   summary: (symbol?: string) => apiClient.get('/journal/summary', { params: { symbol } }),
   sync: () => apiClient.post('/journal/sync'),
+  setRisk: (ticket: string, data: { sl?: number; r?: number }) => apiClient.post(`/journal/${ticket}/risk`, data),
 }
 
 // Planner API

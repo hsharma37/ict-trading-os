@@ -40,6 +40,8 @@ class TradeJournalService:
                 "lot_size": t.get("lot_size"),
                 "open_price": t.get("open_price"),
                 "close_price": t.get("close_price"),
+                "sl": t.get("sl"),
+                "tp": t.get("tp"),
                 "profit": t.get("realized_pnl", t.get("profit", 0)),
                 "r": t.get("r"),
                 "risk_money": t.get("risk_money"),
@@ -88,6 +90,33 @@ class TradeJournalService:
         else:
             takeaway = "Scratch — break-even exit."
         return f"{head} {takeaway}"
+
+    def set_risk(self, ticket: str, sl: Optional[float] = None, r: Optional[float] = None) -> Dict[str, Any]:
+        """Manually fill R for a journaled trade — either by giving the stop-loss
+        (R is computed from it) or R directly. Regenerates the auto-note."""
+        entry = db.find_one(_COLL, str(ticket))
+        if not entry:
+            return {"error": "Trade not found"}
+        profit = float(entry.get("profit") or 0)
+        risk_money = entry.get("risk_money")
+        if sl:
+            try:
+                dist = abs(float(entry["open_price"]) - float(sl))
+                lot = float(entry.get("lot_size") or 0)
+                if dist > 0 and lot > 0:
+                    from app.services.broker_specs import money_per_lot
+                    mpl = money_per_lot(entry.get("symbol", ""), dist)
+                    risk_money = round((mpl or (dist * 100000 / 1.0)) * lot, 2)  # broker rate, else rough
+                    r = round(profit / risk_money, 2) if risk_money else None
+                    entry["sl"] = float(sl)
+            except (TypeError, ValueError, ZeroDivisionError):
+                return {"error": "Could not compute R from that stop-loss"}
+        if r is None:
+            return {"error": "Provide a stop-loss (to compute R) or an R value."}
+        patch = {"r": r, "risk_money": risk_money, "sl": entry.get("sl")}
+        patch["note"] = self._auto_note({**entry, **patch})
+        db.update(_COLL, str(ticket), patch)
+        return db.find_one(_COLL, str(ticket))
 
     def sync_from_mt5(self) -> Dict[str, Any]:
         """Explicitly pull the broker's closed-trade history and store it in the

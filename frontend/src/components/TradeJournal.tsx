@@ -47,6 +47,25 @@ export default function TradeJournal() {
     catch { /* ignore */ } finally { setSyncing(false) }
   }
 
+  // Manually fill R for a trade whose stop-loss wasn't captured: enter the SL
+  // and R is computed from it (broker rates), or enter R directly.
+  const fillR = async (t: JournalTrade) => {
+    const sl = window.prompt(`Stop-loss for ${t.symbol} (opened at ${t.open_price}) — R is computed from it.\nLeave blank to enter R directly.`)
+    if (sl === null) return
+    try {
+      if (sl.trim()) {
+        await journalApi.setRisk(t.id, { sl: Number(sl) })
+      } else {
+        const r = window.prompt('Enter the R multiple for this trade (e.g. 1.5 or -1):')
+        if (r === null || !r.trim()) return
+        await journalApi.setRisk(t.id, { r: Number(r) })
+      }
+      await load()
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || 'Could not set R')
+    }
+  }
+
   const stat = (label: string, value: string, cls = '') => (
     <div className="p-2.5 rounded-lg bg-muted">
       <div className="text-xs text-muted-foreground">{label}</div>
@@ -126,7 +145,14 @@ export default function TradeJournal() {
                       <td className="p-2 text-right font-mono">{t.open_price}</td>
                       <td className="p-2 text-right font-mono">{t.close_price}</td>
                       <td className={`p-2 text-right font-mono font-semibold ${pos ? 'text-emerald-400' : 'text-red-400'}`}>{money(t.profit ?? 0)}</td>
-                      <td className="p-2 text-right font-mono">{t.r != null ? `${t.r}R` : '—'}</td>
+                      <td className="p-2 text-right font-mono">
+                        {t.r != null ? `${t.r}R` : (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); fillR(t) }}
+                            className="text-[11px] px-1.5 py-0.5 rounded border border-border text-primary hover:bg-primary/10"
+                          >set R</button>
+                        )}
+                      </td>
                       <td className="p-2 text-xs text-muted-foreground">{t.closed_at ? new Date(t.closed_at).toLocaleString() : '-'}</td>
                     </tr>,
                     expanded === t.id && t.note && (

@@ -62,3 +62,23 @@ def test_auto_note_generated():
     assert "XAUUSD" in t["note"]
     assert "win" in t["note"].lower()
     assert "2.0R" in t["note"] or "+2.00R" in t["note"]
+
+
+def test_manual_set_risk_by_sl(monkeypatch):
+    # No broker specs in tests -> uses the rough fallback; R sign/magnitude sane.
+    j.record_closed([{"ticket": "50", "symbol": "EURUSD", "side": "BUY", "direction": "long",
+                      "lot_size": 0.1, "open_price": 1.1000, "close_price": 1.1050,
+                      "realized_pnl": 50.0, "r": None, "closed_at": "2026-07-15T05:00:00"}])
+    out = j.set_risk("50", sl=1.0950)  # 50-pip stop
+    assert out.get("r") is not None
+    assert out["r"] > 0  # winning trade -> positive R
+    assert out["sl"] == 1.0950
+
+
+def test_manual_set_risk_direct():
+    j.record_closed([{"ticket": "51", "symbol": "XAUUSD", "side": "SELL", "direction": "short",
+                      "lot_size": 0.1, "open_price": 4000, "close_price": 3990,
+                      "realized_pnl": 100.0, "r": None, "closed_at": "2026-07-15T05:00:00"}])
+    out = j.set_risk("51", r=2.5)
+    assert out["r"] == 2.5
+    assert "2.5" in out["note"] or "2.50" in out["note"]
