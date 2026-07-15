@@ -151,6 +151,23 @@ def test_closed_r_is_none_without_risk_or_sl(monkeypatch):
     assert closed["r"] is None  # no fixed risk, no SL -> honest "—"
 
 
+def test_background_journal_tick_prunes_stale_rows(monkeypatch):
+    # A stale broker row from an older keying scheme sits in the journal.
+    _wire(monkeypatch)
+    from app.services.trade_journal_service import trade_journal_service as j
+    j.record_closed([{"ticket": "STALE_PID", "symbol": "XAUUSD", "side": "SELL",
+                      "direction": "short", "lot_size": 0.1, "open_price": 4000,
+                      "close_price": 3990, "realized_pnl": 40.0,
+                      "closed_at": "2026-07-01T00:00:00", "source": "mt5"}])
+    # A plain stats call (the 60s tick path) must reconcile the journal to MT5's
+    # current history (tickets 9 and 8), pruning the stale row — not just the
+    # manual Sync button.
+    mt5_trades_service.get_stats()
+    tickets = {t["ticket"] for t in j.list_trades()}
+    assert "STALE_PID" not in tickets
+    assert tickets == {"9", "8"}  # exact mirror of the wired MT5 HISTORY
+
+
 def test_trade_lifecycle_delegates_to_mt5(monkeypatch):
     _wire(monkeypatch)
     from app.services.trade_lifecycle_service import trade_lifecycle_service

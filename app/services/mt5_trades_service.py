@@ -287,10 +287,13 @@ class Mt5TradesService:
         return closed[:limit]
 
     def _journal(self, closed: List[Dict]) -> None:
-        """Persist closed trades to the durable journal (best-effort)."""
+        """Mirror closed trades into the durable journal (best-effort). Uses
+        mirror_closed (record + prune) rather than a bare insert so the journal
+        converges to MT5's exact set on every tick — stale/duplicate rows from an
+        older keying scheme get cleaned up automatically, not just on manual sync."""
         try:
             from app.services.trade_journal_service import trade_journal_service
-            trade_journal_service.record_closed(closed)
+            trade_journal_service.mirror_closed(closed)
         except Exception:
             pass
 

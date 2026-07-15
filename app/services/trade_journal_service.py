@@ -115,6 +115,16 @@ class TradeJournalService:
         db.update(_COLL, str(ticket), patch)
         return db.find_one(_COLL, str(ticket))
 
+    def mirror_closed(self, closed: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Make the journal exactly reflect this MT5 closed-trade set: upsert every
+        row, then prune stale broker rows MT5 no longer reports. This is the single
+        convergence point used by BOTH the manual sync and the background auto-
+        journal tick, so duplicates (e.g. rows left by an older keying scheme) are
+        cleaned up on any code path, not just the Sync button."""
+        added = self.record_closed(closed)
+        removed = self._reconcile(closed)
+        return {"added": added, "removed": removed}
+
     def sync_from_mt5(self) -> Dict[str, Any]:
         """Mirror the broker's closed-trade history into the journal: upsert every
         current MT5 close, then prune stale broker-sourced rows so the journal is
@@ -129,11 +139,10 @@ class TradeJournalService:
             if not mt5_trades_service.is_active():
                 return {"ok": False, "reason": "MT5 not connected", "added": 0}
             closed = [mt5_trades_service._normalize_closed(t) for t in mt5_trades_service.fetch_history()]
-            added = self.record_closed(closed)
-            removed = self._reconcile(closed)
+            res = self.mirror_closed(closed)
             return {
-                "ok": True, "fetched": len(closed), "added": added,
-                "removed": removed, "total": len(self.list_trades(limit=100000)),
+                "ok": True, "fetched": len(closed), "added": res["added"],
+                "removed": res["removed"], "total": len(self.list_trades(limit=100000)),
             }
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "reason": str(e), "added": 0}
