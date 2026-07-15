@@ -32,13 +32,15 @@ def clear_quote_cache():
     settings overrides always take effect."""
     from app.services.quote_service import clear_cache
     from app.services.bridge_config import clear_cache as clear_bridge_cache
-    from app.services.mt5_trades_service import mt5_trades_service
+    from app.services.mt5_trades_service import mt5_trades_service, clear_calibration_cache
     clear_cache()
     clear_bridge_cache()
+    clear_calibration_cache()
     mt5_trades_service.clear_cache()
     yield
     clear_cache()
     clear_bridge_cache()
+    clear_calibration_cache()
     mt5_trades_service.clear_cache()
 
 

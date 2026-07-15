@@ -148,6 +148,23 @@ def test_profit_norm_and_normalized_stats(monkeypatch):
     assert s["best_trade"] == 89.75 and s["worst_trade"] == -53.0
 
 
+def test_calibration_reads_from_settings(monkeypatch):
+    _wire(monkeypatch)
+    from app.core.database import db
+    from app.services import mt5_trades_service as m
+    # Override: XAUUSD standard lot 0.50 for $80 risk.
+    db.insert("settings", {"id": "global", "calibration_risk": 80,
+                           "calibration_lots": {"XAUUSD": 0.50}})
+    m.clear_calibration_cache()
+    # risk for a 0.50-lot XAUUSD trade = (80/0.50)*0.50 = $80
+    assert m.calibrated_risk("XAUUSD", 0.50) == 80.0
+    # 0.50 lot, +$80 -> R 1.0; profit_norm rescales to the 0.50 std = raw 80
+    assert m.normalized_profit("XAUUSD", 80.0, 0.50) == 80.0
+    # a 1.0-lot trade normalizes to the 0.50 std: 160 * (0.50/1.0) = 80
+    assert m.normalized_profit("XAUUSD", 160.0, 1.0) == 80.0
+    m.clear_calibration_cache()
+
+
 def test_risk_money_and_open_r(monkeypatch):
     _wire(monkeypatch)
     # GBPUSD (not lot-calibrated) 0.10 lot, 20-pip SL, +10 float -> risk $20, R = 0.5

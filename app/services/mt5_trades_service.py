@@ -29,29 +29,74 @@ _CONN_TTL = 10.0
 
 _STARTING_EQUITY_FALLBACK = 10000.0
 
-# The trader risks a flat $75 per trade, and these are the lots they use for that
-# risk on each instrument. Both R and the size-normalized ("per standard lot")
-# stats are built on this single calibration so the whole app is consistent.
-CALIBRATION_RISK = 75.0
-STANDARD_LOT = {
+# The trader risks a flat amount per trade, and these are the lots they use for
+# that risk on each instrument. Both R and the size-normalized ("per standard
+# lot") stats are built on this single calibration so the whole app is
+# consistent. Values are editable in Settings (persisted on the "global"
+# settings row); these are the defaults / fallback.
+DEFAULT_CALIBRATION_RISK = 75.0
+DEFAULT_STANDARD_LOT = {
     "XAUUSD": 0.25,
     "USDJPY": 0.53,
     "EURUSD": 0.53,
     "USDCAD": 0.30,
 }
 
+_CALIB_TTL = 15.0
+_calib_cache: Optional[tuple] = None
+_calib_at: float = 0.0
+
+
+def get_calibration() -> tuple:
+    """Effective (risk_dollars, {SYMBOL: standard_lot}) — Settings overrides merged
+    over the defaults. Cached briefly so a stats pass (one call per trade) doesn't
+    hit the DB repeatedly; edits show within _CALIB_TTL."""
+    global _calib_cache, _calib_at
+    now = time.monotonic()
+    if _calib_cache is not None and (now - _calib_at) < _CALIB_TTL:
+        return _calib_cache
+    risk = DEFAULT_CALIBRATION_RISK
+    lots = dict(DEFAULT_STANDARD_LOT)
+    try:
+        from app.core.database import db
+        row = db.find_one("settings", "global") or {}
+        v = row.get("calibration_risk")
+        if v not in (None, "", 0, "0") and float(v) > 0:
+            risk = float(v)
+        stored = row.get("calibration_lots")
+        if isinstance(stored, dict):
+            for k, val in stored.items():
+                try:
+                    f = float(val)
+                except (TypeError, ValueError):
+                    continue
+                if f > 0:
+                    lots[str(k).upper()] = f
+    except Exception:
+        pass
+    _calib_cache = (risk, lots)
+    _calib_at = now
+    return _calib_cache
+
+
+def clear_calibration_cache() -> None:
+    global _calib_cache, _calib_at
+    _calib_cache = None
+    _calib_at = 0.0
+
 
 def calibrated_risk(symbol: str, lot: float) -> Optional[float]:
-    """Risk $ for a trade from the per-instrument lot→$75 calibration:
-    (75 / standard_lot) × actual_lot. None when the symbol isn't calibrated."""
-    std = STANDARD_LOT.get(str(symbol or "").upper())
+    """Risk $ for a trade from the per-instrument lot→risk calibration:
+    (risk / standard_lot) × actual_lot. None when the symbol isn't calibrated."""
+    risk, lots = get_calibration()
+    std = lots.get(str(symbol or "").upper())
     try:
         lot = float(lot)
     except (TypeError, ValueError):
         return None
     if not std or std <= 0 or lot <= 0:
         return None
-    return round((CALIBRATION_RISK / std) * lot, 2)
+    return round((risk / std) * lot, 2)
 
 
 def normalized_profit(symbol: str, profit: float, lot: float) -> float:
@@ -64,7 +109,8 @@ def normalized_profit(symbol: str, profit: float, lot: float) -> float:
         lot = float(lot)
     except (TypeError, ValueError):
         return profit if isinstance(profit, (int, float)) else 0.0
-    std = STANDARD_LOT.get(str(symbol or "").upper())
+    _, lots = get_calibration()
+    std = lots.get(str(symbol or "").upper())
     if not std or std <= 0 or lot <= 0:
         return round(profit, 2)
     return round(profit * (std / lot), 2)

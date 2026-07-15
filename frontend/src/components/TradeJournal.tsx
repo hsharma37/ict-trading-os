@@ -119,7 +119,7 @@ export default function TradeJournal() {
         )}
         {summary?.stats_basis === 'per_standard_lot' && (
           <p className="text-[11px] text-muted-foreground -mt-1">
-            Avg / Best / Worst are per your standard lot (XAUUSD 0.25, EUR/JPY 0.53, CAD 0.30); Net P&L is actual money.
+            Avg / Best / Worst are per your standard lot (set in Settings); Net P&L is actual money.
           </p>
         )}
 
