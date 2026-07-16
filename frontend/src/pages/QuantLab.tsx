@@ -3,6 +3,7 @@ import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { researchApi, quantApi } from '@/api/client'
+import BacktestPanel from '@/components/BacktestPanel'
 import {
   Activity, DollarSign, AlertTriangle, Shield, Globe, BarChart3, Layers,
   TrendingUp, TrendingDown, Zap, Clock, Target, HelpCircle,
@@ -384,6 +385,9 @@ export default function QuantLab() {
           </div>
         </div>
       )}
+
+      {/* Backtest + Monte Carlo — measure the signal's real edge */}
+      <BacktestPanel symbol={selected?.symbol} />
 
       {/* Quant Agents Section */}
       <Card>
