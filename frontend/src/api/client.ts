@@ -129,6 +129,8 @@ export const researchApi = {
     apiClient.get(`/research/backtest/${symbol}`, { params }),
   sweep: (symbol: string, params?: { timeframe?: string; history_range?: string }) =>
     apiClient.get(`/research/sweep/${symbol}`, { params }),
+  calibrate: (symbol: string, params?: { timeframe?: string; target_r?: number }) =>
+    apiClient.get(`/research/calibrate/${symbol}`, { params }),
   honestTest: (symbol: string, params?: { timeframe?: string; history_range?: string }) =>
     apiClient.get(`/research/honest-test/${symbol}`, { params }),
   monteCarlo: (body: any) => apiClient.post('/research/monte-carlo', body),
@@ -229,6 +231,7 @@ export const mt5Api = {
   scaledTrade: (data: { symbol: string; direction: string; lot_size: number; take_profits: string; stop_loss?: number }) =>
     apiClient.post('/mt5/scaled-trade', null, { params: data }),
   close: (ticket_id: string) => apiClient.post('/mt5/close', null, { params: { ticket_id } }),
+  drawLevels: (symbol: string) => apiClient.post(`/mt5/draw-levels/${symbol}`),
   history: () => apiClient.get('/mt5/history'),
   // Market data
   tick: (symbol: string) => apiClient.get(`/mt5/tick/${symbol}`),

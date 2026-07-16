@@ -276,6 +276,22 @@ async def order_check(
     raise HTTPException(status_code=503, detail=f"MT5 bridge unreachable: {last}")
 
 
+@router.post("/draw-levels/{symbol}", summary="Push ICT levels to the MT5 chart")
+async def draw_levels_on_chart(symbol: str):
+    """Compute the live ICT zones and send them to the bridge, which writes a file
+    the ICTOSLevels indicator reads to draw them on your chart."""
+    from app.routers.ict import levels as ict_levels
+    data = ict_levels(symbol)
+    if data.get("synthetic"):
+        raise HTTPException(status_code=422, detail="Market data is simulated — refusing to draw fake levels.")
+    if not data.get("zones"):
+        raise HTTPException(status_code=422, detail="No ICT zones detected to draw right now.")
+    payload = {"symbol": data["symbol"], "current_price": data["current_price"],
+               "dealing_range": data.get("dealing_range"), "premium_discount": data.get("premium_discount"),
+               "zones": data["zones"]}
+    return await _bridge_post(f"/draw-levels", payload)
+
+
 @router.post("/close", summary="Close a position on MT5")
 async def close_position(ticket_id: str):
     """Close an open position by ticket ID."""

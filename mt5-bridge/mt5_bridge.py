@@ -110,6 +110,25 @@ def fetch_url():
         return jsonify({"error": str(e)}), 502
 
 
+@app.route("/draw-levels", methods=["POST"])
+@require_bridge_key
+def draw_levels():
+    """Write ICT levels to MQL5\\Files so the ICTOSLevels indicator draws them on
+    the chart. Body: {symbol, current_price, dealing_range, premium_discount, zones[]}."""
+    data = request.get_json(force=True)
+    try:
+        path = mt5_client.write_levels_file(
+            data.get("symbol", "UNKNOWN"),
+            data.get("zones", []),
+            {"current_price": data.get("current_price"),
+             "dealing_range": data.get("dealing_range"),
+             "premium_discount": data.get("premium_discount")},
+        )
+    except Mt5ConnectionError as e:
+        return jsonify({"status": "error", "error": str(e)}), 503
+    return jsonify({"status": "ok", "written": path, "zones": len(data.get("zones", []))})
+
+
 @app.route("/order-check", methods=["POST"])
 @require_bridge_key
 def order_check():
