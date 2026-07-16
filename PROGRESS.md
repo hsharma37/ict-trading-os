@@ -4,6 +4,29 @@
 > Reconciles the planning docs (`MIGRATION_ROADMAP.md`, `docs/PRODUCT_DIRECTION_AND_BATCHES.md`,
 > `CODE_REVIEW_BUG_REPORT.md`) against the **actual current code and the live Vercel deployment**.
 
+> **Feature trust ratings:** see [`FEATURE_ASSESSMENT.md`](FEATURE_ASSESSMENT.md) for an honest,
+> real-money-grade "how much can I trust this?" breakdown of every feature + a prioritized
+> improvement roadmap.
+
+## Shipped since (safety, trust & validation cycle — 2026-07-16)
+
+- **Execution safety:** scale-out is opt-in (killed a double/triple-order bug), XAUUSD lot
+  oversizing fixed, non-idempotent order retries removed (no double close/partial), bridge-health
+  gating **blocks orders when the feed is offline/stale**, and every market order does an
+  independent **read-back from MT5** ("Confirmed in MT5: ticket #…").
+- **Trust integrity:** fabricated fallback candles are flagged; research/signals **refuse or clearly
+  label** simulated data instead of showing invented levels; heuristics (news sentiment, signal
+  confidence) are honestly labelled; Telegram **won't auto-trade a guessed stop-loss**.
+- **Data bug:** Yahoo candle fetch used `period=` (ignored) → ~14 candles → HTF bias always NEUTRAL,
+  SMAs null, 2R never viable. Fixed to `range=` → full history; bias/SMA/levels now real.
+- **R & analytics:** editable per-instrument lot→$ risk calibration (Settings); money stats
+  normalized per standard lot.
+- **Research validation suite:** backtest (walk-forward, no look-ahead) + Monte Carlo (risk of ruin)
+  + parameter sweep (with out-of-sample column) + honest walk-forward test + **live paper-forward
+  test**. Verdict: the ICT signal has **no edge at 2R**, a **thin filter-dependent edge at ~3R**
+  that held out-of-sample on GBPUSD/EURUSD — a candidate to forward-test, not a proven system.
+- **Feed curation:** discard/keep for Telegram posts and trade plans; Signals page reorganised.
+
 ## Live status (verified 2026-07-15)
 
 Production is **up and healthy** at **https://ict-trading-os-rho.vercel.app**.
