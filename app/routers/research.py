@@ -78,6 +78,21 @@ def backtest(symbol: str, timeframe: str = "1h", target_r: float = 2.0, history_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/calibrate/{symbol}")
+def calibrate_strength(symbol: str, timeframe: str = "1h", target_r: float = 3.0):
+    """Measured historical win rate + expectancy for each signal-strength tier —
+    turns 'STRONG/MODERATE/WEAK' into real, cost-adjusted numbers."""
+    try:
+        result = backtest_service.calibrate_strength(symbol, timeframe=timeframe, target_r=target_r)
+        if result.get("error"):
+            raise HTTPException(status_code=422, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/sweep/{symbol}")
 def parameter_sweep(symbol: str, timeframe: str = "1h", history_range: str = "1y"):
     """Grid-search target-R × session × trend filters to find whether ANY config

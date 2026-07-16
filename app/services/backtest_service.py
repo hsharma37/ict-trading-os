@@ -124,6 +124,7 @@ def _scan_signals(candles, symbol, timeframe, window, min_confluence) -> List[Di
             hour = 12
         sigs.append({"i": i, "long": long, "entry": zone["entry"], "sl": zone["sl"],
                      "risk": zone["risk"], "hour": hour,
+                     "confluence": int(a.get("confluence_score", 0)),
                      "trend_ok": (zone["entry"] > sma) if long else (zone["entry"] < sma)})
     return sigs
 
@@ -190,7 +191,7 @@ def _evaluate(candles, signals, target_r, fill_window, max_hold, session_filter,
         trades.append({
             "dir": "long" if long else "short", "entry": entry, "sl": sl,
             "target": round(target, 5), "r": net_r, "gross_r": round(outcome_r, 2),
-            "entry_idx": fill_idx, "open": is_open,
+            "entry_idx": fill_idx, "open": is_open, "confluence": s.get("confluence", 0),
             "entry_time": candles[fill_idx].get("time"), "exit_time": candles[exit_idx].get("time"),
         })
         busy_until = exit_idx
@@ -242,6 +243,54 @@ def run_sweep(symbol: str, timeframe: str = "1h", history_range: str = "1y",
         "symbol": symbol, "timeframe": timeframe, "history_range": history_range,
         "candles": n, "signals_scanned": len(signals), "configs_tested": len(configs),
         "oos_split_pct": int(oos_split * 100), "configs": configs, "best": best, "verdict": verdict,
+    }
+
+
+def calibrate_strength(symbol: str, timeframe: str = "1h", target_r: float = 3.0,
+                       history_range: str = "1y", trend_filter: bool = True) -> Dict:
+    """What each signal-STRENGTH tier actually won historically (net of costs) —
+    so 'STRONG' stops being an arbitrary label and gets a measured win rate.
+    Buckets every backtested trade by the confluence score at its entry."""
+    symbol = symbol.upper()
+    if timeframe == "1d":
+        history_range = "2y"
+    candles = market_service.get_history(symbol, timeframe, 5000, history_range=history_range)
+    guard = _data_guard(symbol, candles, 100)
+    if guard:
+        return guard
+    cost = _round_trip_cost_price(symbol)
+    signals = _scan_signals(candles, symbol, timeframe, 100, 0)  # all setups, no gate
+    trades = _evaluate(candles, signals, target_r, 8, 48, False, trend_filter, cost)
+    closed = [t for t in trades if not t.get("open")]
+    breakeven = round(100 / (1 + target_r), 1)
+
+    def tier(c: int) -> str:
+        return "STRONG" if c >= 4 else "MODERATE" if c == 3 else "WEAK"
+
+    buckets: Dict[str, list] = {"STRONG": [], "MODERATE": [], "WEAK": []}
+    for t in closed:
+        buckets[tier(int(t.get("confluence", 0)))].append(t["r"])
+
+    tiers = {}
+    for name, rs in buckets.items():
+        if rs:
+            wins = sum(1 for r in rs if r > 0)
+            exp = sum(rs) / len(rs)
+            tiers[name] = {
+                "trades": len(rs), "win_rate": round(wins / len(rs) * 100, 1),
+                "expectancy_r": round(exp, 3),
+                # Truth = expectancy net of costs (NOT the frictionless breakeven,
+                # which a positive win-rate can beat while still losing money).
+                "profitable": exp > 0,
+                "small_sample": len(rs) < 30,
+            }
+        else:
+            tiers[name] = {"trades": 0}
+    return {
+        "symbol": symbol, "timeframe": timeframe, "target_r": target_r,
+        "history_range": history_range, "breakeven_win_rate": breakeven,
+        "total_trades": len(closed), "tiers": tiers,
+        "note": "Net of estimated spread + commission. Confluence tier: STRONG ≥4, MODERATE =3, WEAK ≤2 ICT confluences.",
     }
 
 

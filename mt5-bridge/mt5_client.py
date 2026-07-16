@@ -541,6 +541,29 @@ class Mt5Client:
             raise Mt5ConnectionError(f"symbols_get() failed: {mt5.last_error()}")
         return [s.name for s in symbols]
 
+    def write_levels_file(self, symbol: str, zones: List[Dict], meta: Dict) -> str:
+        """Write ICT levels to the terminal's MQL5\\Files sandbox so the companion
+        ICTOSLevels indicator can draw them on the chart (the Python API can't draw
+        objects itself). One file per symbol. Returns the path written."""
+        import os
+        self._ensure_connected()
+        info = mt5.terminal_info()
+        if info is None or not getattr(info, "data_path", ""):
+            raise Mt5ConnectionError("terminal_info() unavailable — can't locate MQL5\\Files.")
+        files_dir = os.path.join(info.data_path, "MQL5", "Files")
+        os.makedirs(files_dir, exist_ok=True)
+        path = os.path.join(files_dir, f"ictos_levels_{symbol.upper()}.csv")
+        lines = [f"#META,{symbol.upper()},{meta.get('current_price', '')},"
+                 f"{(meta.get('dealing_range') or {}).get('equilibrium', '')},{meta.get('premium_discount', '')}"]
+        for z in zones:
+            lines.append(",".join(str(x) for x in [
+                z.get("kind", "zone"), z.get("type", ""), z.get("direction", ""),
+                z.get("timeframe", ""), z.get("high", ""), z.get("low", ""),
+            ]))
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        return path
+
     # ── Order & position management ──────────────────────────────
 
     def modify_sltp(

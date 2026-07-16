@@ -144,3 +144,16 @@ def test_min_stop_filter_reduces_trades(monkeypatch):
     wide = bt.run_backtest("EURUSD", target_r=2.0, min_stop_pips=30)
     allt = bt.run_backtest("EURUSD", target_r=2.0, min_stop_pips=0)
     assert wide.get("trades", 0) <= allt.get("trades", 0)
+
+
+def test_calibrate_strength_shape(monkeypatch):
+    from tests.test_forward_test import _series
+    candles = _series(500)
+    monkeypatch.setattr(bt.market_service, "get_history",
+                        lambda s, tf="1h", limit=5000, history_range="1y": candles)
+    out = bt.calibrate_strength("EURUSD", timeframe="1h", target_r=3.0)
+    assert "tiers" in out and set(out["tiers"]) == {"STRONG", "MODERATE", "WEAK"}
+    for t in out["tiers"].values():
+        if t.get("trades"):
+            # 'profitable' must agree with expectancy sign, not the frictionless breakeven.
+            assert t["profitable"] == (t["expectancy_r"] > 0)

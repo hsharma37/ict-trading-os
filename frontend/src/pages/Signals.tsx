@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import SignalIntelligence from '@/components/SignalIntelligence'
-import LiveIctLevels from '@/components/LiveIctLevels'
+import StrengthCalibration from '@/components/StrengthCalibration'
+import DrawOnMt5Button from '@/components/DrawOnMt5Button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { signalsApi } from '@/api/client'
@@ -344,9 +345,12 @@ export default function Signals() {
       {/* Selected symbol — the two engines side by side: ICT confluence
           checklist (structure) + news-driven intelligence (context). */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          {selectedSymbol} — analysis
-        </h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            {selectedSymbol} — analysis
+          </h2>
+          <DrawOnMt5Button symbol={selectedSymbol} />
+        </div>
         <div className="grid gap-4 xl:grid-cols-2 items-start">
           <Card>
             <CardHeader className="pb-2">
@@ -361,8 +365,8 @@ export default function Signals() {
           </Card>
           <SignalIntelligence symbol={selectedSymbol} />
         </div>
-        {/* Live price projection of every ICT zone vs the current price. */}
-        <LiveIctLevels symbol={selectedSymbol} />
+        {/* Measured win rate / expectancy per signal-strength tier. */}
+        <StrengthCalibration symbol={selectedSymbol} />
       </section>
 
       {/* Scan Results */}
