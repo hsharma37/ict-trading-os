@@ -171,9 +171,8 @@ and shows a red banner** when it can't reach a live, fresh bridge (fails safe).
 
 ## Known gaps / tech debt (cross-cutting)
 
-- **Orphan page:** `frontend/src/pages/Research.tsx` is **not routed** (the Research nav renders
-  `QuantLab`). Some data-quality badge UI landed there and isn't visible. Fix: port the badge into
-  QuantLab and delete `Research.tsx`.
+- ✅ **Orphan page fixed:** `Research.tsx` (unrouted) has been **deleted**, and the data-quality
+  badge (live / stale / simulated) is now on the real research page (`QuantLab`).
 - **Dead backend:** the `backend/` RAG/vector tree is not used by the Vercel app. Delete or wire in.
 - **Heuristics vs models:** signal confidence and news sentiment are heuristics (now labelled).
   They are not backtested-to-a-hit-rate models.
@@ -200,7 +199,8 @@ and shows a red banner** when it can't reach a live, fresh bridge (fails safe).
 2. ✅ **Model spread/commission in the backtest** — done. Verdict: the edge does **not** survive
    costs on FX; XAUUSD wide-stop is marginal/break-even. Next: **higher-timeframe (4h/1d) variants**
    where stops are naturally wider vs. costs. *P0 → done; follow-up P1*
-3. **Port data-quality badges to QuantLab; delete orphan `Research.tsx` + dead `backend/`.** *P1*
+3. ✅ **Data-quality badge on QuantLab + orphan `Research.tsx` deleted.** Remaining: delete the dead
+   `backend/` RAG tree (needs a CI-workflow check first). *P1 → mostly done*
 4. **Prefer real per-trade SL for risk/R** when captured; calibration as fallback. *P1*
 5. **Multi-timeframe backtest** of the exact live signal. *P2*
 6. **Real sentiment/NLP model** (replace keyword tally); optional LLM synthesis for KB chat. *P2*
