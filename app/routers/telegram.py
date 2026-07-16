@@ -35,13 +35,33 @@ def get_status():
 
 
 @router.get("/signals")
-def list_signals(limit: int = 50, acknowledged: Optional[bool] = None, auto_traded: Optional[bool] = None):
+def list_signals(limit: int = 50, acknowledged: Optional[bool] = None, auto_traded: Optional[bool] = None,
+                 include_discarded: bool = False):
     """List parsed and raw Telegram signals with optional filters."""
     try:
-        signals = telegram_service.get_signals(limit=limit, acknowledged=acknowledged, auto_traded=auto_traded)
+        signals = telegram_service.get_signals(limit=limit, acknowledged=acknowledged,
+                                               auto_traded=auto_traded, include_discarded=include_discarded)
         return {"signals": signals, "count": len(signals)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/signals/{signal_id}/discard")
+def discard_signal(signal_id: str):
+    """Hide an unnecessary post from the feed (reversible)."""
+    result = telegram_service.discard(signal_id)
+    if result.get("error"):
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
+
+
+@router.post("/signals/{signal_id}/restore")
+def restore_signal(signal_id: str):
+    """Bring a discarded post back into the feed."""
+    result = telegram_service.restore(signal_id)
+    if result.get("error"):
+        raise HTTPException(status_code=404, detail=result["error"])
+    return result
 
 
 @router.post("/poll")

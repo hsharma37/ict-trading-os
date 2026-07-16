@@ -54,10 +54,16 @@ export default function TradePlanner({ refreshKey }: { refreshKey?: number }) {
           {p.is_event && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">event</span>}
           {p.source === 'telegram' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400">telegram</span>}
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          {p.trigger_type === 'price' && <><Target className="w-3 h-3" /> @ {p.entry_price}</>}
-          {p.trigger_type === 'time' && <><CalendarClock className="w-3 h-3" /> {p.trigger_time ? new Date(p.trigger_time).toLocaleString() : 'timed'}</>}
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {p.trigger_type === 'price' && <span className="flex items-center gap-1"><Target className="w-3 h-3" /> @ {p.entry_price}</span>}
+          {p.trigger_type === 'time' && <span className="flex items-center gap-1"><CalendarClock className="w-3 h-3" /> {p.trigger_time ? new Date(p.trigger_time).toLocaleString() : 'timed'}</span>}
           {p.trigger_type === 'now' && <>market</>}
+          <button
+            onClick={() => act(p.id, () => plannerApi.remove(p.id))}
+            disabled={busy === p.id}
+            title="Discard this plan (remove it)"
+            className="px-1.5 py-0.5 rounded border border-border hover:text-red-400 shrink-0"
+          >✕ Discard</button>
         </div>
       </div>
       <div className="mt-1.5 text-xs text-muted-foreground flex gap-3 flex-wrap">

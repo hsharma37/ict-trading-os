@@ -491,9 +491,31 @@ class TelegramService:
         db.update("telegram_signals", signal_id, signal)
         return {"signal_id": signal_id, "trade_id": trade.get("id"), "trade": trade}
 
-    def get_signals(self, limit: int = 50, acknowledged: Optional[bool] = None, auto_traded: Optional[bool] = None) -> List[Dict[str, Any]]:
-        """List signals with optional filters."""
+    def discard(self, signal_id: str) -> Dict[str, Any]:
+        """Hide an unnecessary post from the feed (kept in the DB so polling won't
+        re-add it, but excluded from the default list). Reversible via restore()."""
+        signal = db.find_one("telegram_signals", signal_id)
+        if not signal:
+            return {"error": "Signal not found"}
+        db.update("telegram_signals", signal_id, {"discarded": True,
+                                                  "discarded_at": datetime.utcnow().isoformat()})
+        return {"ok": True, "id": signal_id, "discarded": True}
+
+    def restore(self, signal_id: str) -> Dict[str, Any]:
+        """Un-discard a signal (bring it back into the feed)."""
+        signal = db.find_one("telegram_signals", signal_id)
+        if not signal:
+            return {"error": "Signal not found"}
+        db.update("telegram_signals", signal_id, {"discarded": False})
+        return {"ok": True, "id": signal_id, "discarded": False}
+
+    def get_signals(self, limit: int = 50, acknowledged: Optional[bool] = None,
+                    auto_traded: Optional[bool] = None, include_discarded: bool = False) -> List[Dict[str, Any]]:
+        """List signals with optional filters. Discarded posts are hidden unless
+        include_discarded=True (so the 'kept' feed stays clean)."""
         signals = db.get_collection("telegram_signals")
+        if not include_discarded:
+            signals = [s for s in signals if not s.get("discarded")]
         if acknowledged is not None:
             signals = [s for s in signals if s.get("acknowledged") == acknowledged]
         if auto_traded is not None:

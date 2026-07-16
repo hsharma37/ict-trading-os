@@ -170,10 +170,12 @@ export const alertsApi = {
 // Telegram API
 export const telegramApi = {
   status: () => apiClient.get('/telegram/status'),
-  signals: (limit: number = 50, acknowledged?: boolean, auto_traded?: boolean) =>
-    apiClient.get('/telegram/signals', { params: { limit, acknowledged, auto_traded } }),
+  signals: (limit: number = 50, acknowledged?: boolean, auto_traded?: boolean, include_discarded?: boolean) =>
+    apiClient.get('/telegram/signals', { params: { limit, acknowledged, auto_traded, include_discarded } }),
   poll: () => apiClient.post('/telegram/poll'),
   acknowledge: (id: string) => apiClient.post(`/telegram/acknowledge/${id}`),
+  discard: (id: string) => apiClient.post(`/telegram/signals/${id}/discard`),
+  restore: (id: string) => apiClient.post(`/telegram/signals/${id}/restore`),
   autoTrade: (id: string, data?: { account_balance?: number; risk_pct?: number }) =>
     apiClient.post(`/telegram/auto-trade/${id}`, data),
   stats: () => apiClient.get('/telegram/stats'),
