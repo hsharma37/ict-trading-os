@@ -102,6 +102,14 @@ class ResearchService:
                 "current_price": live.get("price"),
             }
 
+        # Data-quality provenance: never present levels derived from random
+        # fallback candles (or a stale/synthetic quote) as if they were real.
+        from app.services.market_data import history_is_synthetic
+        synthetic = history_is_synthetic(candles) or (str(live.get("source", "")).lower() == "synthetic")
+        stale = bool(live.get("stale"))
+        data_source = live.get("source", "unknown")
+        data_quality = "synthetic" if synthetic else ("stale" if stale else "live")
+
         closes = [c["close"] for c in candles if c.get("close")]
         trend = self._trend(candles)
         vol = self._volatility(candles)
@@ -109,7 +117,7 @@ class ResearchService:
 
         sma20 = self._sma(closes, 20)
         sma50 = self._sma(closes, 50)
-        sma200 = self._sma(closes, 50)  # limited data, use 50 as proxy
+        sma200 = self._sma(closes, 200)  # None unless ≥200 candles — not faked from 50
 
         # Sentiment based on trend and recent price action
         sentiment = "NEUTRAL"
@@ -144,6 +152,7 @@ class ResearchService:
         reasoning = self._build_reasoning(
             symbol, price, live.get("change_pct", 0), trend, sentiment, sma20r, sma50r,
             support, resistance, dist_to_support, dist_to_resistance, vol, news, digits,
+            data_quality,
         )
 
         return {
@@ -165,6 +174,11 @@ class ResearchService:
             "sma20": sma20r,
             "sma50": sma50r,
             "news": news,
+            # Provenance so the UI never shows fabricated/stale levels as live.
+            "data_source": data_source,
+            "stale": stale,
+            "synthetic": synthetic,
+            "data_quality": data_quality,
             "timestamp": datetime.utcnow().isoformat(),
         }
 
@@ -179,10 +193,21 @@ class ResearchService:
             return []
 
     def _build_reasoning(self, symbol, price, change_pct, trend, sentiment, sma20, sma50,
-                         support, resistance, dist_sup, dist_res, vol, news, digits) -> str:
+                         support, resistance, dist_sup, dist_res, vol, news, digits,
+                         data_quality="live") -> str:
         """A precise, evidence-grounded explanation of the current read — every
-        clause cites the actual number behind it (no vague 'looks bullish')."""
+        clause cites the actual number behind it (no vague 'looks bullish').
+
+        When the underlying data isn't live (random fallback candles or a stale
+        quote), the analysis leads with an explicit warning instead of presenting
+        the levels as tradeable — the numbers below are not real market data."""
         parts = []
+        if data_quality == "synthetic":
+            return ("⚠️ DATA UNAVAILABLE — the market feed could not be reached, so the levels "
+                    "below would be simulated, not real. Do not trade on this. Retry when the "
+                    "price source is live.")
+        if data_quality == "stale":
+            parts.append("⚠️ Quote is stale (feed not updating) — treat levels as indicative only.")
         # Structure vs moving averages.
         if sma20 and sma50 and price:
             rel = []

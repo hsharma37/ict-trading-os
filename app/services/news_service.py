@@ -61,6 +61,16 @@ _HIGH_IMPACT = [
     "central bank", "emergency", "breaking", "intervention",
 ]
 
+# Medium-impact: market-relevant but not a top-tier scheduled event. Anything
+# matching neither high nor medium is genuinely low-impact (routine headline),
+# so we stop rating every single headline >= medium.
+_MEDIUM_IMPACT = [
+    "central bank", "policy", "hawkish", "dovish", "minutes", "speech", "testimony",
+    "retail sales", "pmi", "ppi", "unemployment", "trade balance", "sentiment",
+    "manufacturing", "services", "housing", "consumer", "yields", "bond",
+    "recession", "stimulus", "tariff", "sanction", "opec", "oil", "gold",
+]
+
 _CACHE_TTL = 300.0  # 5 min
 
 
@@ -118,7 +128,11 @@ class NewsService:
 
     def _impact(self, text: str) -> str:
         low = text.lower()
-        return "high" if any(k in low for k in _HIGH_IMPACT) else "medium"
+        if any(k in low for k in _HIGH_IMPACT):
+            return "high"
+        if any(k in low for k in _MEDIUM_IMPACT):
+            return "medium"
+        return "low"  # routine headline — no longer inflated to "medium"
 
     def _reason(self, symbols: List[str], text: str) -> str:
         if not symbols:

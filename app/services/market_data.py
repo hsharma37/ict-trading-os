@@ -162,9 +162,18 @@ class MarketDataService:
             h = max(o, c) + random.random() * base * 0.001
             l = min(o, c) - random.random() * base * 0.001
             candles.append({"time": int(datetime.utcnow().timestamp()) - (limit-i)*3600,
-                           "open": round(o, 5), "high": round(h, 5), "low": round(l, 5), "close": round(c, 5)})
+                           "open": round(o, 5), "high": round(h, 5), "low": round(l, 5), "close": round(c, 5),
+                           # Mark every fabricated bar so downstream analysis can refuse or
+                           # clearly label it — these are RANDOM, not market data.
+                           "synthetic": True})
             price = c
         return candles
+
+
+def history_is_synthetic(candles: List[Dict]) -> bool:
+    """True when a candle list came from _synthetic_history (random fallback data),
+    so callers never present derived levels/signals from it as real."""
+    return bool(candles) and any(c.get("synthetic") for c in candles)
 
 
 market_service = MarketDataService()
