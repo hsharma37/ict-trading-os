@@ -3,6 +3,8 @@ import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { researchApi, quantApi } from '@/api/client'
+import BacktestPanel from '@/components/BacktestPanel'
+import ForwardTests from '@/components/ForwardTests'
 import {
   Activity, DollarSign, AlertTriangle, Shield, Globe, BarChart3, Layers,
   TrendingUp, TrendingDown, Zap, Clock, Target, HelpCircle,
@@ -26,6 +28,8 @@ interface InstrumentAnalysis {
   key_levels: { level: number; type: string }[]
   sma20: number | null
   sma50: number | null
+  data_quality?: 'live' | 'stale' | 'synthetic'
+  data_source?: string
   timestamp: string
 }
 
@@ -385,6 +389,12 @@ export default function QuantLab() {
         </div>
       )}
 
+      {/* Backtest + Monte Carlo — measure the signal's real edge */}
+      <BacktestPanel symbol={selected?.symbol} />
+
+      {/* Live paper-forward test — validate a config on future candles */}
+      <ForwardTests defaultSymbol={selected?.symbol} />
+
       {/* Quant Agents Section */}
       <Card>
         <CardHeader>
@@ -577,9 +587,16 @@ export default function QuantLab() {
       {selected && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 flex-wrap">
               {kindIcons[selected.kind] || <Activity className="w-5 h-5" />}
               {selected.symbol} — {selected.label}
+              {selected.data_quality === 'synthetic' ? (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/30">⚠ simulated — not tradeable</span>
+              ) : selected.data_quality === 'stale' ? (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">stale feed</span>
+              ) : selected.data_quality === 'live' ? (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300/90 border border-emerald-500/20">live · {selected.data_source || 'source'}</span>
+              ) : null}
             </CardTitle>
           </CardHeader>
           <CardContent>

@@ -78,6 +78,36 @@ def backtest(symbol: str, timeframe: str = "1h", target_r: float = 2.0, history_
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/sweep/{symbol}")
+def parameter_sweep(symbol: str, timeframe: str = "1h", history_range: str = "1y"):
+    """Grid-search target-R × session × trend filters to find whether ANY config
+    has a positive edge, with an out-of-sample check to expose curve-fitting."""
+    try:
+        result = backtest_service.run_sweep(symbol, timeframe=timeframe, history_range=history_range)
+        if result.get("error"):
+            raise HTTPException(status_code=422, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/honest-test/{symbol}")
+def honest_test(symbol: str, timeframe: str = "1h", history_range: str = "1y"):
+    """Walk-forward validation: pick the best config on the first 60% of history,
+    lock it, and report performance ONLY on the untouched last 40%."""
+    try:
+        result = backtest_service.run_honest_test(symbol, timeframe=timeframe, history_range=history_range)
+        if result.get("error"):
+            raise HTTPException(status_code=422, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class MonteCarloRequest(BaseModel):
     r_values: Optional[List[float]] = None      # explicit outcomes, else derived from `source`
     source: Optional[str] = None                # "backtest:<SYMBOL>" or "journal"

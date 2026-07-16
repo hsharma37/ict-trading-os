@@ -127,7 +127,19 @@ export const researchApi = {
   instruments: () => apiClient.get('/research/instruments'),
   backtest: (symbol: string, params?: { timeframe?: string; target_r?: number; history_range?: string }) =>
     apiClient.get(`/research/backtest/${symbol}`, { params }),
+  sweep: (symbol: string, params?: { timeframe?: string; history_range?: string }) =>
+    apiClient.get(`/research/sweep/${symbol}`, { params }),
+  honestTest: (symbol: string, params?: { timeframe?: string; history_range?: string }) =>
+    apiClient.get(`/research/honest-test/${symbol}`, { params }),
   monteCarlo: (body: any) => apiClient.post('/research/monte-carlo', body),
+}
+
+// Live paper-forward test API
+export const forwardTestApi = {
+  list: () => apiClient.get('/forward-tests'),
+  create: (body: any) => apiClient.post('/forward-tests', body),
+  stop: (id: string) => apiClient.post(`/forward-tests/${id}/stop`),
+  remove: (id: string) => apiClient.delete(`/forward-tests/${id}`),
 }
 
 // Signals API
