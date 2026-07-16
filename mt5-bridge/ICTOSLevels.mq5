@@ -90,14 +90,24 @@ void Band(string name,double hi,double lo,color bright,color tint)
    ObjectSetInteger(0,bn,OBJPROP_BACK,false);
 }
 
+void Wash(string name,double hi,double lo,color tint)
+{
+   // Filled background region (no border) behind the candles — used to shade the
+   // whole premium / discount half of the dealing range.
+   ObjectCreate(0,name,OBJ_RECTANGLE,0,LeftTime(),hi,RightTime(),lo);
+   ObjectSetInteger(0,name,OBJPROP_COLOR,tint);
+   ObjectSetInteger(0,name,OBJPROP_FILL,true);
+   ObjectSetInteger(0,name,OBJPROP_BACK,true);
+}
+
 void Legend()
 {
    string tf = ChartTF();
    string rows[4];
    rows[0]= M_symbol+"  ICT OS — "+(MatchChartTimeframe && tf!="" ? tf+" zones" : "all zones");
-   rows[1]="green=bullish  red=bearish   box=OB/FVG";
-   rows[2]="orange=liquidity  aqua=structure  blue=fib";
-   rows[3]="gold=OTE  yellow=equilibrium"+(M_pd!=""?("   price in "+M_pd):"");
+   rows[1]="OB/FVG boxes: green=bullish  red=bearish";
+   rows[2]="orange=liquidity  aqua=structure  blue=fib  yellow=EQ";
+   rows[3]="PREMIUM half=green(sell)  DISCOUNT half=red(buy)"+(M_pd!=""?("   now: "+M_pd):"");
    for(int i=0;i<4;i++){
       string nm=PFX+"LEG"+IntegerToString(i);
       ObjectCreate(0,nm,OBJ_LABEL,0,0,0);
@@ -122,19 +132,33 @@ void DrawFibonacci()
 {
    if(!ShowFibonacci || M_rangeHigh<=M_rangeLow) return;
    double rng=M_rangeHigh-M_rangeLow;
-   Band(PFX+"OTE_SELL",M_rangeLow+rng*0.786,M_rangeLow+rng*0.618,clrGold,C'45,38,0');
-   Label(PFX+"OTE_SELL_T",LeftTime(),M_rangeLow+rng*0.70,"Premium OTE (sell)",clrGold,9);
-   Band(PFX+"OTE_BUY",M_rangeLow+rng*0.382,M_rangeLow+rng*0.214,clrGold,C'45,38,0');
-   Label(PFX+"OTE_BUY_T",LeftTime(),M_rangeLow+rng*0.30,"Discount OTE (buy)",clrGold,9);
+   double eq=(M_eq>0)?M_eq:(M_rangeLow+rng*0.5);
+
+   // ---- Premium / Discount zones (the halves of the dealing range) ----------
+   // Premium = everything ABOVE equilibrium -> the SELL area (green highlight).
+   Wash(PFX+"PREMIUM",M_rangeHigh,eq,C'0,32,0');
+   Label(PFX+"PREMIUM_T",LeftTime(),(M_rangeHigh+eq)/2.0,"PREMIUM  ▲ sell area (above EQ)",clrLime,10);
+   // Discount = everything BELOW equilibrium -> the BUY area (red highlight).
+   Wash(PFX+"DISCOUNT",eq,M_rangeLow,C'40,0,0');
+   Label(PFX+"DISCOUNT_T",LeftTime(),(eq+M_rangeLow)/2.0,"DISCOUNT  ▼ buy area (below EQ)",clrRed,10);
+
+   // ---- OTE (optimal trade entry) sub-zones, brighter, inside each half -----
+   // Premium OTE = 61.8-78.6% retracement -> best SELL entries.
+   Band(PFX+"OTE_SELL",M_rangeLow+rng*0.786,M_rangeLow+rng*0.618,clrLime,C'0,70,0');
+   Label(PFX+"OTE_SELL_T",RightTime(),M_rangeLow+rng*0.702,"Premium OTE 62-79% (sell)",clrLime,8);
+   // Discount OTE = 21.4-38.2% retracement -> best BUY entries.
+   Band(PFX+"OTE_BUY",M_rangeLow+rng*0.382,M_rangeLow+rng*0.214,clrRed,C'80,0,0');
+   Label(PFX+"OTE_BUY_T",RightTime(),M_rangeLow+rng*0.298,"Discount OTE 21-38% (buy)",clrRed,8);
+
    FibLevel(0.0,"0% (low)",clrDeepSkyBlue);
    FibLevel(0.236,"23.6%",clrDeepSkyBlue);
    FibLevel(0.382,"38.2%",clrDeepSkyBlue);
    FibLevel(0.618,"61.8%",clrDeepSkyBlue);
    FibLevel(0.786,"78.6%",clrDeepSkyBlue);
    FibLevel(1.0,"100% (high)",clrDeepSkyBlue);
-   double eq=(M_eq>0)?M_eq:(M_rangeLow+rng*0.5);
+
    HLine(PFX+"EQ",eq,clrYellow,STYLE_SOLID,2);
-   Label(PFX+"EQ_T",RightTime(),eq,"EQUILIBRIUM  "+DoubleToString(eq,_Digits),clrYellow,9);
+   Label(PFX+"EQ_T",RightTime(),eq,"EQUILIBRIUM 50%  "+DoubleToString(eq,_Digits),clrYellow,9);
 }
 
 //--- main ----------------------------------------------------------
