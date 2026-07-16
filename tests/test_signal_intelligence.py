@@ -71,3 +71,17 @@ def test_conflict_caps_confidence(monkeypatch):
     out = si.generate("EURUSD")
     # News bullish, technicals bearish -> conflict -> confidence capped low/medium.
     assert out["confidence"] != "high"
+
+
+def test_sentiment_handles_negation_and_intensity():
+    from app.services.signal_intelligence import signal_intelligence as si
+    # Plain: "dollar rises" → USD positive.
+    assert si._currency_polarities("dollar rises")["USD"] > 0
+    # Negated: "dollar fails to rise" → USD flips negative.
+    assert si._currency_polarities("dollar fails to rise")["USD"] < 0
+    # "gold not higher" → XAU negative.
+    assert si._currency_polarities("gold not higher")["XAU"] < 0
+    # Intensity: a surge weighs more than a mild gain.
+    strong = si._currency_polarities("euro surges")["EUR"]
+    mild = si._currency_polarities("euro gains")["EUR"]
+    assert strong > mild > 0

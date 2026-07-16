@@ -94,7 +94,7 @@ export default function SignalIntelligence({ symbol }: { symbol: string }) {
                 <span className="text-muted-foreground"> ({data.confidence_score}/100)</span>
                 <span className="text-muted-foreground text-[10px] ml-1 align-top">ⓘ heuristic</span>
               </div>
-              <div className="text-sm" title={data.news_sentiment.method === 'keyword-polarity' ? 'Keyword-polarity tally over headlines (not an NLP model)' : ''}>
+              <div className="text-sm" title={data.news_sentiment.method ? 'Lexicon + negation over headline & summary — a rule-based heuristic, not a trained NLP model' : ''}>
                 <span className="text-muted-foreground">News </span>
                 <span className={`font-semibold ${dirColor(data.news_sentiment.label)}`}>
                   {data.news_sentiment.label} ({data.news_sentiment.score >= 0 ? '+' : ''}{data.news_sentiment.score})

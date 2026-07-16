@@ -30,6 +30,20 @@ _BEARISH = {
     "slump", "slumps", "retreat", "retreats", "eases", "ease", "sell-off", "selloff",
 }
 
+# Strong directional words count ~1.8×; a mild move shouldn't read like a crash.
+_STRONG = {
+    "surge", "surges", "soar", "soars", "plunge", "plunges", "tumble", "tumbles",
+    "spike", "spikes", "slump", "slumps", "crash", "crashes", "rally", "rallies", "collapse",
+}
+# Negators flip the polarity of a nearby directional word ("fails to rise",
+# "not higher", "no gains"). Apostrophes are stripped by the tokenizer, so the
+# pre-apostrophe stems (isn't→isn) are included.
+_NEGATORS = {
+    "no", "not", "never", "none", "fails", "fail", "failed", "failing", "without",
+    "hardly", "barely", "lacks", "lack", "cannot", "isn", "aren", "wasn", "weren",
+    "didn", "don", "doesn", "won", "can",
+}
+
 # word -> currency code, for proximity-based per-currency sentiment.
 _WORD_CCY = {
     "gold": "XAU", "bullion": "XAU", "xau": "XAU",
@@ -56,20 +70,34 @@ class SignalIntelligence:
             return "XAU", "USD"
         return s[:3], s[3:6]
 
-    def _currency_polarities(self, title: str) -> Dict[str, int]:
+    @staticmethod
+    def _word_polarity(w: str) -> float:
+        base = 1.0 if w in _BULLISH else -1.0 if w in _BEARISH else 0.0
+        return base * 1.8 if (base and w in _STRONG) else base
+
+    def _currency_polarities(self, text: str) -> Dict[str, float]:
         """Sentiment per currency, attributed by proximity — the directional word
         nearest a currency mention counts for THAT currency (so 'Gold climbs as
-        Dollar slips' scores gold + and USD -, not one blended number)."""
-        words = re.findall(r"[a-z\-]+", title.lower())
-        pols: Dict[str, int] = {}
+        Dollar slips' scores gold + and USD -, not one blended number).
+
+        Now negation-aware and intensity-weighted: a directional word preceded by
+        a negator within 2 tokens is flipped ('dollar fails to rise' → USD −), and
+        strong words ('surges', 'plunges') weigh more than mild ones."""
+        words = re.findall(r"[a-z\-]+", text.lower())
+        pols: Dict[str, float] = {}
         for i, w in enumerate(words):
             ccy = _WORD_CCY.get(w)
             if not ccy:
                 continue
             lo, hi = max(0, i - _WINDOW), min(len(words), i + _WINDOW + 1)
-            window = words[lo:hi]
-            p = sum(1 for x in window if x in _BULLISH) - sum(1 for x in window if x in _BEARISH)
-            pols[ccy] = pols.get(ccy, 0) + p
+            p = 0.0
+            for j in range(lo, hi):
+                wp = self._word_polarity(words[j])
+                if wp == 0.0:
+                    continue
+                negated = any(words[k] in _NEGATORS for k in range(max(lo, j - 2), j))
+                p += -wp if negated else wp
+            pols[ccy] = pols.get(ccy, 0.0) + p
         return pols
 
     def _recency_weight(self, ts: Optional[str]) -> float:
@@ -97,7 +125,12 @@ class SignalIntelligence:
         contributors = []
         for item in news:
             title = item.get("title", "")
+            # Score the summary too (weighted less than the headline), not just the title.
+            summary = item.get("summary") or item.get("description") or ""
             pols = self._currency_polarities(title)
+            if summary:
+                for ccy, p in self._currency_polarities(summary).items():
+                    pols[ccy] = pols.get(ccy, 0.0) + 0.5 * p
             # Strong base OR weak quote => bullish pair (and vice-versa).
             raw = pols.get(base, 0) - pols.get(quote, 0)
             if raw == 0:
@@ -116,10 +149,11 @@ class SignalIntelligence:
             })
         score = round(num / den, 2) if den else 0.0  # [-1, 1]
         label = "bullish" if score > 0.15 else "bearish" if score < -0.15 else "neutral"
-        # Be honest about the method: this is a keyword-polarity tally over
-        # headlines, not an NLP sentiment model (no negation/sarcasm handling).
+        # Honest about the method: a proximity lexicon with negation + intensity
+        # weighting over headline + summary. Better than a bag-of-words tally, but
+        # still a rule-based heuristic — not a trained NLP model (no sarcasm/irony).
         return {"score": score, "label": label, "items_scored": len(contributors),
-                "contributors": contributors[:5], "method": "keyword-polarity"}
+                "contributors": contributors[:5], "method": "lexicon+negation"}
 
     # ── ICT knowledge overlay ────────────────────────────────────────
 

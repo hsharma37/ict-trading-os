@@ -149,9 +149,12 @@ review before acting. Chart-image analysis is not implemented (images are stored
 ### 11. News + sentiment — 🟠
 **Works:** real forex/gold headlines are fetched, deduped, tagged to instruments, with an impact
 tier (now including a real "low"). 
-**Trust:** low for *interpretation* — impact and sentiment are keyword heuristics (no negation,
-no NLP), honestly labelled. Fine as a "what's happening" feed; don't trade the sentiment score.
-**Improvements:** a real sentiment/NLP model; higher-quality sources.
+**Trust:** improved — sentiment is now a **proximity lexicon with negation + intensity weighting**
+over headline **and** summary ("dollar *fails to* rise" → USD negative; "surges" > "gains"), a real
+step up from the old bag-of-words tally. Still a rule-based heuristic (no sarcasm/irony, not a
+trained model), and honestly labelled `lexicon+negation`. Fine as context; don't trade the score.
+**Improvements:** a trained NLP/finance sentiment model (needs an external API on serverless);
+higher-quality sources.
 
 ### 12. Knowledge base / chat — 🟡
 **Works and is the most honest AI surface:** it retrieves real KB chunks, **cites sources**, and

@@ -56,7 +56,7 @@ def test_live_signal_carries_honest_basis(monkeypatch):
     out = signal_intelligence.generate("EURUSD")
     assert out["data_quality"] == "live"
     assert "not backtested" in out["confidence_basis"]
-    assert out["news_sentiment"]["method"] == "keyword-polarity"
+    assert out["news_sentiment"]["method"] == "lexicon+negation"
 
 
 # ── Telegram: never auto-trade a guessed stop ─────────────────────────
