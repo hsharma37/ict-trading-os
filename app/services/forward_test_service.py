@@ -26,8 +26,9 @@ def _now() -> str:
 
 def _range_for(timeframe: str) -> str:
     # Enough lookback to cover a multi-week/month forward test plus the pattern
-    # window; only trades after start_candle_time are counted.
-    return {"1d": "2y"}.get(timeframe, "6mo")
+    # window; only trades after start_candle_time are counted. Yahoo caps 5m/15m
+    # history at ~60 days, so intraday forward tests use that.
+    return {"1d": "2y", "1h": "6mo", "15m": "60d", "5m": "60d"}.get(timeframe, "6mo")
 
 
 class ForwardTestService:

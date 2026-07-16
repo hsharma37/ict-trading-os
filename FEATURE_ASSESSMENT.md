@@ -167,12 +167,14 @@ delete or integrate the dead `backend/` engine.
 bridge, exposed over a **Cloudflare quick tunnel whose URL changes on every restart**. Restarts
 are manual. There is no proactive alert when the bridge drops — though the app now **blocks orders
 and shows a red banner** when it can't reach a live, fresh bridge (fails safe).
-**Improvements (highest priority for real money):**
-1. **Persistent named tunnel** so the URL stops changing.
-2. **Bridge supervisor/auto-restart** (Task Scheduler / NSSM) + reconnect.
-3. **Proactive "bridge down" alert** (Telegram/email), not just in-app gating.
-4. Deploy hygiene: the Python version is pinned to 3.12 (Vercel builder was resolving 3.14 and
-   failing); keep it pinned.
+**Improvements — now largely delivered via `mt5-bridge/watchdog.py` (see
+[`docs/BRIDGE_RELIABILITY.md`](docs/BRIDGE_RELIABILITY.md)):**
+1. ✅ **Bridge + tunnel supervisor** — auto-restarts either on failure.
+2. ✅ **Stable URL** — persistent named-tunnel support, or quick-tunnel URL auto-pushed to the app.
+3. ✅ **Proactive Telegram alerts** on bridge down/restart, MT5 disconnect, URL change.
+4. ✅ Deploy hygiene: Python pinned to 3.12.
+   **You still run the watchdog on the Windows box** (Task Scheduler / NSSM at boot) — the code
+   can't launch/log-in the MT5 GUI for you, but it detects & alerts on that too.
 
 ---
 
@@ -202,7 +204,8 @@ and shows a red banner** when it can't reach a live, fresh bridge (fails safe).
 
 ## Priority improvement roadmap
 
-1. **Persistent tunnel + bridge auto-restart + down-alert** (infra reliability). *P0*
+1. ✅ **Persistent tunnel + bridge auto-restart + down-alert** — delivered as `watchdog.py` +
+   `docs/BRIDGE_RELIABILITY.md`. Action for you: run it at boot on the Windows machine. *P0 → done*
 2. ✅ **Model spread/commission in the backtest** — done. Verdict: the edge does **not** survive
    costs on FX; XAUUSD wide-stop is marginal/break-even. Next: **higher-timeframe (4h/1d) variants**
    where stops are naturally wider vs. costs. *P0 → done; follow-up P1*

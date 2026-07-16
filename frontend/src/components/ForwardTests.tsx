@@ -79,6 +79,8 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
           <label className="flex items-center gap-1.5 text-sm">
             <span className="text-muted-foreground">TF</span>
             <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)} className="px-2 py-1.5 border rounded-md bg-background text-sm">
+              <option value="5m">5m</option>
+              <option value="15m">15m</option>
               <option value="1h">1h</option>
               <option value="1d">1d</option>
             </select>

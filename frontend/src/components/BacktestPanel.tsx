@@ -107,8 +107,10 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
     } finally { setHonestLoading(false) }
   }
 
-  // Daily needs far more calendar coverage than 1h to get a usable sample.
-  const rangeFor = (tf: string) => (tf === '1d' ? '2y' : '1y')
+  // Each timeframe needs a different calendar window for a usable sample —
+  // and Yahoo caps intraday history (≤60d for 5m/15m, ≤730d for 1h).
+  const rangeFor = (tf: string) =>
+    tf === '1d' ? '2y' : tf === '1h' ? '1y' : '60d'  // 5m/15m → 60 days
 
   const runBacktest = async () => {
     setLoading(true); setError(null); setMc(null); setBt(null)
@@ -161,6 +163,8 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
           <label className="flex items-center gap-1.5 text-sm">
             <span className="text-muted-foreground">TF</span>
             <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)} className="px-2 py-1.5 border rounded-md bg-background text-sm">
+              <option value="5m">5m</option>
+              <option value="15m">15m</option>
               <option value="1h">1h</option>
               <option value="1d">1d</option>
             </select>
