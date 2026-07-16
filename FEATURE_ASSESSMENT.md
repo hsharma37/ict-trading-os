@@ -113,14 +113,23 @@ sentiment model; (c) backtest the *exact* live multi-TF signal (the backtester i
 - **Honest test** — picks the best config on the first 60%, reports only the untouched 40%.
 - **Live paper-forward test** — locks a config and counts only signals on *future* candles.
 
-**Findings it produced (real):** 2R = no edge; **3R + trend/killzone filters** turns positive and
-*held out-of-sample* on GBPUSD (+0.22R test) and EURUSD (+0.08R), but was inconclusive on XAUUSD
-(curve-fit). So there is a *candidate* edge, not a proven one.
-**Trust with care — caveats baked into the UI:** single timeframe (not the live 3-TF stack),
-**no spread/commission/slippage**, limit-fill assumption, conservative "stop-first" on ambiguous
-bars. Treat backtest expectancy as an **optimistic ceiling**.
-**Improvements:** model spread+commission (this alone may erase the thin edge); multi-timeframe
-replay; let the forward test run for weeks before trusting; more instruments/timeframes.
+**Findings — the honest arc (this is the whole point of the tool):**
+- At **2R the signal has no edge** (~32% win rate; needs >33.3%).
+- **Gross** (before costs), 3R + trend/session filters looked positive and even held out-of-sample.
+- **Net of realistic spread + commission, the edge collapses.** The ICT pattern stops are very
+  tight (median ~4 pips on 1h), and a ~1.9-pip round-trip cost eats ~half the risk on the typical
+  trade. Net expectancy goes **negative** on EUR/GBP.
+- Adding a **minimum-stop filter** (only take setups with a wider stop) is the one lever that helps:
+  **XAUUSD, 3R, ≥15-pip stop** is the best surviving config — but on truly unseen (out-of-sample)
+  data it is only **+0.035R/trade, i.e. essentially break-even after costs.**
+- **Conclusion: there is no *proven net edge*.** XAUUSD wide-stop is a marginal candidate within
+  noise, worth watching on the forward test — nothing to trade mechanically yet.
+
+**Trust with care — caveats baked into the UI:** results are now **net of estimated spread +
+commission**; still single-timeframe (not the live 3-TF stack), limit-fill model, conservative
+"stop-first" on ambiguous bars. Treat any positive expectancy as an optimistic ceiling.
+**Improvements:** multi-timeframe replay of the exact live signal; higher-timeframe variants where
+stops are naturally wider (costs matter less); let the forward test accrue for weeks.
 
 ### 10. Telegram signal ingestion — 🟡
 **Works & now safe:** posts parse into signals; **auto-trade refuses when the stop-loss was
@@ -179,15 +188,18 @@ and shows a red banner** when it can't reach a live, fresh bridge (fails safe).
 - **For execution and tracking — yes, with discipline.** Orders are real and self-verifying;
   tracking mirrors the broker. Start with **micro lots**, keep the MT5 terminal open, and
   reconcile for a couple of weeks. The app now refuses to act blind and confirms every fill.
-- **For the signal as an edge — no, not yet.** Backtesting shows at best a thin, filter-dependent
-  edge that hasn't been proven live. Use signals as **context**, run the **forward test** for
-  weeks, and only then consider trading a validated config small.
+- **For the signal as an edge — no.** Once realistic **spread + commission** are modelled, the
+  apparent edge disappears: the ICT stops are too tight to clear costs on FX, and the only marginal
+  survivor (XAUUSD, 3R, ≥15-pip stop) is ~break-even out-of-sample. Use signals as **context only**;
+  run the **forward test** for weeks before believing any config, and don't trade the raw signal.
 - **Biggest risk is infrastructure, not code.** Harden the tunnel/bridge before scaling size.
 
 ## Priority improvement roadmap
 
 1. **Persistent tunnel + bridge auto-restart + down-alert** (infra reliability). *P0*
-2. **Model spread/commission in the backtest** — confirm whether the 3R edge survives costs. *P0*
+2. ✅ **Model spread/commission in the backtest** — done. Verdict: the edge does **not** survive
+   costs on FX; XAUUSD wide-stop is marginal/break-even. Next: **higher-timeframe (4h/1d) variants**
+   where stops are naturally wider vs. costs. *P0 → done; follow-up P1*
 3. **Port data-quality badges to QuantLab; delete orphan `Research.tsx` + dead `backend/`.** *P1*
 4. **Prefer real per-trade SL for risk/R** when captured; calibration as fallback. *P1*
 5. **Multi-timeframe backtest** of the exact live signal. *P2*

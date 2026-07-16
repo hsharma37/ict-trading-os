@@ -61,8 +61,9 @@ class ForwardTestService:
         if not candles or history_is_synthetic(candles):
             return test  # keep last-known; don't wipe on a feed blip
         signals = bt._scan_signals(candles, symbol, tf, 100, test.get("min_confluence", 2))
+        cost_price = bt._round_trip_cost_price(symbol)  # net-of-cost, like the backtest
         all_trades = bt._evaluate(candles, signals, test["target_r"], 8, 48,
-                                  test.get("session_filter", False), test.get("trend_filter", False))
+                                  test.get("session_filter", False), test.get("trend_filter", False), cost_price)
         start = test.get("start_candle_time") or 0
         fwd = [t for t in all_trades if (t.get("entry_time") or 0) > start]
         closed = [t for t in fwd if not t.get("open")]

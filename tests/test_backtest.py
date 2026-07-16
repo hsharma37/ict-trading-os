@@ -114,3 +114,33 @@ def test_honest_verdict_distinguishes_real_from_curvefit():
     assert bt._honest_verdict(best, {"trades": 200, "expectancy_r": 0.01})["tone"] == "warn"
     # Too few test trades → warn (inconclusive).
     assert bt._honest_verdict(best, {"trades": 5, "expectancy_r": 0.3})["tone"] == "warn"
+
+
+# ── Trading costs (spread + commission) ───────────────────────────────
+
+def test_round_trip_cost_is_positive():
+    assert bt._round_trip_cost_price("EURUSD") > 0
+    assert bt._round_trip_cost_price("XAUUSD") > bt._round_trip_cost_price("EURUSD")
+
+
+def test_costs_reduce_expectancy(monkeypatch):
+    # A trending series that produces some trades; net must be <= gross.
+    from tests.test_forward_test import _series  # reuse the trending generator
+    candles = _series(500)
+    monkeypatch.setattr(bt.market_service, "get_history",
+                        lambda s, tf="1h", limit=5000, history_range="1y": candles)
+    gross = bt.run_backtest("EURUSD", target_r=2.0, include_costs=False)
+    net = bt.run_backtest("EURUSD", target_r=2.0, include_costs=True)
+    if gross.get("trades", 0) >= 5 and net.get("trades", 0) >= 5:
+        assert net["expectancy_r"] <= gross["expectancy_r"]
+        assert net["costs_included"] is True and gross["costs_included"] is False
+
+
+def test_min_stop_filter_reduces_trades(monkeypatch):
+    from tests.test_forward_test import _series
+    candles = _series(500)
+    monkeypatch.setattr(bt.market_service, "get_history",
+                        lambda s, tf="1h", limit=5000, history_range="1y": candles)
+    wide = bt.run_backtest("EURUSD", target_r=2.0, min_stop_pips=30)
+    allt = bt.run_backtest("EURUSD", target_r=2.0, min_stop_pips=0)
+    assert wide.get("trades", 0) <= allt.get("trades", 0)

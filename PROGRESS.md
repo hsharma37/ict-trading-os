@@ -23,8 +23,10 @@
   normalized per standard lot.
 - **Research validation suite:** backtest (walk-forward, no look-ahead) + Monte Carlo (risk of ruin)
   + parameter sweep (with out-of-sample column) + honest walk-forward test + **live paper-forward
-  test**. Verdict: the ICT signal has **no edge at 2R**, a **thin filter-dependent edge at ~3R**
-  that held out-of-sample on GBPUSD/EURUSD — a candidate to forward-test, not a proven system.
+  test — **net of estimated spread + commission**. Verdict: the ICT signal has **no proven net
+  edge**. It looks positive at 3R *gross*, but the pattern stops are so tight (median ~4 pips on
+  1h) that costs erase it on FX; only XAUUSD with a ≥15-pip-stop filter is marginal (~break-even
+  out-of-sample). Signals are **context, not a trigger** — forward-test before trusting.
 - **Feed curation:** discard/keep for Telegram posts and trade plans; Signals page reorganised.
 
 ## Live status (verified 2026-07-15)

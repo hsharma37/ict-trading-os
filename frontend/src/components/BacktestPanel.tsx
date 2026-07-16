@@ -220,8 +220,8 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-border text-muted-foreground">
-                      {['Target', 'Filters', 'Trades', 'Win%', 'Exp', 'In-samp', 'Out-samp', 'Ruin%'].map((h, i) => (
-                        <th key={h} className={`p-1.5 ${i < 2 ? 'text-left' : 'text-right'}`}>{h}</th>
+                      {['Target', 'Min SL', 'Filters', 'Trades', 'Win%', 'Exp', 'In-samp', 'Out-samp', 'Ruin%'].map((h, i) => (
+                        <th key={h} className={`p-1.5 ${i < 3 ? 'text-left' : 'text-right'}`}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -229,6 +229,7 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
                     {sweep.configs.slice(0, 6).map((c: any, idx: number) => (
                       <tr key={idx} className={`border-b border-border/50 ${idx === 0 ? 'bg-emerald-500/5' : ''}`}>
                         <td className="p-1.5 font-mono">{c.target_r}R</td>
+                        <td className="p-1.5 font-mono">{c.min_stop_pips ? `≥${c.min_stop_pips}p` : '—'}</td>
                         <td className="p-1.5">{[c.session_filter && 'killzone', c.trend_filter && 'trend'].filter(Boolean).join(' + ') || 'none'}</td>
                         <td className="p-1.5 text-right font-mono">{c.trades}</td>
                         <td className="p-1.5 text-right font-mono">{c.win_rate}%</td>
@@ -241,7 +242,7 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
                   </tbody>
                 </table>
                 <p className="text-[11px] text-muted-foreground mt-1">
-                  Top 6 by expectancy. <strong>Out-samp</strong> = expectancy on the last {100 - sweep.oos_split_pct}% of data the config wasn't chosen on — if it stays positive there, the edge is more likely real than curve-fit.
+                  Top 6 by expectancy, <strong>net of estimated spread + commission</strong>. <strong>Out-samp</strong> = expectancy on the last {100 - sweep.oos_split_pct}% of data the config wasn't chosen on — if it stays positive there, the edge is more likely real than curve-fit. <strong>Min SL</strong> filters out tight-stop setups where spread dominates.
                 </p>
               </div>
             )}
@@ -290,7 +291,8 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
               )
             })()}
             <p className="text-[11px] text-muted-foreground">
-              {bt.sample_caveat ? `⚠ ${bt.sample_caveat} ` : ''}Assumptions: {bt.assumptions}
+              {bt.sample_caveat ? `⚠ ${bt.sample_caveat} ` : ''}
+              Results are <strong>{bt.cost_per_trade_note || 'net of costs'}</strong>. Assumptions: {bt.assumptions}
             </p>
 
             {/* Monte Carlo */}

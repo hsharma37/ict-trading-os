@@ -24,7 +24,8 @@ from app.services.ict_engine import ict_engine
 def run_backtest(symbol: str, timeframe: str = "1h", target_r: float = 2.0,
                  history_range: str = "1y", window: int = 100,
                  fill_window: int = 8, max_hold: int = 48, min_confluence: int = 2,
-                 session_filter: bool = False, trend_filter: bool = False) -> Dict:
+                 session_filter: bool = False, trend_filter: bool = False,
+                 include_costs: bool = True, min_stop_pips: float = 0.0) -> Dict:
     """Replay the ICT signal over history and score each trade in R-multiples.
 
     `min_confluence` gates entries on the same confluence score the live engine
@@ -35,16 +36,56 @@ def run_backtest(symbol: str, timeframe: str = "1h", target_r: float = 2.0,
     guard = _data_guard(symbol, candles, window)
     if guard:
         return guard
+    cost_price = _round_trip_cost_price(symbol) if include_costs else 0.0
+    min_stop_price = min_stop_pips * _pip_size(symbol)
     signals = _scan_signals(candles, symbol, timeframe, window, min_confluence)
-    trades = _evaluate(candles, signals, target_r, fill_window, max_hold, session_filter, trend_filter)
+    trades = _evaluate(candles, signals, target_r, fill_window, max_hold, session_filter, trend_filter,
+                       cost_price, min_stop_price)
     summary = _summarize_backtest(symbol, timeframe, target_r, history_range, len(candles), trades)
     summary["min_confluence"] = min_confluence
-    summary["filters"] = {"session": session_filter, "trend": trend_filter}
+    summary["filters"] = {"session": session_filter, "trend": trend_filter, "min_stop_pips": min_stop_pips}
+    summary["costs_included"] = include_costs
+    summary["cost_per_trade_note"] = ("net of estimated spread + commission" if include_costs
+                                      else "gross — no trading costs modelled")
     return summary
 
 
 # Killzone hours (UTC-ish) — London Open, NY AM, NY PM, matching the live engine.
 _KILLZONE_HOURS = set(range(7, 10)) | set(range(12, 15)) | set(range(17, 21))
+
+# Typical retail round-trip trading costs, so backtests reflect NET results, not
+# a frictionless fantasy. Spread is in PRICE units (half-spread each side, paid
+# once round-trip); commission is $/lot round-turn converted to price via the
+# contract size. These are conservative estimates — the point is to see whether
+# a thin edge survives costs at all.
+_SPREAD_PRICE = {
+    "EURUSD": 0.00008, "GBPUSD": 0.00012, "USDJPY": 0.008, "AUDUSD": 0.00010,
+    "NZDUSD": 0.00015, "USDCAD": 0.00012, "XAUUSD": 0.25, "BTCUSD": 5.0,
+}
+_COMMISSION_USD_PER_LOT_RT = 7.0
+
+
+def _pip_size(symbol: str) -> float:
+    s = symbol.upper()
+    if s.endswith("JPY"):
+        return 0.01
+    if s == "XAUUSD":
+        return 0.1
+    if s == "BTCUSD":
+        return 1.0
+    return 0.0001
+
+
+def _round_trip_cost_price(symbol: str, spread_price: Optional[float] = None) -> float:
+    """Estimated round-trip cost in PRICE units (spread + commission)."""
+    sp = spread_price if spread_price is not None else _SPREAD_PRICE.get(symbol.upper(), 0.00012)
+    try:
+        from app.services.instrument_config import get_instrument
+        cs = float((get_instrument(symbol.upper()) or {}).get("contract_size", 100000) or 100000)
+    except Exception:
+        cs = 100000.0
+    commission = _COMMISSION_USD_PER_LOT_RT / cs if cs else 0.0
+    return sp + commission
 
 
 def _data_guard(symbol, candles, window) -> Optional[Dict]:
@@ -87,9 +128,14 @@ def _scan_signals(candles, symbol, timeframe, window, min_confluence) -> List[Di
     return sigs
 
 
-def _evaluate(candles, signals, target_r, fill_window, max_hold, session_filter, trend_filter) -> List[Dict]:
+def _evaluate(candles, signals, target_r, fill_window, max_hold, session_filter, trend_filter,
+              cost_price: float = 0.0, min_stop_price: float = 0.0) -> List[Dict]:
     """Cheap pass: apply a config's filters + target to the pre-scanned signals
-    and walk each trade to its outcome. One trade at a time (no overlap)."""
+    and walk each trade to its outcome. One trade at a time (no overlap).
+
+    `cost_price` (spread+commission in price units) is charged to every trade,
+    expressed in R as cost_price/risk — so tight-stop trades pay proportionally
+    more, exactly as in reality."""
     n = len(candles)
     trades: List[Dict] = []
     busy_until = -1
@@ -101,6 +147,8 @@ def _evaluate(candles, signals, target_r, fill_window, max_hold, session_filter,
             continue
         if trend_filter and not s["trend_ok"]:
             continue
+        if min_stop_price and s["risk"] < min_stop_price:
+            continue  # skip tight-stop setups where spread would dominate
         entry, sl, risk, long = s["entry"], s["sl"], s["risk"], s["long"]
         target = entry + target_r * risk if long else entry - target_r * risk
         # Limit fill at `entry` within fill_window bars.
@@ -136,9 +184,13 @@ def _evaluate(candles, signals, target_r, fill_window, max_hold, session_filter,
             last = candles[exit_idx]["close"]
             move = (last - entry) if long else (entry - last)
             outcome_r = round(move / risk, 2) if risk else 0.0
+        # Charge round-trip cost (in R) to closed trades — the honest, net figure.
+        cost_r = (cost_price / risk) if (cost_price and risk) else 0.0
+        net_r = outcome_r if is_open else round(outcome_r - cost_r, 3)
         trades.append({
             "dir": "long" if long else "short", "entry": entry, "sl": sl,
-            "target": round(target, 5), "r": round(outcome_r, 2), "entry_idx": fill_idx, "open": is_open,
+            "target": round(target, 5), "r": net_r, "gross_r": round(outcome_r, 2),
+            "entry_idx": fill_idx, "open": is_open,
             "entry_time": candles[fill_idx].get("time"), "exit_time": candles[exit_idx].get("time"),
         })
         busy_until = exit_idx
@@ -157,21 +209,24 @@ def run_sweep(symbol: str, timeframe: str = "1h", history_range: str = "1y",
         return guard
     n = len(candles)
     split_idx = int(n * oos_split)
+    cost_price = _round_trip_cost_price(symbol)
+    pip = _pip_size(symbol)
     signals = _scan_signals(candles, symbol, timeframe, window, min_confluence)
 
     configs: List[Dict] = []
-    for target_r in (1.0, 1.5, 2.0, 3.0):
+    for target_r in (1.5, 2.0, 3.0):
+      for min_stop in (0, 15, 25):
         for sess in (False, True):
             for trend in (False, True):
-                trades = _evaluate(candles, signals, target_r, 8, 48, sess, trend)
-                if len(trades) < 10:
+                trades = _evaluate(candles, signals, target_r, 8, 48, sess, trend, cost_price, min_stop * pip)
+                if len(trades) < 15:
                     continue
                 rs = [t["r"] for t in trades]
                 is_r = [t["r"] for t in trades if t["entry_idx"] < split_idx]   # in-sample (train)
                 oos_r = [t["r"] for t in trades if t["entry_idx"] >= split_idx]  # out-of-sample (test)
                 mc = monte_carlo(rs, n_sims=500, risk_per_trade_pct=1.0)
                 configs.append({
-                    "target_r": target_r, "session_filter": sess, "trend_filter": trend,
+                    "target_r": target_r, "session_filter": sess, "trend_filter": trend, "min_stop_pips": min_stop,
                     "trades": len(trades),
                     "win_rate": round(sum(1 for r in rs if r > 0) / len(rs) * 100, 1),
                     "expectancy_r": round(sum(rs) / len(rs), 3),
@@ -203,21 +258,25 @@ def run_honest_test(symbol: str, timeframe: str = "1h", history_range: str = "1y
         return guard
     n = len(candles)
     split = int(n * train_split)
+    cost_price = _round_trip_cost_price(symbol)
+    pip = _pip_size(symbol)
     signals = _scan_signals(candles, symbol, timeframe, window, min_confluence)  # one scan, reused
 
     # ── Phase 1: pick the best config on TRAIN only (candles[:split]) ──
     train_candles = candles[:split]
     train_signals = [s for s in signals if s["i"] < split]
     best = None
-    for target_r in (1.0, 1.5, 2.0, 3.0):
+    for target_r in (1.5, 2.0, 3.0):
+      for min_stop in (0, 15, 25):
         for sess in (False, True):
             for trend in (False, True):
-                tr = _evaluate(train_candles, train_signals, target_r, 8, 48, sess, trend)
+                tr = _evaluate(train_candles, train_signals, target_r, 8, 48, sess, trend, cost_price, min_stop * pip)
                 if len(tr) < 20:
                     continue
                 exp = sum(t["r"] for t in tr) / len(tr)
                 if best is None or exp > best["train_expectancy_r"]:
                     best = {"target_r": target_r, "session_filter": sess, "trend_filter": trend,
+                            "min_stop_pips": min_stop,
                             "train_expectancy_r": round(exp, 3), "train_trades": len(tr)}
     if not best:
         return {"symbol": symbol, "timeframe": timeframe, "history_range": history_range,
@@ -227,7 +286,8 @@ def run_honest_test(symbol: str, timeframe: str = "1h", history_range: str = "1y
     # ── Phase 2: apply the LOCKED config to the untouched TEST period ──
     test_signals = [s for s in signals if s["i"] >= split]
     test_trades = _evaluate(candles, test_signals, best["target_r"], 8, 48,
-                            best["session_filter"], best["trend_filter"])
+                            best["session_filter"], best["trend_filter"], cost_price,
+                            best.get("min_stop_pips", 0) * pip)
     test = _summarize_backtest(symbol, timeframe, best["target_r"], history_range, n, test_trades)
     test_mc = monte_carlo([t["r"] for t in test_trades], n_sims=1000, risk_per_trade_pct=1.0) if test_trades else {}
     verdict = _honest_verdict(best, test)
@@ -238,8 +298,15 @@ def run_honest_test(symbol: str, timeframe: str = "1h", history_range: str = "1y
     }
 
 
+def _config_label(best: Dict) -> str:
+    return (f"target {best['target_r']}R"
+            + (f", ≥{best['min_stop_pips']}-pip stop" if best.get("min_stop_pips") else "")
+            + (", killzone-only" if best.get("session_filter") else "")
+            + (", trend-aligned" if best.get("trend_filter") else ""))
+
+
 def _honest_verdict(best: Dict, test: Dict) -> Dict:
-    label = f"target {best['target_r']}R" + (", killzone-only" if best["session_filter"] else "") + (", trend-aligned" if best["trend_filter"] else "")
+    label = _config_label(best)
     if not test or test.get("trades", 0) < 10:
         return {"tone": "warn", "text": f"The blind-chosen config ({label}, train {best['train_expectancy_r']:+.3f}R) produced too few trades in the test period to judge — inconclusive."}
     te = test["expectancy_r"]
@@ -253,7 +320,7 @@ def _honest_verdict(best: Dict, test: Dict) -> Dict:
 def _sweep_verdict(best: Optional[Dict]) -> Dict:
     if not best:
         return {"tone": "bad", "text": "No configuration produced enough trades to judge — this signal isn't a mechanical strategy on this data."}
-    label = f"target {best['target_r']}R" + (", killzone-only" if best["session_filter"] else "") + (", trend-aligned" if best["trend_filter"] else "")
+    label = _config_label(best)
     exp, oos = best["expectancy_r"], best.get("oos_expectancy_r")
     if exp <= 0.03:
         return {"tone": "bad", "text": f"No config crossed into a real edge. The best ({label}) is only {exp:+.3f}R/trade — break-even at best, negative after costs. Treat the signal as context, not a trigger."}
