@@ -72,14 +72,22 @@ void HLine(string name,double price,color col,ENUM_LINE_STYLE st,int w=1)
    ObjectSetInteger(0,name,OBJPROP_RAY_RIGHT,false);
 }
 
-void Band(string name,double hi,double lo,color border)
+void Band(string name,double hi,double lo,color bright,color tint)
 {
-   // Outline only (no solid fill) — keeps the chart readable with several zones.
+   // Highlighted zone = subtle filled tint BEHIND the candles + a crisp bright
+   // outline on top. MT5 rectangles carry a single colour, so we draw two:
+   // one filled (tint, back) for the highlight and one outline (bright, front).
    ObjectCreate(0,name,OBJ_RECTANGLE,0,LeftTime(),hi,RightTime(),lo);
-   ObjectSetInteger(0,name,OBJPROP_COLOR,border);
-   ObjectSetInteger(0,name,OBJPROP_WIDTH,2);
-   ObjectSetInteger(0,name,OBJPROP_FILL,false);
+   ObjectSetInteger(0,name,OBJPROP_COLOR,tint);
+   ObjectSetInteger(0,name,OBJPROP_FILL,true);
    ObjectSetInteger(0,name,OBJPROP_BACK,true);
+
+   string bn=name+"_B";
+   ObjectCreate(0,bn,OBJ_RECTANGLE,0,LeftTime(),hi,RightTime(),lo);
+   ObjectSetInteger(0,bn,OBJPROP_COLOR,bright);
+   ObjectSetInteger(0,bn,OBJPROP_WIDTH,2);
+   ObjectSetInteger(0,bn,OBJPROP_FILL,false);
+   ObjectSetInteger(0,bn,OBJPROP_BACK,false);
 }
 
 void Legend()
@@ -114,9 +122,9 @@ void DrawFibonacci()
 {
    if(!ShowFibonacci || M_rangeHigh<=M_rangeLow) return;
    double rng=M_rangeHigh-M_rangeLow;
-   Band(PFX+"OTE_SELL",M_rangeLow+rng*0.786,M_rangeLow+rng*0.618,clrGold);
+   Band(PFX+"OTE_SELL",M_rangeLow+rng*0.786,M_rangeLow+rng*0.618,clrGold,C'45,38,0');
    Label(PFX+"OTE_SELL_T",LeftTime(),M_rangeLow+rng*0.70,"Premium OTE (sell)",clrGold,9);
-   Band(PFX+"OTE_BUY",M_rangeLow+rng*0.382,M_rangeLow+rng*0.214,clrGold);
+   Band(PFX+"OTE_BUY",M_rangeLow+rng*0.382,M_rangeLow+rng*0.214,clrGold,C'45,38,0');
    Label(PFX+"OTE_BUY_T",LeftTime(),M_rangeLow+rng*0.30,"Discount OTE (buy)",clrGold,9);
    FibLevel(0.0,"0% (low)",clrDeepSkyBlue);
    FibLevel(0.236,"23.6%",clrDeepSkyBlue);
@@ -172,9 +180,10 @@ void DrawAll()
          HLine(nm,hi,lc,(typ=="LIQUIDITY")?STYLE_DOT:STYLE_DASH,2);
          Label(nm+"_T",LeftTime(),hi,full+"  "+DoubleToString(hi,_Digits),lc,9);
       } else {
-         color border = bull?clrLime:clrRed;                    // bright, high-contrast
-         Band(nm,hi,lo,border);
-         Label(nm+"_T",LeftTime(),(hi+lo)/2.0,full,border,9);
+         color bright = bull?clrLime:clrRed;                    // bright, high-contrast
+         color tint   = bull?C'0,45,0':C'50,0,0';               // subtle fill highlight
+         Band(nm,hi,lo,bright,tint);
+         Label(nm+"_T",LeftTime(),(hi+lo)/2.0,full,bright,9);
       }
    }
    FileClose(fh);
