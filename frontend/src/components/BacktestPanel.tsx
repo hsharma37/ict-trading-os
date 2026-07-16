@@ -90,7 +90,7 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
   const runSweep = async () => {
     setSweepLoading(true); setError(null); setSweep(null)
     try {
-      const res = await researchApi.sweep(symbol, { timeframe, history_range: '1y' })
+      const res = await researchApi.sweep(symbol, { timeframe, history_range: rangeFor(timeframe) })
       setSweep(res.data)
     } catch (e: any) {
       setSweep(null); setError(e?.response?.data?.detail || 'Sweep failed')
@@ -100,17 +100,20 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
   const runHonest = async () => {
     setHonestLoading(true); setError(null); setHonest(null)
     try {
-      const res = await researchApi.honestTest(symbol, { timeframe, history_range: '1y' })
+      const res = await researchApi.honestTest(symbol, { timeframe, history_range: rangeFor(timeframe) })
       setHonest(res.data)
     } catch (e: any) {
       setHonest(null); setError(e?.response?.data?.detail || 'Honest test failed')
     } finally { setHonestLoading(false) }
   }
 
+  // Daily needs far more calendar coverage than 1h to get a usable sample.
+  const rangeFor = (tf: string) => (tf === '1d' ? '2y' : '1y')
+
   const runBacktest = async () => {
     setLoading(true); setError(null); setMc(null); setBt(null)
     try {
-      const res = await researchApi.backtest(symbol, { timeframe, target_r: targetR, history_range: '1y' })
+      const res = await researchApi.backtest(symbol, { timeframe, target_r: targetR, history_range: rangeFor(timeframe) })
       setBt(res.data)
     } catch (e: any) {
       setBt(null); setError(e?.response?.data?.detail || 'Backtest failed')

@@ -122,8 +122,15 @@ sentiment model; (c) backtest the *exact* live multi-TF signal (the backtester i
 - Adding a **minimum-stop filter** (only take setups with a wider stop) is the one lever that helps:
   **XAUUSD, 3R, ≥15-pip stop** is the best surviving config — but on truly unseen (out-of-sample)
   data it is only **+0.035R/trade, i.e. essentially break-even after costs.**
-- **Conclusion: there is no *proven net edge*.** XAUUSD wide-stop is a marginal candidate within
-  noise, worth watching on the forward test — nothing to trade mechanically yet.
+- **Higher timeframe changes the economics.** On the **daily** chart, stops are naturally wide
+  (median ~213 pips on gold) so the ~3-pip cost is negligible. **XAUUSD daily, 3R, trend-aligned
+  passes the honest walk-forward test net of costs** (+0.96R out-of-sample, profit factor ~2.9) —
+  the first genuinely positive, cost-surviving, out-of-sample result. Plain daily backtest: 2R
+  +0.43R, 3R +0.64R (PF ~2).
+- **Conclusion:** on **1h there is no net edge**; on **daily gold there is a promising candidate**,
+  but the **sample is small (~24–70 trades over 2 years)** — encouraging, not proven. The forward
+  test must confirm it before it's trusted. (Set the Backtest panel to the **1d** timeframe to see
+  this.)
 
 **Trust with care — caveats baked into the UI:** results are now **net of estimated spread +
 commission**; still single-timeframe (not the live 3-TF stack), limit-fill model, conservative

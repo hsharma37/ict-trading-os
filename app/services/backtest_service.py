@@ -310,8 +310,9 @@ def _honest_verdict(best: Dict, test: Dict) -> Dict:
     if not test or test.get("trades", 0) < 10:
         return {"tone": "warn", "text": f"The blind-chosen config ({label}, train {best['train_expectancy_r']:+.3f}R) produced too few trades in the test period to judge — inconclusive."}
     te = test["expectancy_r"]
+    small = " ⚠ BUT the sample is small (< 30 trades) — treat as encouraging, not proven; the forward test must confirm it." if test["trades"] < 30 else ""
     if te > 0.05:
-        return {"tone": "good", "text": f"PASSED. Chosen blind on the training data ({label}, {best['train_expectancy_r']:+.3f}R), it earned {te:+.3f}R/trade on the {test['trades']} unseen test trades too. That's real out-of-sample evidence — the strongest signal we can give short of live forward-testing. Trade small and confirm live before size."}
+        return {"tone": "good", "text": f"PASSED. Chosen blind on the training data ({label}, {best['train_expectancy_r']:+.3f}R), it earned {te:+.3f}R/trade on the {test['trades']} unseen test trades too — net of costs. That's real out-of-sample evidence.{small} Trade small and confirm live before size."}
     if te < -0.02:
         return {"tone": "bad", "text": f"FAILED. The config that looked best on training ({label}, {best['train_expectancy_r']:+.3f}R) LOST {te:+.3f}R/trade on the unseen test data — textbook curve-fitting. The 'edge' was noise. Do not trade it."}
     return {"tone": "warn", "text": f"INCONCLUSIVE. The blind-chosen config ({label}) was {te:+.3f}R on unseen data — essentially break-even, so no reliable edge survived out-of-sample."}
