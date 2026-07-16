@@ -152,6 +152,11 @@ export const signalsApi = {
   intelligenceAll: () => apiClient.get('/signals/intelligence'),
 }
 
+// ICT live price zones (order blocks, FVGs, liquidity, structure) vs current price
+export const ictApi = {
+  levels: (symbol: string) => apiClient.get(`/ict/levels/${symbol}`),
+}
+
 // Journal API (durable closed-trade journal, per instrument)
 export const journalApi = {
   list: (symbol?: string, limit = 200) => apiClient.get('/journal', { params: { symbol, limit } }),

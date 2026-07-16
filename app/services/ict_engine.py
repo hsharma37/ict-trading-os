@@ -140,6 +140,24 @@ class ICTPatternEngine:
         mid = (max(highs) + min(lows)) / 2
         return "premium" if price > mid else "discount"
 
+    def range_levels(self, candles: List[Dict]) -> Optional[Dict]:
+        """The current dealing range (recent swing high → swing low) and its 50%
+        equilibrium — the premium/discount boundary price trades around."""
+        if len(candles) < 20:
+            return None
+        highs = np.array([c["high"] for c in candles])
+        lows = np.array([c["low"] for c in candles])
+        times = [c["time"] for c in candles]
+        swings = self._detect_swings(highs, lows, times)
+        sh = [s["price"] for s in swings if s["type"] == "high"][-5:]
+        sl = [s["price"] for s in swings if s["type"] == "low"][-5:]
+        hi = max(sh) if sh else float(np.max(highs[-50:]))
+        lo = min(sl) if sl else float(np.min(lows[-50:]))
+        if hi <= lo:
+            return None
+        return {"high": round(float(hi), 5), "low": round(float(lo), 5),
+                "equilibrium": round(float((hi + lo) / 2), 5)}
+
     def calculate_entry(self, patterns, bias, current_price):
         """Calculate entry zone, SL, and TPs from detected patterns.
         
