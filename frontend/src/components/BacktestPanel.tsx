@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { researchApi } from '@/api/client'
+import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { FlaskConical, Dice5, Loader2, AlertTriangle } from 'lucide-react'
 
 function Sparkline({ data, color = 'currentColor' }: { data: number[]; color?: string }) {
@@ -26,7 +27,8 @@ const Stat = ({ label, value, cls = '' }: { label: string; value: string; cls?: 
   </div>
 )
 
-export default function BacktestPanel({ symbol }: { symbol: string }) {
+export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: string }) {
+  const [symbol, setSymbol] = useState(initialSymbol || SUPPORTED_SYMBOLS[0] || 'EURUSD')
   const [targetR, setTargetR] = useState(2)
   const [timeframe, setTimeframe] = useState('1h')
   const [bt, setBt] = useState<any>(null)
@@ -36,8 +38,12 @@ export default function BacktestPanel({ symbol }: { symbol: string }) {
   const [mcLoading, setMcLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Follow the page's selected instrument when it changes, but stay usable on
+  // its own (the panel has its own picker, so it's always visible).
+  useEffect(() => { if (initialSymbol) setSymbol(initialSymbol) }, [initialSymbol])
+
   const runBacktest = async () => {
-    setLoading(true); setError(null); setMc(null)
+    setLoading(true); setError(null); setMc(null); setBt(null)
     try {
       const res = await researchApi.backtest(symbol, { timeframe, target_r: targetR, history_range: '1y' })
       setBt(res.data)
@@ -67,7 +73,7 @@ export default function BacktestPanel({ symbol }: { symbol: string }) {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center gap-2">
-          <FlaskConical className="w-5 h-5 text-primary" /> Backtest & Monte Carlo — {symbol}
+          <FlaskConical className="w-5 h-5 text-primary" /> Backtest & Monte Carlo
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -77,6 +83,13 @@ export default function BacktestPanel({ symbol }: { symbol: string }) {
         </p>
 
         <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-1.5 text-sm">
+            <span className="text-muted-foreground">Symbol</span>
+            <select value={symbol} onChange={(e) => { setSymbol(e.target.value); setBt(null); setMc(null) }}
+              className="px-2 py-1.5 border rounded-md bg-background text-sm font-semibold">
+              {SUPPORTED_SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
           <label className="flex items-center gap-1.5 text-sm">
             <span className="text-muted-foreground">TF</span>
             <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)} className="px-2 py-1.5 border rounded-md bg-background text-sm">

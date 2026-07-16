@@ -267,8 +267,9 @@ export default function Research() {
         </Card>
       )}
 
-      {/* Backtest + Monte Carlo for the selected instrument */}
-      {selected && <BacktestPanel symbol={selected.symbol} />}
+      {/* Backtest + Monte Carlo — always visible; follows the selected instrument
+          but has its own symbol picker so it works without selecting one. */}
+      <BacktestPanel symbol={selected?.symbol} />
 
       {/* Correlation Matrix */}
       {correlation?.matrix && Object.keys(correlation.matrix).length > 0 && (
