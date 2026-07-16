@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { researchApi } from '@/api/client'
+import BacktestPanel from '@/components/BacktestPanel'
 import {
   Activity, DollarSign, AlertTriangle, Shield, Globe, BarChart3, Layers,
 } from 'lucide-react'
@@ -265,6 +266,9 @@ export default function Research() {
           </CardContent>
         </Card>
       )}
+
+      {/* Backtest + Monte Carlo for the selected instrument */}
+      {selected && <BacktestPanel symbol={selected.symbol} />}
 
       {/* Correlation Matrix */}
       {correlation?.matrix && Object.keys(correlation.matrix).length > 0 && (

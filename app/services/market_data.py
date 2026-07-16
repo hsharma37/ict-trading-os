@@ -92,7 +92,8 @@ class MarketDataService:
         from app.services.quote_service import get_quote  # late import: avoids cycle
         return get_quote(symbol)
 
-    def get_history(self, symbol: str, timeframe: str = "1h", limit: int = 200) -> List[Dict]:
+    def get_history(self, symbol: str, timeframe: str = "1h", limit: int = 200,
+                    history_range: Optional[str] = None) -> List[Dict]:
         # Prefer OANDA candles when configured (native 4H, tighter data).
         oanda_candles = oanda_service.get_history(symbol, timeframe, limit)
         if oanda_candles:
@@ -105,6 +106,10 @@ class MarketDataService:
             "1d": ("6mo", "1d")
         }
         period, interval = tf_map.get(timeframe, ("1mo", "1h"))
+        # A caller (e.g. the backtester) can request a longer window than the
+        # default for this interval — Yahoo caps 1h at ~730d, 1d at years.
+        if history_range:
+            period = history_range
 
         try:
             # Yahoo's chart API takes `range=` (e.g. 1mo), NOT `period=`. Passing
