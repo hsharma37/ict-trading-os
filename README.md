@@ -36,8 +36,7 @@ Three parts of the repo:
 |---|---|
 | `app/` | **Active** FastAPI backend (deployed). Routers + services + Postgres. |
 | `frontend/` | React SPA (Vite). Pages, the shared `useMt5` hook, `marketApi` client. |
-| `mt5-bridge/` | Standalone Flask bridge that runs on Windows next to the MT5 terminal. |
-| `backend/` | Dormant "Gen-2" rewrite target (Postgres/Celery/Alembic). Not deployed. |
+| `mt5-bridge/` | Standalone Flask bridge (+ `watchdog.py` supervisor) that runs on Windows next to the MT5 terminal. |
 
 ---
 
