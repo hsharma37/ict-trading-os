@@ -112,8 +112,9 @@ def _evaluate(candles, signals, target_r, fill_window, max_hold, session_filter,
         if fill_idx is None:
             continue
         # Walk forward; stop assumed first on an ambiguous bar (conservative).
-        outcome_r, exit_idx = None, fill_idx
-        for k in range(fill_idx + 1, min(fill_idx + 1 + max_hold, n)):
+        end_k = min(fill_idx + 1 + max_hold, n)
+        outcome_r, exit_idx, is_open = None, fill_idx, False
+        for k in range(fill_idx + 1, end_k):
             hi, lo = candles[k]["high"], candles[k]["low"]
             hit_sl = lo <= sl if long else hi >= sl
             hit_tp = hi >= target if long else lo <= target
@@ -124,13 +125,20 @@ def _evaluate(candles, signals, target_r, fill_window, max_hold, session_filter,
                 outcome_r, exit_idx = float(target_r), k
                 break
         if outcome_r is None:
-            last = candles[min(fill_idx + max_hold, n - 1)]["close"]
+            if end_k >= fill_idx + 1 + max_hold:
+                # Completed the max-hold window without a hit → timed out (closed).
+                exit_idx = fill_idx + max_hold
+            else:
+                # Ran out of candles before resolving → the trade is still OPEN
+                # (its R below is unrealized; forward-test excludes it from stats).
+                is_open = True
+                exit_idx = n - 1
+            last = candles[exit_idx]["close"]
             move = (last - entry) if long else (entry - last)
             outcome_r = round(move / risk, 2) if risk else 0.0
-            exit_idx = min(fill_idx + max_hold, n - 1)
         trades.append({
             "dir": "long" if long else "short", "entry": entry, "sl": sl,
-            "target": round(target, 5), "r": round(outcome_r, 2), "entry_idx": fill_idx,
+            "target": round(target, 5), "r": round(outcome_r, 2), "entry_idx": fill_idx, "open": is_open,
             "entry_time": candles[fill_idx].get("time"), "exit_time": candles[exit_idx].get("time"),
         })
         busy_until = exit_idx

@@ -8,6 +8,7 @@ from app.routers import market, ict, signals, trades, quant, orders, plans, kb, 
 from app.routers import settings as settings_router
 from app.routers import planner
 from app.routers import journal
+from app.routers import forward_test
 
 validate_auth_config()
 
@@ -57,6 +58,7 @@ app.include_router(news.router)
 app.include_router(settings_router.router)
 app.include_router(planner.router)
 app.include_router(journal.router)
+app.include_router(forward_test.router)
 
 @app.get("/health")
 def health():

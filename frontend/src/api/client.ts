@@ -134,6 +134,14 @@ export const researchApi = {
   monteCarlo: (body: any) => apiClient.post('/research/monte-carlo', body),
 }
 
+// Live paper-forward test API
+export const forwardTestApi = {
+  list: () => apiClient.get('/forward-tests'),
+  create: (body: any) => apiClient.post('/forward-tests', body),
+  stop: (id: string) => apiClient.post(`/forward-tests/${id}/stop`),
+  remove: (id: string) => apiClient.delete(`/forward-tests/${id}`),
+}
+
 // Signals API
 export const signalsApi = {
   analyze: (symbol: string) => apiClient.get(`/signals/analyze/${symbol}`),

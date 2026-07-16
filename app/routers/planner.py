@@ -126,4 +126,10 @@ def run_due(request: Request):
         result["journal"] = trade_journal_service.sync_from_mt5()
     except Exception:
         pass
+    # Advance live paper-forward tests as new candles print (skips when unchanged).
+    try:
+        from app.services.forward_test_service import forward_test_service
+        result["forward_tests"] = forward_test_service.tick_all()
+    except Exception:
+        pass
     return result
