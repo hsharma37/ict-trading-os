@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import SignalIntelligence from '@/components/SignalIntelligence'
+import LiveIctLevels from '@/components/LiveIctLevels'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { signalsApi } from '@/api/client'
@@ -360,6 +361,8 @@ export default function Signals() {
           </Card>
           <SignalIntelligence symbol={selectedSymbol} />
         </div>
+        {/* Live price projection of every ICT zone vs the current price. */}
+        <LiveIctLevels symbol={selectedSymbol} />
       </section>
 
       {/* Scan Results */}
