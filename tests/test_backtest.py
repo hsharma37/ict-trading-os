@@ -55,3 +55,34 @@ def test_monte_carlo_losing_edge_shows_high_ruin():
     rs = [-1.0, -1.0, -1.0, 2.0, -1.0, -1.0, -1.0, -1.0]  # 1/8 win at 2R → strongly negative
     out = bt.monte_carlo(rs, n_sims=1000, risk_per_trade_pct=2.0, horizon=100, seed=1)
     assert out["prob_loss_pct"] > 80
+
+
+# ── Parameter sweep + out-of-sample verdict ───────────────────────────
+
+def test_sweep_refuses_synthetic(monkeypatch):
+    monkeypatch.setattr(bt.market_service, "get_history",
+                        lambda s, tf="1h", limit=5000, history_range="1y": _flat(300, synthetic=True))
+    out = bt.run_sweep("EURUSD")
+    assert out.get("data_quality") == "synthetic" and "error" in out
+
+
+def test_sweep_flat_data_has_no_edge(monkeypatch):
+    monkeypatch.setattr(bt.market_service, "get_history",
+                        lambda s, tf="1h", limit=5000, history_range="1y": _flat(400))
+    out = bt.run_sweep("EURUSD")
+    assert out["best"] is None and out["verdict"]["tone"] == "bad"
+
+
+def test_sweep_verdict_flags_curve_fit():
+    # Positive in-sample but negative out-of-sample → curve-fit warning.
+    fit = {"target_r": 3.0, "session_filter": True, "trend_filter": False,
+           "expectancy_r": 0.2, "oos_expectancy_r": -0.1}
+    assert bt._sweep_verdict(fit)["tone"] == "warn"
+    # Positive and holds OOS → good.
+    real = {"target_r": 3.0, "session_filter": True, "trend_filter": True,
+            "expectancy_r": 0.25, "oos_expectancy_r": 0.18}
+    assert bt._sweep_verdict(real)["tone"] == "good"
+    # Break-even → bad.
+    flat = {"target_r": 2.0, "session_filter": False, "trend_filter": False,
+            "expectancy_r": 0.0, "oos_expectancy_r": 0.0}
+    assert bt._sweep_verdict(flat)["tone"] == "bad"

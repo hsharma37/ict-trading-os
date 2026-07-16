@@ -23,7 +23,8 @@ from app.services.ict_engine import ict_engine
 
 def run_backtest(symbol: str, timeframe: str = "1h", target_r: float = 2.0,
                  history_range: str = "1y", window: int = 100,
-                 fill_window: int = 8, max_hold: int = 48, min_confluence: int = 2) -> Dict:
+                 fill_window: int = 8, max_hold: int = 48, min_confluence: int = 2,
+                 session_filter: bool = False, trend_filter: bool = False) -> Dict:
     """Replay the ICT signal over history and score each trade in R-multiples.
 
     `min_confluence` gates entries on the same confluence score the live engine
@@ -31,80 +32,166 @@ def run_backtest(symbol: str, timeframe: str = "1h", target_r: float = 2.0,
     you'd actually take, not every pattern touch."""
     symbol = symbol.upper()
     candles = market_service.get_history(symbol, timeframe, 5000, history_range=history_range)
+    guard = _data_guard(symbol, candles, window)
+    if guard:
+        return guard
+    signals = _scan_signals(candles, symbol, timeframe, window, min_confluence)
+    trades = _evaluate(candles, signals, target_r, fill_window, max_hold, session_filter, trend_filter)
+    summary = _summarize_backtest(symbol, timeframe, target_r, history_range, len(candles), trades)
+    summary["min_confluence"] = min_confluence
+    summary["filters"] = {"session": session_filter, "trend": trend_filter}
+    return summary
+
+
+# Killzone hours (UTC-ish) — London Open, NY AM, NY PM, matching the live engine.
+_KILLZONE_HOURS = set(range(7, 10)) | set(range(12, 15)) | set(range(17, 21))
+
+
+def _data_guard(symbol, candles, window) -> Optional[Dict]:
     if not candles or len(candles) < window + 20:
         return {"symbol": symbol, "error": "Not enough historical data to backtest.",
                 "candles": len(candles or [])}
     if history_is_synthetic(candles):
         return {"symbol": symbol, "error": "Market data feed unavailable (would be simulated) — cannot backtest.",
                 "data_quality": "synthetic"}
+    return None
 
-    trades: List[Dict] = []
-    i = window
+
+def _scan_signals(candles, symbol, timeframe, window, min_confluence) -> List[Dict]:
+    """The expensive pass (ICT pattern detection per bar) — done ONCE and reused
+    across every sweep config. Emits candidate entries with the metadata the
+    filters need (killzone hour, trend alignment)."""
+    from datetime import datetime
+    sigs: List[Dict] = []
     n = len(candles)
-    while i < n - 1:
+    for i in range(window, n - 1):
         sub = candles[i - window:i]
-        analysis = ict_engine.analyze(sub, symbol, timeframe)
-        bias = analysis.get("current_bias", "NEUTRAL")
-        if bias == "NEUTRAL" or analysis.get("confluence_score", 0) < min_confluence:
-            i += 1
+        a = ict_engine.analyze(sub, symbol, timeframe)
+        bias = a.get("current_bias", "NEUTRAL")
+        if bias == "NEUTRAL" or a.get("confluence_score", 0) < min_confluence:
             continue
-        zone = ict_engine.calculate_entry(analysis.get("patterns", []), bias, sub[-1]["close"])
+        zone = ict_engine.calculate_entry(a.get("patterns", []), bias, sub[-1]["close"])
         if not zone or not zone.get("risk"):
-            i += 1
             continue
-
-        entry, sl, risk = zone["entry"], zone["sl"], zone["risk"]
+        closes = [c["close"] for c in sub]
+        sma = sum(closes[-50:]) / 50 if len(closes) >= 50 else sum(closes) / len(closes)
         long = bias == "BULLISH"
-        target = entry + target_r * risk if long else entry - target_r * risk
+        t = candles[i].get("time")
+        try:
+            hour = datetime.utcfromtimestamp(int(t)).hour if t else 12
+        except (TypeError, ValueError, OSError):
+            hour = 12
+        sigs.append({"i": i, "long": long, "entry": zone["entry"], "sl": zone["sl"],
+                     "risk": zone["risk"], "hour": hour,
+                     "trend_ok": (zone["entry"] > sma) if long else (zone["entry"] < sma)})
+    return sigs
 
-        # 1) Wait for a limit fill at `entry` within fill_window bars.
+
+def _evaluate(candles, signals, target_r, fill_window, max_hold, session_filter, trend_filter) -> List[Dict]:
+    """Cheap pass: apply a config's filters + target to the pre-scanned signals
+    and walk each trade to its outcome. One trade at a time (no overlap)."""
+    n = len(candles)
+    trades: List[Dict] = []
+    busy_until = -1
+    for s in signals:
+        i = s["i"]
+        if i <= busy_until:
+            continue
+        if session_filter and s["hour"] not in _KILLZONE_HOURS:
+            continue
+        if trend_filter and not s["trend_ok"]:
+            continue
+        entry, sl, risk, long = s["entry"], s["sl"], s["risk"], s["long"]
+        target = entry + target_r * risk if long else entry - target_r * risk
+        # Limit fill at `entry` within fill_window bars.
         fill_idx = None
         for j in range(i, min(i + fill_window, n)):
             if candles[j]["low"] <= entry <= candles[j]["high"]:
                 fill_idx = j
                 break
         if fill_idx is None:
-            i += 1
             continue
-
-        # 2) Walk forward from the fill; SL and target checked each bar. If both
-        #    are touched in the same bar we conservatively assume the STOP first.
-        outcome_r = None
-        exit_idx = fill_idx
+        # Walk forward; stop assumed first on an ambiguous bar (conservative).
+        outcome_r, exit_idx = None, fill_idx
         for k in range(fill_idx + 1, min(fill_idx + 1 + max_hold, n)):
             hi, lo = candles[k]["high"], candles[k]["low"]
             hit_sl = lo <= sl if long else hi >= sl
             hit_tp = hi >= target if long else lo <= target
-            if hit_sl and hit_tp:
-                outcome_r = -1.0  # ambiguous bar → assume stop (conservative)
-                exit_idx = k
-                break
             if hit_sl:
-                outcome_r = -1.0
-                exit_idx = k
+                outcome_r, exit_idx = -1.0, k
                 break
             if hit_tp:
-                outcome_r = float(target_r)
-                exit_idx = k
+                outcome_r, exit_idx = float(target_r), k
                 break
         if outcome_r is None:
-            # Timed out — mark to the last close as a fractional R.
             last = candles[min(fill_idx + max_hold, n - 1)]["close"]
             move = (last - entry) if long else (entry - last)
             outcome_r = round(move / risk, 2) if risk else 0.0
             exit_idx = min(fill_idx + max_hold, n - 1)
-
         trades.append({
             "dir": "long" if long else "short", "entry": entry, "sl": sl,
-            "target": round(target, 5), "r": round(outcome_r, 2),
+            "target": round(target, 5), "r": round(outcome_r, 2), "entry_idx": fill_idx,
             "entry_time": candles[fill_idx].get("time"), "exit_time": candles[exit_idx].get("time"),
         })
-        # One trade at a time: resume scanning after the exit.
-        i = max(exit_idx + 1, i + 1)
+        busy_until = exit_idx
+    return trades
 
-    summary = _summarize_backtest(symbol, timeframe, target_r, history_range, len(candles), trades)
-    summary["min_confluence"] = min_confluence
-    return summary
+
+def run_sweep(symbol: str, timeframe: str = "1h", history_range: str = "1y",
+              window: int = 100, min_confluence: int = 2, oos_split: float = 0.6) -> Dict:
+    """Grid-search target-R × session-filter × trend-filter to see if ANY config
+    has a positive edge — and whether it survives out-of-sample (the anti-curve-
+    fit check). The costly pattern scan runs once; each config is a cheap eval."""
+    symbol = symbol.upper()
+    candles = market_service.get_history(symbol, timeframe, 5000, history_range=history_range)
+    guard = _data_guard(symbol, candles, window)
+    if guard:
+        return guard
+    n = len(candles)
+    split_idx = int(n * oos_split)
+    signals = _scan_signals(candles, symbol, timeframe, window, min_confluence)
+
+    configs: List[Dict] = []
+    for target_r in (1.0, 1.5, 2.0, 3.0):
+        for sess in (False, True):
+            for trend in (False, True):
+                trades = _evaluate(candles, signals, target_r, 8, 48, sess, trend)
+                if len(trades) < 10:
+                    continue
+                rs = [t["r"] for t in trades]
+                is_r = [t["r"] for t in trades if t["entry_idx"] < split_idx]   # in-sample (train)
+                oos_r = [t["r"] for t in trades if t["entry_idx"] >= split_idx]  # out-of-sample (test)
+                mc = monte_carlo(rs, n_sims=500, risk_per_trade_pct=1.0)
+                configs.append({
+                    "target_r": target_r, "session_filter": sess, "trend_filter": trend,
+                    "trades": len(trades),
+                    "win_rate": round(sum(1 for r in rs if r > 0) / len(rs) * 100, 1),
+                    "expectancy_r": round(sum(rs) / len(rs), 3),
+                    "is_expectancy_r": round(sum(is_r) / len(is_r), 3) if is_r else None,
+                    "oos_expectancy_r": round(sum(oos_r) / len(oos_r), 3) if oos_r else None,
+                    "total_r": round(sum(rs), 2),
+                    "risk_of_ruin_pct": mc.get("risk_of_ruin_pct") if not mc.get("error") else None,
+                })
+    configs.sort(key=lambda c: c["expectancy_r"], reverse=True)
+    best = configs[0] if configs else None
+    verdict = _sweep_verdict(best)
+    return {
+        "symbol": symbol, "timeframe": timeframe, "history_range": history_range,
+        "candles": n, "signals_scanned": len(signals), "configs_tested": len(configs),
+        "oos_split_pct": int(oos_split * 100), "configs": configs, "best": best, "verdict": verdict,
+    }
+
+
+def _sweep_verdict(best: Optional[Dict]) -> Dict:
+    if not best:
+        return {"tone": "bad", "text": "No configuration produced enough trades to judge — this signal isn't a mechanical strategy on this data."}
+    label = f"target {best['target_r']}R" + (", killzone-only" if best["session_filter"] else "") + (", trend-aligned" if best["trend_filter"] else "")
+    exp, oos = best["expectancy_r"], best.get("oos_expectancy_r")
+    if exp <= 0.03:
+        return {"tone": "bad", "text": f"No config crossed into a real edge. The best ({label}) is only {exp:+.3f}R/trade — break-even at best, negative after costs. Treat the signal as context, not a trigger."}
+    if oos is None or oos <= 0:
+        return {"tone": "warn", "text": f"The best config ({label}) looks positive in-sample ({exp:+.3f}R) but its edge does NOT hold out-of-sample ({oos if oos is not None else 'n/a'}R) — that's curve-fitting. Don't trust it."}
+    return {"tone": "good", "text": f"Promising: {label} is {exp:+.3f}R/trade AND stays positive out-of-sample ({oos:+.3f}R). Forward-test it on new data before risking size — this is a candidate, not a guarantee."}
 
 
 def _summarize_backtest(symbol, timeframe, target_r, history_range, n_candles, trades) -> Dict:

@@ -77,11 +77,23 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
   const [riskPct, setRiskPct] = useState(1)
   const [loading, setLoading] = useState(false)
   const [mcLoading, setMcLoading] = useState(false)
+  const [sweep, setSweep] = useState<any>(null)
+  const [sweepLoading, setSweepLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Follow the page's selected instrument when it changes, but stay usable on
   // its own (the panel has its own picker, so it's always visible).
   useEffect(() => { if (initialSymbol) setSymbol(initialSymbol) }, [initialSymbol])
+
+  const runSweep = async () => {
+    setSweepLoading(true); setError(null); setSweep(null)
+    try {
+      const res = await researchApi.sweep(symbol, { timeframe, history_range: '1y' })
+      setSweep(res.data)
+    } catch (e: any) {
+      setSweep(null); setError(e?.response?.data?.detail || 'Sweep failed')
+    } finally { setSweepLoading(false) }
+  }
 
   const runBacktest = async () => {
     setLoading(true); setError(null); setMc(null); setBt(null)
@@ -148,7 +160,54 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
             {loading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FlaskConical className="w-4 h-4 mr-1" />}
             Run backtest
           </Button>
+          <Button size="sm" variant="outline" onClick={runSweep} disabled={sweepLoading} title="Grid-search target-R × session × trend to find if any config has an edge">
+            {sweepLoading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FlaskConical className="w-4 h-4 mr-1" />}
+            Find best config
+          </Button>
         </div>
+
+        {/* Parameter sweep results */}
+        {sweep && sweep.verdict && (
+          <div className="space-y-2">
+            <div className={`p-3 rounded-lg border text-sm ${
+              sweep.verdict.tone === 'good' ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-200'
+                : sweep.verdict.tone === 'warn' ? 'border-amber-500/30 bg-amber-500/5 text-amber-200'
+                  : 'border-red-500/30 bg-red-500/5 text-red-200'}`}>
+              <div className="text-xs font-semibold uppercase tracking-wide mb-1 opacity-80">Parameter sweep — {sweep.configs_tested} configs, OOS split {sweep.oos_split_pct}%</div>
+              {sweep.verdict.text}
+            </div>
+            {sweep.configs?.length > 0 && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border text-muted-foreground">
+                      {['Target', 'Filters', 'Trades', 'Win%', 'Exp', 'In-samp', 'Out-samp', 'Ruin%'].map((h, i) => (
+                        <th key={h} className={`p-1.5 ${i < 2 ? 'text-left' : 'text-right'}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sweep.configs.slice(0, 6).map((c: any, idx: number) => (
+                      <tr key={idx} className={`border-b border-border/50 ${idx === 0 ? 'bg-emerald-500/5' : ''}`}>
+                        <td className="p-1.5 font-mono">{c.target_r}R</td>
+                        <td className="p-1.5">{[c.session_filter && 'killzone', c.trend_filter && 'trend'].filter(Boolean).join(' + ') || 'none'}</td>
+                        <td className="p-1.5 text-right font-mono">{c.trades}</td>
+                        <td className="p-1.5 text-right font-mono">{c.win_rate}%</td>
+                        <td className={`p-1.5 text-right font-mono font-semibold ${c.expectancy_r > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{c.expectancy_r >= 0 ? '+' : ''}{c.expectancy_r}R</td>
+                        <td className="p-1.5 text-right font-mono text-muted-foreground">{c.is_expectancy_r ?? '—'}</td>
+                        <td className={`p-1.5 text-right font-mono ${c.oos_expectancy_r > 0 ? 'text-emerald-400' : c.oos_expectancy_r < 0 ? 'text-red-400' : ''}`}>{c.oos_expectancy_r ?? '—'}</td>
+                        <td className="p-1.5 text-right font-mono">{c.risk_of_ruin_pct ?? '—'}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Top 6 by expectancy. <strong>Out-samp</strong> = expectancy on the last {100 - sweep.oos_split_pct}% of data the config wasn't chosen on — if it stays positive there, the edge is more likely real than curve-fit.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="p-2 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2">

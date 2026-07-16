@@ -127,6 +127,8 @@ export const researchApi = {
   instruments: () => apiClient.get('/research/instruments'),
   backtest: (symbol: string, params?: { timeframe?: string; target_r?: number; history_range?: string }) =>
     apiClient.get(`/research/backtest/${symbol}`, { params }),
+  sweep: (symbol: string, params?: { timeframe?: string; history_range?: string }) =>
+    apiClient.get(`/research/sweep/${symbol}`, { params }),
   monteCarlo: (body: any) => apiClient.post('/research/monte-carlo', body),
 }
 
