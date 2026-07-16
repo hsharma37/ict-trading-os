@@ -153,10 +153,28 @@ class MarketDataService:
                             'close': round(c, 5),
                             'volume': int(v or 0)
                         })
+                    # Yahoo has no native 4h; aggregate the 1h candles into real
+                    # 4h OHLC so the 4h chart/analysis isn't just 1h mislabelled.
+                    if timeframe == "4h":
+                        candles = self._resample(candles, 4)
                     return candles[-limit:] if len(candles) > limit else candles
         except Exception:
             pass
         return self._synthetic_history(symbol, limit)
+
+    @staticmethod
+    def _resample(candles: List[Dict], factor: int) -> List[Dict]:
+        """Aggregate N base candles into one (open=first, high=max, low=min,
+        close=last, volume=sum). Used to build 4h from 1h."""
+        out = []
+        for i in range(0, len(candles) - factor + 1, factor):
+            grp = candles[i:i + factor]
+            out.append({
+                "time": grp[0]["time"], "open": grp[0]["open"],
+                "high": max(g["high"] for g in grp), "low": min(g["low"] for g in grp),
+                "close": grp[-1]["close"], "volume": sum(g.get("volume", 0) for g in grp),
+            })
+        return out
 
     def _synthetic_history(self, symbol: str, limit: int) -> List[Dict]:
         # Use price_service for a realistic base price
