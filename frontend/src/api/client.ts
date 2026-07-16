@@ -125,6 +125,9 @@ export const researchApi = {
   correlation: () => apiClient.get('/research/correlation'),
   summary: () => apiClient.get('/research/summary'),
   instruments: () => apiClient.get('/research/instruments'),
+  backtest: (symbol: string, params?: { timeframe?: string; target_r?: number; history_range?: string }) =>
+    apiClient.get(`/research/backtest/${symbol}`, { params }),
+  monteCarlo: (body: any) => apiClient.post('/research/monte-carlo', body),
 }
 
 // Signals API
