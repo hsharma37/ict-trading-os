@@ -159,7 +159,9 @@ class TelegramService:
                 except ValueError:
                     pass
                 break
-        # If no SL found and we have multiple prices, try heuristics
+        # If no SL found and we have multiple prices, try heuristics — but FLAG it.
+        # A stop guessed from arbitrary numbers in the text is NOT a real stop and
+        # must never silently drive a live order (auto_trade refuses on this flag).
         if parsed["stop_loss"] is None and len(all_prices) >= 2 and parsed["side"] and parsed["entry_prices"]:
             entry = parsed["entry_prices"][0]
             if parsed["side"] == "BUY":
@@ -167,10 +169,12 @@ class TelegramService:
                 candidates = [p for p in all_prices if p < entry]
                 if candidates:
                     parsed["stop_loss"] = min(candidates)
+                    parsed["sl_inferred"] = True
             else:
                 candidates = [p for p in all_prices if p > entry]
                 if candidates:
                     parsed["stop_loss"] = max(candidates)
+                    parsed["sl_inferred"] = True
 
         # Take profit detection
         tp_patterns = [
@@ -188,9 +192,12 @@ class TelegramService:
         if tps:
             parsed["take_profits"] = tps
         elif len(all_prices) >= 2 and parsed["entry_prices"] and parsed["stop_loss"]:
-            # Remaining prices that are not entry or SL are potential TPs
+            # Remaining prices that are not entry or SL are potential TPs — inferred,
+            # so flag it (never auto-traded blindly).
             remaining = [p for p in all_prices if p not in parsed["entry_prices"] and p != parsed["stop_loss"]]
-            parsed["take_profits"] = remaining[:3]
+            if remaining:
+                parsed["take_profits"] = remaining[:3]
+                parsed["tp_inferred"] = True
 
         # Strategy detection
         strategies = ["FVG", "OB", "ORDER BLOCK", "MSS", "CHOCH", "BOS",
@@ -207,7 +214,10 @@ class TelegramService:
         if found_strats:
             parsed["strategy"] = ", ".join(found_strats[:3])
 
-        # Confidence scoring
+        # PARSE COMPLETENESS (not signal quality). This measures how many fields we
+        # could extract from the message — it says nothing about whether the trade
+        # is good. Inferred (guessed) SL/TP do NOT count, so a message that only
+        # looked complete because we filled blanks doesn't read as "high".
         score = 0
         if parsed["symbol"]:
             score += 1
@@ -215,18 +225,22 @@ class TelegramService:
             score += 1
         if parsed["entry_prices"]:
             score += 1
-        if parsed["stop_loss"] is not None:
+        if parsed["stop_loss"] is not None and not parsed.get("sl_inferred"):
             score += 1
-        if parsed["take_profits"]:
+        if parsed["take_profits"] and not parsed.get("tp_inferred"):
             score += 1
         if parsed["strategy"]:
             score += 1
+        # `confidence` is retained for backward compat but is really parse
+        # completeness; the UI/consumer should read it as such.
         if score >= 5:
             parsed["confidence"] = "high"
         elif score >= 3:
             parsed["confidence"] = "medium"
         else:
             parsed["confidence"] = "low"
+        parsed["completeness"] = parsed["confidence"]
+        parsed["completeness_score"] = score
 
         return parsed
 
@@ -336,6 +350,9 @@ class TelegramService:
                 "take_profits": parsed["take_profits"],
                 "strategy": parsed["strategy"],
                 "confidence": parsed["confidence"],
+                "completeness": parsed.get("completeness", parsed["confidence"]),
+                "sl_inferred": parsed.get("sl_inferred", False),
+                "tp_inferred": parsed.get("tp_inferred", False),
                 "acknowledged": False,
                 "auto_traded": False,
                 "planned": False,
@@ -397,6 +414,9 @@ class TelegramService:
                 "take_profits": parsed["take_profits"],
                 "strategy": parsed["strategy"],
                 "confidence": parsed["confidence"],
+                "completeness": parsed.get("completeness", parsed["confidence"]),
+                "sl_inferred": parsed.get("sl_inferred", False),
+                "tp_inferred": parsed.get("tp_inferred", False),
                 "acknowledged": False,
                 "auto_traded": False,
                 "trade_id": None,
@@ -434,6 +454,13 @@ class TelegramService:
             return {"error": "Missing entry prices"}
         if signal.get("stop_loss") is None:
             return {"error": "Missing stop loss"}
+        # SAFETY: never auto-place an order on a stop-loss we GUESSED from stray
+        # numbers in the message. A wrong stop = wrong risk and wrong position
+        # size. Require an explicitly-stated SL; the user can still trade it
+        # manually from the Execute page after reviewing.
+        if signal.get("sl_inferred"):
+            return {"error": "Stop-loss was inferred, not stated in the signal — auto-trade blocked. "
+                             "Review and place manually if the inferred SL is correct."}
 
         entry_price = signal["entry_prices"][0]
         stop_loss = signal["stop_loss"]

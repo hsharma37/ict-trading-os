@@ -106,10 +106,20 @@ class ICTPatternEngine:
         return patterns
 
     def _determine_bias(self, patterns, current_price):
-        bullish = sum(1 for p in patterns if p["direction"] == "bullish" and p["type"] in ["MSS", "BOS"])
-        bearish = sum(1 for p in patterns if p["direction"] == "bearish" and p["type"] in ["MSS", "BOS"])
-        if bullish > bearish + 1: return "BULLISH"
-        elif bearish > bullish + 1: return "BEARISH"
+        # Market-structure shift (MSS) is the primary bias driver. NOTE: the old
+        # code also counted a "BOS" pattern type that NO detector ever emits, so
+        # bias silently rested on MSS alone with a phantom term — removed.
+        struct = [p for p in patterns if p["type"] == "MSS"]
+        bull_s = sum(1 for p in struct if p["direction"] == "bullish")
+        bear_s = sum(1 for p in struct if p["direction"] == "bearish")
+        if bull_s != bear_s:
+            return "BULLISH" if bull_s > bear_s else "BEARISH"
+        # No decisive structure shift → net of all directional arrays (OB/FVG/
+        # liquidity), requiring a clear margin so noise doesn't create a bias.
+        bull = sum(1 for p in patterns if p["direction"] == "bullish")
+        bear = sum(1 for p in patterns if p["direction"] == "bearish")
+        if bull > bear + 1: return "BULLISH"
+        if bear > bull + 1: return "BEARISH"
         return "NEUTRAL"
 
     def _calculate_confluences(self, patterns, bias):

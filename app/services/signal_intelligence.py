@@ -116,7 +116,10 @@ class SignalIntelligence:
             })
         score = round(num / den, 2) if den else 0.0  # [-1, 1]
         label = "bullish" if score > 0.15 else "bearish" if score < -0.15 else "neutral"
-        return {"score": score, "label": label, "items_scored": len(contributors), "contributors": contributors[:5]}
+        # Be honest about the method: this is a keyword-polarity tally over
+        # headlines, not an NLP sentiment model (no negation/sarcasm handling).
+        return {"score": score, "label": label, "items_scored": len(contributors),
+                "contributors": contributors[:5], "method": "keyword-polarity"}
 
     # ── ICT knowledge overlay ────────────────────────────────────────
 
@@ -176,6 +179,27 @@ class SignalIntelligence:
         news = news_service.get_news(limit=12, symbol=symbol)
         senti = self.news_sentiment(symbol, news)
 
+        # Data-quality gate: never emit a confident BUY/SELL when the technicals
+        # are built on random fallback candles — that would be a signal on noise.
+        data_quality = tech.get("data_quality", "live")
+        if data_quality == "synthetic":
+            return {
+                "symbol": symbol, "signal": "NEUTRAL", "confidence": "low", "confidence_score": 0,
+                "score": 0.0, "unavailable": True,
+                "data_quality": "synthetic", "data_source": tech.get("data_source"), "stale": tech.get("stale", False),
+                "news_sentiment": senti,
+                "technical": {"trend": "NEUTRAL", "current_price": tech.get("current_price")},
+                "ict": self._ict_playbook("NEUTRAL", tech),
+                "factors": [],
+                "reasoning": ("⚠️ Live market data is unavailable, so no reliable signal can be generated — the "
+                              "underlying candles would be simulated. News sentiment below is still real. "
+                              "Retry when the price feed is live."),
+                "suggestions": [],
+                "news": [{"title": n["title"], "impact": n["impact"], "source": n["source"],
+                          "timestamp": n.get("timestamp"), "link": n.get("link", "")} for n in news[:5]],
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            }
+
         # Component scores in [-1, 1].
         trend = (tech.get("trend") or "NEUTRAL").upper()
         tech_score = 0.7 if trend == "BULLISH" else -0.7 if trend == "BEARISH" else 0.0
@@ -193,6 +217,9 @@ class SignalIntelligence:
         conf = min(95, int(abs(final) * 90) + (10 if agree else 0) + min(10, senti["items_scored"] * 2))
         if conflict:
             conf = min(conf, 40)
+        # A stale quote can't support a confident read — cap it.
+        if data_quality == "stale":
+            conf = min(conf, 45)
         confidence = "high" if conf >= 66 else "medium" if conf >= 40 else "low"
 
         ict = self._ict_playbook(direction, tech)
@@ -205,6 +232,11 @@ class SignalIntelligence:
             "signal": direction,
             "confidence": confidence,
             "confidence_score": conf,
+            # Be explicit that this is a heuristic fusion, not a backtested model.
+            "confidence_basis": "heuristic: 0.5·news + 0.35·trend + 0.15·momentum (not backtested to a hit-rate)",
+            "data_quality": data_quality,
+            "data_source": tech.get("data_source"),
+            "stale": tech.get("stale", False),
             "score": final,
             "news_sentiment": senti,
             "technical": {"trend": trend, "sentiment": tech.get("sentiment"), "change_pct": change_pct,

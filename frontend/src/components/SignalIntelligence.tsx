@@ -12,8 +12,12 @@ interface Intel {
   signal: 'BUY' | 'SELL' | 'NEUTRAL'
   confidence: string
   confidence_score: number
+  confidence_basis?: string
+  data_quality?: 'live' | 'stale' | 'synthetic'
+  data_source?: string
+  unavailable?: boolean
   score: number
-  news_sentiment: { score: number; label: string; items_scored: number; contributors: any[] }
+  news_sentiment: { score: number; label: string; items_scored: number; contributors: any[]; method?: string }
   technical: any
   ict: { rule: string; concepts: string[]; kb_source?: string }
   factors: Factor[]
@@ -72,6 +76,11 @@ export default function SignalIntelligence({ symbol }: { symbol: string }) {
           </div>
         )}
         {!data && loading && <p className="text-sm text-muted-foreground">Analysing news + price + ICT…</p>}
+        {data && data.data_quality === 'synthetic' && (
+          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm">
+            ⚠ Live market data is unavailable, so no reliable signal can be generated — technicals would be simulated. News sentiment below is still real.
+          </div>
+        )}
         {data && (
           <>
             {/* Verdict */}
@@ -79,17 +88,23 @@ export default function SignalIntelligence({ symbol }: { symbol: string }) {
               <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border font-bold ${dirBg(data.signal)}`}>
                 <Arrow className="w-5 h-5" /> {data.signal}
               </div>
-              <div className="text-sm">
+              <div className="text-sm" title={data.confidence_basis || ''}>
                 <span className="text-muted-foreground">Confidence </span>
                 <span className="font-semibold capitalize">{data.confidence}</span>
                 <span className="text-muted-foreground"> ({data.confidence_score}/100)</span>
+                <span className="text-muted-foreground text-[10px] ml-1 align-top">ⓘ heuristic</span>
               </div>
-              <div className="text-sm">
+              <div className="text-sm" title={data.news_sentiment.method === 'keyword-polarity' ? 'Keyword-polarity tally over headlines (not an NLP model)' : ''}>
                 <span className="text-muted-foreground">News </span>
                 <span className={`font-semibold ${dirColor(data.news_sentiment.label)}`}>
                   {data.news_sentiment.label} ({data.news_sentiment.score >= 0 ? '+' : ''}{data.news_sentiment.score})
                 </span>
               </div>
+              {data.data_quality && data.data_quality !== 'synthetic' && (
+                <span className={`text-[11px] px-2 py-0.5 rounded-full border ${data.data_quality === 'stale' ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' : 'bg-emerald-500/10 text-emerald-300/90 border-emerald-500/20'}`}>
+                  {data.data_quality === 'stale' ? 'stale feed' : `live · ${data.data_source || 'source'}`}
+                </span>
+              )}
             </div>
 
             {/* Reasoning */}

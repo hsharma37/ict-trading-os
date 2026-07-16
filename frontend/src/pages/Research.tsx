@@ -24,7 +24,22 @@ interface InstrumentAnalysis {
   key_levels: { level: number; type: string }[]
   sma20: number | null
   sma50: number | null
+  data_quality?: 'live' | 'stale' | 'synthetic'
+  data_source?: string
+  stale?: boolean
+  synthetic?: boolean
   timestamp: string
+}
+
+function DataQualityBadge({ a }: { a: { data_quality?: string; data_source?: string } }) {
+  const q = a.data_quality || 'live'
+  if (q === 'synthetic') {
+    return <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/30">⚠ simulated data — not tradeable</span>
+  }
+  if (q === 'stale') {
+    return <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">stale feed</span>
+  }
+  return <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300/90 border border-emerald-500/20">live · {a.data_source || 'source'}</span>
 }
 
 export default function Research() {
@@ -134,12 +149,19 @@ export default function Research() {
       {selected && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 flex-wrap">
               {kindIcons[selected.kind] || <Activity className="w-5 h-5" />}
               {selected.symbol} — {selected.label}
+              <DataQualityBadge a={selected} />
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {selected.data_quality === 'synthetic' && (
+              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-300 text-sm flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>The market feed is unavailable — the levels below would be <strong>simulated, not real</strong>. Don't trade on them; retry when the feed is live.</span>
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="p-3 rounded-lg bg-muted">
                 <div className="text-xs text-muted-foreground">Current Price</div>

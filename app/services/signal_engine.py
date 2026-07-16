@@ -176,8 +176,14 @@ class SignalEngine:
             "description": "Risk:Reward ratio is at least 2:1"
         })
 
-        # 9. Multi-timeframe alignment
-        mtf_ok = htf_bias != "NEUTRAL" and len(all_patterns) > 0
+        # 9. Multi-timeframe alignment — actually compare directions across TFs,
+        # not just "HTF isn't neutral and some pattern exists" (which claimed
+        # agreement it never checked). Require an ITF *and* an LTF pattern whose
+        # direction matches the HTF bias.
+        htf_dir = "bullish" if htf_bias == "BULLISH" else "bearish" if htf_bias == "BEARISH" else None
+        itf_agree = bool(htf_dir) and any(p.get("direction") == htf_dir for p in itf_patterns)
+        ltf_agree = bool(htf_dir) and any(p.get("direction") == htf_dir for p in ltf_patterns)
+        mtf_ok = bool(htf_dir) and itf_agree and ltf_agree
         if mtf_ok:
             score += 1
             confluences.append("MTF_Alignment")
@@ -185,7 +191,7 @@ class SignalEngine:
             "key": "mtf_alignment",
             "label": "Multi-Timeframe Alignment",
             "passed": mtf_ok,
-            "description": "HTF, ITF, and LTF all agree on direction"
+            "description": "HTF bias confirmed by a same-direction pattern on BOTH the intermediate and lower timeframe"
         })
 
         # Determine quality
@@ -213,6 +219,7 @@ class SignalEngine:
             "stop_loss": entry_zone.get("sl") if entry_zone else None,
             "targets": [entry_zone.get("tp1"), entry_zone.get("tp2"), entry_zone.get("tp3")] if entry_zone else [],
             "confidence": round(score / len(checklist), 2),
+            "confidence_basis": f"{score}/{len(checklist)} ICT confluence checks passed (not a win-probability)",
             "session": session,
             "executed": False,
             "created_at": now.isoformat(),
