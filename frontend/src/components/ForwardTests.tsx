@@ -20,7 +20,8 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [sym, setSym] = useState(defaultSymbol || 'GBPUSD')
+  const [sym, setSym] = useState(defaultSymbol || 'XAUUSD')
+  const [timeframe, setTimeframe] = useState('1d')
   const [targetR, setTargetR] = useState(3)
   const [killzone, setKillzone] = useState(false)
   const [trend, setTrend] = useState(true)
@@ -40,7 +41,7 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
   const create = async () => {
     setCreating(true); setError(null)
     try {
-      await forwardTestApi.create({ symbol: sym, timeframe: '1h', target_r: targetR, session_filter: killzone, trend_filter: trend })
+      await forwardTestApi.create({ symbol: sym, timeframe, target_r: targetR, session_filter: killzone, trend_filter: trend })
       await load()
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Could not start forward test')
@@ -73,6 +74,13 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
             <span className="text-muted-foreground">Symbol</span>
             <select value={sym} onChange={(e) => setSym(e.target.value)} className="px-2 py-1.5 border rounded-md bg-background text-sm font-semibold">
               {SUPPORTED_SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-sm">
+            <span className="text-muted-foreground">TF</span>
+            <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)} className="px-2 py-1.5 border rounded-md bg-background text-sm">
+              <option value="1h">1h</option>
+              <option value="1d">1d</option>
             </select>
           </label>
           <label className="flex items-center gap-1.5 text-sm">
