@@ -27,6 +27,47 @@ const Stat = ({ label, value, cls = '' }: { label: string; value: string; cls?: 
   </div>
 )
 
+// Translate the raw stats into plain English + money, not just ratios.
+function explainBacktest(bt: any): { tone: 'good' | 'bad' | 'warn'; lines: string[] } {
+  const be = +(100 / (1 + bt.target_r)).toFixed(1)          // break-even win rate at this R:R
+  const expPer100 = Math.round(bt.expectancy_r * 100)        // $ per $100 risked, per trade
+  const totalPer100 = Math.round(bt.total_r * 100)           // cumulative on $100/trade risk
+  const tone = bt.expectancy_r > 0.05 ? 'good' : bt.expectancy_r < -0.05 ? 'bad' : 'warn'
+  const lines: string[] = []
+  lines.push(
+    `At a ${bt.target_r}:1 target you must win ${be}% of trades just to break even. This setup won ${bt.win_rate}% — ${bt.win_rate >= be ? 'above' : 'below'} the line.`
+  )
+  lines.push(
+    expPer100 === 0
+      ? `Average edge ≈ $0 per trade: for every $100 you risk you get about $100 back — a coin flip after the effort.`
+      : `On average each trade ${expPer100 >= 0 ? 'makes' : 'loses'} $${Math.abs(expPer100)} for every $100 risked. Across the ${bt.trades} trades that compounded to ${totalPer100 >= 0 ? '+' : '−'}$${Math.abs(totalPer100)} per $100-risk unit.`
+  )
+  lines.push(
+    `Brace for the ride: the worst run was ${bt.max_loss_streak} losses in a row and a ${bt.max_drawdown_r}R drawdown${bt.profit_factor != null ? `. You earned $${bt.profit_factor} for every $1 you lost.` : '.'}`
+  )
+  if (tone === 'bad') lines.push('Bottom line: repeated at size this bleeds money — the ~1-in-3 wins aren\'t frequent or big enough to cover the losses. Don\'t trade it as-is.')
+  else if (tone === 'warn') lines.push('Bottom line: no real edge — it\'s roughly break-even before spread/commission, which would tip it negative. Not tradeable for profit yet.')
+  else lines.push('Bottom line: a positive expectancy here — but confirm it survives spread/commission and out-of-sample data before trusting it.')
+  return { tone, lines }
+}
+
+function explainMonteCarlo(mc: any): string[] {
+  const f = mc.final_return_pct
+  const lines: string[] = []
+  lines.push(
+    `Same edge, ${mc.n_sims.toLocaleString()} alternate histories (only luck differs): the typical outcome was ${f.median >= 0 ? '+' : ''}${f.median}%, but results ranged from ${f.p5}% (unlucky) to ${f.p95}% (lucky). Order of wins/losses alone causes that spread.`
+  )
+  lines.push(
+    `${mc.prob_loss_pct}% of those histories ended down money${mc.prob_loss_pct >= 50 ? ' — you\'re more likely to lose than win' : ''}. Deepest drawdown was typically ${mc.max_drawdown_pct.median}%, and a rough ${mc.max_drawdown_pct.p95}% in the worst 1-in-20.`
+  )
+  lines.push(
+    mc.risk_of_ruin_pct > 10
+      ? `Risk of ruin ${mc.risk_of_ruin_pct}%: that often your account fell ${mc.ruin_drawdown_pct}% — unacceptable; cut risk-per-trade or don\'t trade this.`
+      : `Risk of ruin ${mc.risk_of_ruin_pct}% at ${mc.risk_per_trade_pct}% risk/trade — the sizing itself won\'t blow you up, though the edge still has to be real.`
+  )
+  return lines
+}
+
 export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: string }) {
   const [symbol, setSymbol] = useState(initialSymbol || SUPPORTED_SYMBOLS[0] || 'EURUSD')
   const [targetR, setTargetR] = useState(2)
@@ -138,6 +179,18 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
                 <Sparkline data={bt.equity_curve_r} />
               </div>
             </div>
+            {/* Plain-English interpretation */}
+            {(() => {
+              const ex = explainBacktest(bt)
+              const box = ex.tone === 'good' ? 'border-emerald-500/30 bg-emerald-500/5'
+                : ex.tone === 'bad' ? 'border-red-500/30 bg-red-500/5' : 'border-amber-500/30 bg-amber-500/5'
+              return (
+                <div className={`p-3 rounded-lg border ${box} space-y-1.5`}>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What this means</div>
+                  {ex.lines.map((l, i) => <p key={i} className="text-sm leading-relaxed">{l}</p>)}
+                </div>
+              )
+            })()}
             <p className="text-[11px] text-muted-foreground">
               {bt.sample_caveat ? `⚠ ${bt.sample_caveat} ` : ''}Assumptions: {bt.assumptions}
             </p>
@@ -167,6 +220,10 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
                     <Stat label="Median max DD" value={`${mc.max_drawdown_pct.median}%`} />
                     <Stat label="Worst-case DD (p95)" value={`${mc.max_drawdown_pct.p95}%`} cls="text-red-400" />
                     <Stat label={`Risk of ruin (−${mc.ruin_drawdown_pct}%)`} value={`${mc.risk_of_ruin_pct}%`} cls={mc.risk_of_ruin_pct > 10 ? 'text-red-400' : 'text-emerald-400'} />
+                  </div>
+                  <div className="p-3 rounded-lg border border-border bg-muted/30 space-y-1.5">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What this means</div>
+                    {explainMonteCarlo(mc).map((l, i) => <p key={i} className="text-sm leading-relaxed">{l}</p>)}
                   </div>
                   <div className="text-[11px] text-muted-foreground">
                     {mc.n_sims.toLocaleString()} simulations of {mc.horizon} trades, {mc.risk_per_trade_pct}% risk each, compounding from ${mc.start_equity.toLocaleString()}. Source: {mc.origin}.
