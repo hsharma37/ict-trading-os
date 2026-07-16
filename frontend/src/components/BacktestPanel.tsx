@@ -79,6 +79,8 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
   const [mcLoading, setMcLoading] = useState(false)
   const [sweep, setSweep] = useState<any>(null)
   const [sweepLoading, setSweepLoading] = useState(false)
+  const [honest, setHonest] = useState<any>(null)
+  const [honestLoading, setHonestLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Follow the page's selected instrument when it changes, but stay usable on
@@ -93,6 +95,16 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
     } catch (e: any) {
       setSweep(null); setError(e?.response?.data?.detail || 'Sweep failed')
     } finally { setSweepLoading(false) }
+  }
+
+  const runHonest = async () => {
+    setHonestLoading(true); setError(null); setHonest(null)
+    try {
+      const res = await researchApi.honestTest(symbol, { timeframe, history_range: '1y' })
+      setHonest(res.data)
+    } catch (e: any) {
+      setHonest(null); setError(e?.response?.data?.detail || 'Honest test failed')
+    } finally { setHonestLoading(false) }
   }
 
   const runBacktest = async () => {
@@ -164,7 +176,34 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
             {sweepLoading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <FlaskConical className="w-4 h-4 mr-1" />}
             Find best config
           </Button>
+          <Button size="sm" variant="outline" onClick={runHonest} disabled={honestLoading}
+            title="Pick the best config on the first 60% of history, lock it, and report ONLY the untouched last 40% — the real anti-curve-fit test">
+            {honestLoading ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Dice5 className="w-4 h-4 mr-1" />}
+            Honest test
+          </Button>
         </div>
+
+        {/* Honest walk-forward test */}
+        {honest && honest.verdict && (
+          <div className={`p-3 rounded-lg border text-sm space-y-2 ${
+            honest.verdict.tone === 'good' ? 'border-emerald-500/30 bg-emerald-500/5'
+              : honest.verdict.tone === 'warn' ? 'border-amber-500/30 bg-amber-500/5'
+                : 'border-red-500/30 bg-red-500/5'}`}>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Honest walk-forward test — trained on first {honest.train_split_pct}%, tested on the rest
+            </div>
+            <p className="leading-relaxed">{honest.verdict.text}</p>
+            {honest.chosen_config && honest.test?.trades > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-1">
+                <Stat label="Chosen (blind)" value={`${honest.chosen_config.target_r}R${honest.chosen_config.session_filter ? ' · KZ' : ''}${honest.chosen_config.trend_filter ? ' · trend' : ''}`} />
+                <Stat label="Train exp." value={`${honest.chosen_config.train_expectancy_r >= 0 ? '+' : ''}${honest.chosen_config.train_expectancy_r}R`} />
+                <Stat label="Test trades" value={`${honest.test.trades} · ${honest.test.win_rate}%`} />
+                <Stat label="Test exp. (unseen)" value={`${honest.test.expectancy_r >= 0 ? '+' : ''}${honest.test.expectancy_r}R`}
+                  cls={honest.test.expectancy_r > 0.05 ? 'text-emerald-400' : honest.test.expectancy_r < -0.02 ? 'text-red-400' : 'text-amber-400'} />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Parameter sweep results */}
         {sweep && sweep.verdict && (

@@ -182,6 +182,66 @@ def run_sweep(symbol: str, timeframe: str = "1h", history_range: str = "1y",
     }
 
 
+def run_honest_test(symbol: str, timeframe: str = "1h", history_range: str = "1y",
+                    window: int = 100, min_confluence: int = 2, train_split: float = 0.6) -> Dict:
+    """The anti-self-deception test. Choose the best config using ONLY the first
+    `train_split` of history, lock it, then report its performance on the
+    untouched remainder. If the blind-picked config still makes money on data it
+    never saw, the edge is far more likely real than curve-fit."""
+    symbol = symbol.upper()
+    candles = market_service.get_history(symbol, timeframe, 5000, history_range=history_range)
+    guard = _data_guard(symbol, candles, window)
+    if guard:
+        return guard
+    n = len(candles)
+    split = int(n * train_split)
+    signals = _scan_signals(candles, symbol, timeframe, window, min_confluence)  # one scan, reused
+
+    # ── Phase 1: pick the best config on TRAIN only (candles[:split]) ──
+    train_candles = candles[:split]
+    train_signals = [s for s in signals if s["i"] < split]
+    best = None
+    for target_r in (1.0, 1.5, 2.0, 3.0):
+        for sess in (False, True):
+            for trend in (False, True):
+                tr = _evaluate(train_candles, train_signals, target_r, 8, 48, sess, trend)
+                if len(tr) < 20:
+                    continue
+                exp = sum(t["r"] for t in tr) / len(tr)
+                if best is None or exp > best["train_expectancy_r"]:
+                    best = {"target_r": target_r, "session_filter": sess, "trend_filter": trend,
+                            "train_expectancy_r": round(exp, 3), "train_trades": len(tr)}
+    if not best:
+        return {"symbol": symbol, "timeframe": timeframe, "history_range": history_range,
+                "candles": n, "train_split_pct": int(train_split * 100),
+                "note": "Not enough training-period trades to choose a config."}
+
+    # ── Phase 2: apply the LOCKED config to the untouched TEST period ──
+    test_signals = [s for s in signals if s["i"] >= split]
+    test_trades = _evaluate(candles, test_signals, best["target_r"], 8, 48,
+                            best["session_filter"], best["trend_filter"])
+    test = _summarize_backtest(symbol, timeframe, best["target_r"], history_range, n, test_trades)
+    test_mc = monte_carlo([t["r"] for t in test_trades], n_sims=1000, risk_per_trade_pct=1.0) if test_trades else {}
+    verdict = _honest_verdict(best, test)
+    return {
+        "symbol": symbol, "timeframe": timeframe, "history_range": history_range, "candles": n,
+        "train_split_pct": int(train_split * 100),
+        "chosen_config": best, "test": test, "test_monte_carlo": test_mc, "verdict": verdict,
+    }
+
+
+def _honest_verdict(best: Dict, test: Dict) -> Dict:
+    label = f"target {best['target_r']}R" + (", killzone-only" if best["session_filter"] else "") + (", trend-aligned" if best["trend_filter"] else "")
+    if not test or test.get("trades", 0) < 10:
+        return {"tone": "warn", "text": f"The blind-chosen config ({label}, train {best['train_expectancy_r']:+.3f}R) produced too few trades in the test period to judge — inconclusive."}
+    te = test["expectancy_r"]
+    if te > 0.05:
+        return {"tone": "good", "text": f"PASSED. Chosen blind on the training data ({label}, {best['train_expectancy_r']:+.3f}R), it earned {te:+.3f}R/trade on the {test['trades']} unseen test trades too. That's real out-of-sample evidence — the strongest signal we can give short of live forward-testing. Trade small and confirm live before size."}
+    if te < -0.02:
+        return {"tone": "bad", "text": f"FAILED. The config that looked best on training ({label}, {best['train_expectancy_r']:+.3f}R) LOST {te:+.3f}R/trade on the unseen test data — textbook curve-fitting. The 'edge' was noise. Do not trade it."}
+    return {"tone": "warn", "text": f"INCONCLUSIVE. The blind-chosen config ({label}) was {te:+.3f}R on unseen data — essentially break-even, so no reliable edge survived out-of-sample."}
+
+
 def _sweep_verdict(best: Optional[Dict]) -> Dict:
     if not best:
         return {"tone": "bad", "text": "No configuration produced enough trades to judge — this signal isn't a mechanical strategy on this data."}

@@ -129,6 +129,8 @@ export const researchApi = {
     apiClient.get(`/research/backtest/${symbol}`, { params }),
   sweep: (symbol: string, params?: { timeframe?: string; history_range?: string }) =>
     apiClient.get(`/research/sweep/${symbol}`, { params }),
+  honestTest: (symbol: string, params?: { timeframe?: string; history_range?: string }) =>
+    apiClient.get(`/research/honest-test/${symbol}`, { params }),
   monteCarlo: (body: any) => apiClient.post('/research/monte-carlo', body),
 }
 

@@ -86,3 +86,31 @@ def test_sweep_verdict_flags_curve_fit():
     flat = {"target_r": 2.0, "session_filter": False, "trend_filter": False,
             "expectancy_r": 0.0, "oos_expectancy_r": 0.0}
     assert bt._sweep_verdict(flat)["tone"] == "bad"
+
+
+# ── Honest walk-forward test (train → lock → unseen test) ─────────────
+
+def test_honest_test_refuses_synthetic(monkeypatch):
+    monkeypatch.setattr(bt.market_service, "get_history",
+                        lambda s, tf="1h", limit=5000, history_range="1y": _flat(400, synthetic=True))
+    out = bt.run_honest_test("EURUSD")
+    assert out.get("data_quality") == "synthetic" and "error" in out
+
+
+def test_honest_test_flat_no_config(monkeypatch):
+    monkeypatch.setattr(bt.market_service, "get_history",
+                        lambda s, tf="1h", limit=5000, history_range="1y": _flat(400))
+    out = bt.run_honest_test("EURUSD")
+    assert out.get("note")  # not enough training trades
+
+
+def test_honest_verdict_distinguishes_real_from_curvefit():
+    best = {"target_r": 3.0, "session_filter": False, "trend_filter": True, "train_expectancy_r": 0.2}
+    # Holds out-of-sample → good.
+    assert bt._honest_verdict(best, {"trades": 200, "expectancy_r": 0.12})["tone"] == "good"
+    # Collapses out-of-sample → bad (curve-fit).
+    assert bt._honest_verdict(best, {"trades": 200, "expectancy_r": -0.1})["tone"] == "bad"
+    # Break-even → warn.
+    assert bt._honest_verdict(best, {"trades": 200, "expectancy_r": 0.01})["tone"] == "warn"
+    # Too few test trades → warn (inconclusive).
+    assert bt._honest_verdict(best, {"trades": 5, "expectancy_r": 0.3})["tone"] == "warn"
