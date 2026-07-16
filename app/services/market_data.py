@@ -107,7 +107,13 @@ class MarketDataService:
         period, interval = tf_map.get(timeframe, ("1mo", "1h"))
 
         try:
-            url = f'https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_sym}?period={period}&interval={interval}&events=div%2Csplit'
+            # Yahoo's chart API takes `range=` (e.g. 1mo), NOT `period=`. Passing
+            # `period=` was silently ignored, so Yahoo returned only the interval's
+            # tiny default window (~14 1h candles instead of ~530). That starved
+            # every downstream calc: ICT's analyze early-returned NEUTRAL on <20
+            # candles (HTF bias always neutral → entry/2R never viable), and
+            # SMA20/50 came back null. Using `range=` fixes all of them.
+            url = f'https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_sym}?range={period}&interval={interval}&events=div%2Csplit'
             headers = {'User-Agent': 'Mozilla/5.0'}
             with httpx.Client(timeout=20.0, headers=headers) as client:
                 resp = client.get(url)

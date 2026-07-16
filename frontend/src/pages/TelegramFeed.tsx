@@ -28,6 +28,9 @@ interface TelegramSignal {
   parsed_at: string | null
   images?: string[]
   has_image?: boolean
+  discarded?: boolean
+  sl_inferred?: boolean
+  tp_inferred?: boolean
 }
 
 interface SignalStats {
@@ -54,16 +57,36 @@ export default function TelegramFeed() {
   const [accountBalance, setAccountBalance] = useState(10000)
   const [planSeed, setPlanSeed] = useState<PlanSeed | null>(null)
   const [plannerRefresh, setPlannerRefresh] = useState(0)
+  const [showDiscarded, setShowDiscarded] = useState(false)
 
   const fetchSignals = useCallback(async () => {
     try {
-      const res = await telegramApi.signals(50)
+      const res = await telegramApi.signals(50, undefined, undefined, showDiscarded)
       const list = res.data?.signals || []
       setSignals(list.filter((s: any) => s))
     } catch (e: any) {
       console.error('Failed to fetch signals', e)
     }
-  }, [])
+  }, [showDiscarded])
+
+  const discard = async (id: string) => {
+    try {
+      await telegramApi.discard(id)
+      if (!showDiscarded) setSignals(prev => prev.filter(s => s.id !== id))
+      else setSignals(prev => prev.map(s => s.id === id ? { ...s, discarded: true } : s))
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Discard failed')
+    }
+  }
+
+  const restore = async (id: string) => {
+    try {
+      await telegramApi.restore(id)
+      setSignals(prev => prev.map(s => s.id === id ? { ...s, discarded: false } : s))
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Restore failed')
+    }
+  }
 
   const fetchStats = useCallback(async () => {
     try {
@@ -305,8 +328,12 @@ export default function TelegramFeed() {
                 className="w-28 px-2 py-1 border rounded-md bg-background text-sm"
               />
             </div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer ml-auto">
+              <input type="checkbox" checked={showDiscarded} onChange={(e) => setShowDiscarded(e.target.checked)} />
+              Show discarded
+            </label>
             {stats?.last_poll_time && (
-              <span className="text-xs text-muted-foreground ml-auto">
+              <span className="text-xs text-muted-foreground">
                 Last poll: {new Date(stats.last_poll_time).toLocaleTimeString()}
               </span>
             )}
@@ -356,7 +383,27 @@ export default function TelegramFeed() {
                     TRADED
                   </span>
                 )}
+                {signal.sl_inferred && (
+                  <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-400" title="Stop-loss was inferred from the message, not stated — auto-trade is blocked; verify before trading.">
+                    SL GUESSED
+                  </span>
+                )}
+                {signal.discarded && (
+                  <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">DISCARDED</span>
+                )}
               </div>
+              {signal.discarded ? (
+                <button onClick={() => restore(signal.id)}
+                  className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground shrink-0">
+                  Keep
+                </button>
+              ) : (
+                <button onClick={() => discard(signal.id)}
+                  title="Discard this post from the feed"
+                  className="text-xs px-2 py-1 rounded border border-border text-muted-foreground hover:text-red-400 shrink-0">
+                  ✕ Discard
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-xs mb-3">

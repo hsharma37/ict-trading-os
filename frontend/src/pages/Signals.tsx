@@ -312,41 +312,55 @@ export default function Signals() {
         </div>
       )}
 
-      {/* Single Symbol Analysis */}
+      {/* Toolbar: pick a symbol, analyze it, or scan all */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Zap className="w-5 h-5 text-amber-400" />
-            Analyze Symbol
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-3 mb-4">
-            <select
-              className="px-3 py-2 border rounded-md bg-background text-sm"
-              value={selectedSymbol}
-              onChange={(e) => setSelectedSymbol(e.target.value)}
-            >
-              {SYMBOLS.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+        <CardContent className="p-3">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Symbol</span>
+              <select
+                className="px-3 py-2 border rounded-md bg-background text-sm font-semibold"
+                value={selectedSymbol}
+                onChange={(e) => setSelectedSymbol(e.target.value)}
+              >
+                {SYMBOLS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
             <Button onClick={analyzeSymbol} disabled={loading}>
               {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ArrowRight className="w-4 h-4 mr-2" />}
               Analyze
             </Button>
-            <Button variant="outline" onClick={scanAll} disabled={scanning} className="md:ml-auto">
+            <Button variant="outline" onClick={scanAll} disabled={scanning} className="sm:ml-auto">
               {scanning ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
               Scan All Symbols
             </Button>
           </div>
-
-          {symbolSignal && renderPartial(symbolSignal)}
         </CardContent>
       </Card>
 
-      {/* News-driven signal intelligence for the selected symbol */}
-      <SignalIntelligence symbol={selectedSymbol} />
+      {/* Selected symbol — the two engines side by side: ICT confluence
+          checklist (structure) + news-driven intelligence (context). */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          {selectedSymbol} — analysis
+        </h2>
+        <div className="grid gap-4 xl:grid-cols-2 items-start">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-400" /> ICT Confluence
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {symbolSignal ? renderPartial(symbolSignal)
+                : <p className="text-sm text-muted-foreground py-3 text-center">Click <strong>Analyze</strong> to run the ICT checklist.</p>}
+            </CardContent>
+          </Card>
+          <SignalIntelligence symbol={selectedSymbol} />
+        </div>
+      </section>
 
       {/* Scan Results */}
       {scanResults.length > 0 && (
@@ -354,7 +368,7 @@ export default function Signals() {
           <CardHeader>
             <CardTitle className="text-base">Last Scan Results ({scanResults.length})</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="grid gap-3 lg:grid-cols-2">
             {scanResults.map((s) => renderSignalCard(s))}
           </CardContent>
         </Card>
@@ -377,7 +391,7 @@ export default function Signals() {
               No active signals. Run a scan or analyze a symbol to generate signals.
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-3 lg:grid-cols-2">
               {activeSignals.map((s) => renderSignalCard(s))}
             </div>
           )}
