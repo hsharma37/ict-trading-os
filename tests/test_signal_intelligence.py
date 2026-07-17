@@ -71,3 +71,37 @@ def test_conflict_caps_confidence(monkeypatch):
     out = si.generate("EURUSD")
     # News bullish, technicals bearish -> conflict -> confidence capped low/medium.
     assert out["confidence"] != "high"
+
+
+# ── signal_engine adopts Signal-Intelligence direction + adjustable R ──
+
+def test_calculate_entry_target_r_scales_targets():
+    from app.services.ict_engine import ict_engine
+    patterns = [{"type": "OB", "direction": "bullish", "price_level": 1.10,
+                 "metadata": {"ob_high": 1.10, "ob_low": 1.09}}]
+    # default 3.0 -> 1R/2R/3R (unchanged behaviour)
+    d3 = ict_engine.calculate_entry(patterns, "BULLISH", 1.10, target_r=3.0)
+    risk = d3["risk"]
+    assert round(d3["tp3"] - d3["entry"], 5) == round(risk * 3, 5)
+    # 2R -> tp3 sits at exactly 2R
+    d2 = ict_engine.calculate_entry(patterns, "BULLISH", 1.10, target_r=2.0)
+    assert round(d2["tp3"] - d2["entry"], 5) == round(risk * 2, 5)
+    assert d2["target_r"] == 2.0
+
+
+def test_signal_engine_adopts_signal_intelligence_direction(monkeypatch):
+    from app.services import signal_engine as se
+    # Force ICT structural bias NEUTRAL but SI says BUY -> engine should go BULLISH.
+    monkeypatch.setattr(se.market_service, "get_history",
+                        lambda s, tf, limit: [{"time": i, "open": 1.1, "high": 1.11,
+                                               "low": 1.09, "close": 1.1} for i in range(60)])
+    monkeypatch.setattr(se.ict_engine, "analyze",
+                        lambda c, s, tf: {"current_bias": "NEUTRAL", "patterns": [],
+                                          "current_price": 1.1, "premium_discount": "discount"})
+    import app.services.signal_intelligence as si_mod
+    monkeypatch.setattr(si_mod.signal_intelligence, "generate",
+                        lambda symbol: {"signal": "BUY"})
+    out = se.signal_engine.analyze("EURUSD", target_r=2.0)
+    assert out["bias_source"] == "signal_intelligence"
+    assert out["htf_bias"] == "BULLISH"
+    assert out["target_r"] == 2.0

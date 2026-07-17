@@ -82,6 +82,7 @@ def backtest(symbol: str, timeframe: str = "1h", target_r: float = 2.0, history_
 def calibrate_strength(symbol: str, timeframe: str = "1h", target_r: float = 3.0):
     """Measured historical win rate + expectancy for each signal-strength tier —
     turns 'STRONG/MODERATE/WEAK' into real, cost-adjusted numbers."""
+    target_r = max(0.5, min(float(target_r), 10.0))
     try:
         result = backtest_service.calibrate_strength(symbol, timeframe=timeframe, target_r=target_r)
         if result.get("error"):

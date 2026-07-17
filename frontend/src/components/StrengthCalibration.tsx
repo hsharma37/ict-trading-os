@@ -11,8 +11,12 @@ interface Calib {
 
 const ORDER = ['STRONG', 'MODERATE', 'WEAK']
 
+const TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h', '1d']
+const R_OPTIONS = [1.5, 2, 3]
+
 export default function StrengthCalibration({ symbol }: { symbol: string }) {
   const [tf, setTf] = useState('1h')
+  const [targetR, setTargetR] = useState(3)
   const [data, setData] = useState<Calib | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -20,12 +24,12 @@ export default function StrengthCalibration({ symbol }: { symbol: string }) {
   const load = useCallback(async () => {
     setLoading(true); setError(null); setData(null)
     try {
-      const res = await researchApi.calibrate(symbol, { timeframe: tf, target_r: 3 })
+      const res = await researchApi.calibrate(symbol, { timeframe: tf, target_r: targetR })
       setData(res.data)
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Calibration failed')
     } finally { setLoading(false) }
-  }, [symbol, tf])
+  }, [symbol, tf, targetR])
 
   useEffect(() => { load() }, [load])
 
@@ -34,15 +38,17 @@ export default function StrengthCalibration({ symbol }: { symbol: string }) {
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
           <Gauge className="w-4 h-4 text-primary" /> Signal strength — measured
-          <select value={tf} onChange={(e) => setTf(e.target.value)} className="ml-auto px-2 py-1 border rounded-md bg-background text-xs">
-            <option value="1h">1h</option>
-            <option value="1d">1d</option>
+          <select value={tf} onChange={(e) => setTf(e.target.value)} className="ml-auto px-2 py-1 border rounded-md bg-background text-xs" title="Timeframe">
+            {TIMEFRAMES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select value={targetR} onChange={(e) => setTargetR(Number(e.target.value))} className="px-2 py-1 border rounded-md bg-background text-xs" title="Target reward:risk">
+            {R_OPTIONS.map((r) => <option key={r} value={r}>{r}R</option>)}
           </select>
         </CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-xs text-muted-foreground mb-2">
-          What each ICT-confluence tier actually won historically ({symbol} {tf}, 3R target, net of costs) —
+          What each ICT-confluence tier actually won historically ({symbol} {tf}, {targetR}R target, net of costs) —
           so “STRONG” means a real number, not a label. Break-even ≈ {data?.breakeven_win_rate ?? 25}% (frictionless);
           the honest test is <strong>expectancy &gt; 0</strong>.
         </p>

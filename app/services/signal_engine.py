@@ -43,7 +43,7 @@ class SignalEngine:
             self.symbol_states[symbol] = {"bias": "NEUTRAL", "last_flip": datetime.utcnow() - timedelta(hours=1), "count": 0}
         return self.symbol_states[symbol]
 
-    def analyze(self, symbol: str) -> Optional[Dict]:
+    def analyze(self, symbol: str, target_r: float = 2.0) -> Optional[Dict]:
         timeframes = ["1h", "15m", "5m"]
         analyses = {}
         for tf in timeframes:
@@ -58,7 +58,26 @@ class SignalEngine:
         itf = analyses.get("15m", {})
         ltf = analyses.get("5m", {})
 
-        htf_bias = htf.get("current_bias", "NEUTRAL")
+        # Direction comes from the fused Signal Intelligence read (news + technical
+        # trend + momentum + ICT playbook) — the same logic that calls direction
+        # correctly — with the ICT structural HTF bias as fallback when the fused
+        # read is NEUTRAL. The ICT confluence checklist below then confirms/scores
+        # that direction rather than deriving its own.
+        ict_bias = htf.get("current_bias", "NEUTRAL")
+        bias_source = "ict_structure"
+        try:
+            from app.services.signal_intelligence import signal_intelligence
+            si = signal_intelligence.generate(symbol)
+            si_dir = si.get("signal", "NEUTRAL")
+            si_bias = {"BUY": "BULLISH", "SELL": "BEARISH"}.get(si_dir, "NEUTRAL")
+            if si_bias != "NEUTRAL":
+                htf_bias = si_bias
+                bias_source = "signal_intelligence"
+            else:
+                htf_bias = ict_bias
+        except Exception:
+            htf_bias = ict_bias
+
         itf_patterns = itf.get("patterns", [])
         ltf_patterns = ltf.get("patterns", [])
         all_patterns = itf_patterns + ltf_patterns
@@ -79,10 +98,12 @@ class SignalEngine:
             confluences.append("HTF_Bias_Aligned")
         checklist.append({
             "key": "htf_bias",
-            "label": "HTF Bias Defined",
+            "label": "Directional Bias Defined",
             "passed": htf_bias_ok,
             "value": htf_bias,
-            "description": "Higher timeframe shows clear directional bias"
+            "description": ("Direction from Signal Intelligence (news+technical+momentum+ICT)"
+                            if bias_source == "signal_intelligence"
+                            else "Higher-timeframe ICT structural bias")
         })
 
         # 2. Market Structure Shift
@@ -160,7 +181,7 @@ class SignalEngine:
         })
 
         # 8. Entry zone and R:R
-        entry_zone = ict_engine.calculate_entry(all_patterns, htf_bias, current_price)
+        entry_zone = ict_engine.calculate_entry(all_patterns, htf_bias, current_price, target_r=target_r)
         rr_ok = False
         if entry_zone and entry_zone.get("tp3"):
             risk = entry_zone["risk"]
@@ -220,6 +241,8 @@ class SignalEngine:
             "targets": [entry_zone.get("tp1"), entry_zone.get("tp2"), entry_zone.get("tp3")] if entry_zone else [],
             "confidence": round(score / len(checklist), 2),
             "confidence_basis": f"{score}/{len(checklist)} ICT confluence checks passed (not a win-probability)",
+            "bias_source": bias_source,
+            "target_r": target_r,
             "session": session,
             "executed": False,
             "created_at": now.isoformat(),

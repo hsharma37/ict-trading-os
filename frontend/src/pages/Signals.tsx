@@ -27,6 +27,8 @@ interface SignalData {
   score: number
   max_score: number
   quality: string
+  bias_source?: string
+  target_r?: number
   confluences: string[]
   checklist?: ChecklistItem[]
   entry_zone?: number
@@ -144,6 +146,7 @@ const ICTCriteriaChecklist = ({ checklist, compact = false }: { checklist?: Chec
 export default function Signals() {
   const [activeSignals, setActiveSignals] = useState<SignalData[]>([])
   const [selectedSymbol, setSelectedSymbol] = useState('EURUSD')
+  const [targetR, setTargetR] = useState(2)
   const [symbolSignal, setSymbolSignal] = useState<SignalResponse | null>(null)
   const [scanResults, setScanResults] = useState<SignalData[]>([])
   const [loading, setLoading] = useState(false)
@@ -165,14 +168,14 @@ export default function Signals() {
     setLoading(true)
     setError(null)
     try {
-      const res = await signalsApi.analyze(selectedSymbol)
+      const res = await signalsApi.analyze(selectedSymbol, { target_r: targetR })
       setSymbolSignal(res.data || null)
     } catch (e: any) {
       setError(e?.message || `Failed to analyze ${selectedSymbol}`)
     } finally {
       setLoading(false)
     }
-  }, [selectedSymbol])
+  }, [selectedSymbol, targetR])
 
   const scanAll = useCallback(async () => {
     setScanning(true)
@@ -214,6 +217,13 @@ export default function Signals() {
             {sig.quality} ({sig.score}/{sig.max_score})
           </div>
         </CardTitle>
+        <p className="text-[11px] text-muted-foreground mt-0.5">
+          Direction:{' '}
+          {sig.bias_source === 'signal_intelligence'
+            ? 'Signal Intelligence (news+technical+momentum+ICT)'
+            : 'ICT structure'}
+          {sig.target_r ? ` · targets at ${sig.target_r}R` : ''}
+        </p>
       </CardHeader>
       <CardContent className="space-y-3">
         {/* ICT Criteria Checklist */}
@@ -328,6 +338,17 @@ export default function Signals() {
                 {SYMBOLS.map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Target R</span>
+              <select
+                className="px-2 py-2 border rounded-md bg-background text-sm"
+                value={targetR}
+                onChange={(e) => setTargetR(Number(e.target.value))}
+                title="Reward:risk of the proposed targets"
+              >
+                {[1.5, 2, 3].map((r) => <option key={r} value={r}>{r}R</option>)}
               </select>
             </div>
             <Button onClick={analyzeSymbol} disabled={loading}>

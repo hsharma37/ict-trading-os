@@ -213,11 +213,15 @@ class ICTPatternEngine:
         return {"high": round(float(hi), 5), "low": round(float(lo), 5),
                 "equilibrium": round(float((hi + lo) / 2), 5)}
 
-    def calculate_entry(self, patterns, bias, current_price):
+    def calculate_entry(self, patterns, bias, current_price, target_r: float = 3.0):
         """Calculate entry zone, SL, and TPs from detected patterns.
-        
+
+        target_r sets the FINAL target (tp3) in R multiples; tp1/tp2 are staged
+        scale-outs at 1/3 and 2/3 of it. Default 3.0 → 1R/2R/3R (unchanged).
+
         Fixes: correctly reads OB metadata (ob_high/ob_low) and FVG metadata (top/bottom).
         """
+        r1, r2, r3 = target_r / 3.0, target_r * 2.0 / 3.0, target_r
         if bias == "NEUTRAL": return None
         relevant = [p for p in patterns if p["direction"] == bias.lower() and p["type"] in ["FVG", "OB"]]
         if not relevant: return None
@@ -234,8 +238,9 @@ class ICTPatternEngine:
                 risk = entry * 0.005  # fallback 0.5%
             return {
                 "entry": round(entry, 5), "sl": round(sl, 5),
-                "tp1": round(entry + risk, 5), "tp2": round(entry + risk * 2, 5), "tp3": round(entry + risk * 3, 5),
-                "risk": round(risk, 5)
+                "tp1": round(entry + risk * r1, 5), "tp2": round(entry + risk * r2, 5),
+                "tp3": round(entry + risk * r3, 5),
+                "risk": round(risk, 5), "target_r": target_r
             }
         else:
             # For bearish entry: SL is above the pattern's upper boundary
@@ -246,8 +251,9 @@ class ICTPatternEngine:
                 risk = entry * 0.005  # fallback 0.5%
             return {
                 "entry": round(entry, 5), "sl": round(sl, 5),
-                "tp1": round(entry - risk, 5), "tp2": round(entry - risk * 2, 5), "tp3": round(entry - risk * 3, 5),
-                "risk": round(risk, 5)
+                "tp1": round(entry - risk * r1, 5), "tp2": round(entry - risk * r2, 5),
+                "tp3": round(entry - risk * r3, 5),
+                "risk": round(risk, 5), "target_r": target_r
             }
 
 ict_engine = ICTPatternEngine()
