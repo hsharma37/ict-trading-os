@@ -79,11 +79,13 @@ void HLine(string name,double price,color col,ENUM_LINE_STYLE st,int w=1)
    ObjectSetInteger(0,name,OBJPROP_RAY_RIGHT,false);
 }
 
-void Band(string name,double hi,double lo,color bright,color tint)
+void Band(string name,double hi,double lo,color bright,color tint,
+          ENUM_LINE_STYLE style=STYLE_SOLID,int width=2)
 {
    // Highlighted zone = subtle filled tint BEHIND the candles + a crisp bright
    // outline on top. MT5 rectangles carry a single colour, so we draw two:
    // one filled (tint, back) for the highlight and one outline (bright, front).
+   // The border style/width distinguish OB (solid, bold) from FVG (dashed, thin).
    ObjectCreate(0,name,OBJ_RECTANGLE,0,LeftTime(),hi,RightTime(),lo);
    ObjectSetInteger(0,name,OBJPROP_COLOR,tint);
    ObjectSetInteger(0,name,OBJPROP_FILL,true);
@@ -92,7 +94,8 @@ void Band(string name,double hi,double lo,color bright,color tint)
    string bn=name+"_B";
    ObjectCreate(0,bn,OBJ_RECTANGLE,0,LeftTime(),hi,RightTime(),lo);
    ObjectSetInteger(0,bn,OBJPROP_COLOR,bright);
-   ObjectSetInteger(0,bn,OBJPROP_WIDTH,2);
+   ObjectSetInteger(0,bn,OBJPROP_STYLE,style);   // MT5 only dashes when width==1
+   ObjectSetInteger(0,bn,OBJPROP_WIDTH,width);
    ObjectSetInteger(0,bn,OBJPROP_FILL,false);
    ObjectSetInteger(0,bn,OBJPROP_BACK,false);
 }
@@ -112,7 +115,7 @@ void Legend()
    string tf = ChartTF();
    string rows[5];
    rows[0]= M_symbol+"  ICT OS — "+(MatchChartTimeframe && tf!="" ? tf+" zones" : "all zones");
-   rows[1]="OB/FVG: green=bull red=bear   fib = THIS chart's range";
+   rows[1]="OB=solid box  FVG=dashed box   green=bull red=bear";
    rows[2]="MSS=aqua  BoS=violet  BSL=magenta  SSL=orange  EQ=yellow";
    rows[3]="PREMIUM half=green(sell)  DISCOUNT half=red(buy)";
    rows[4]="HTF sentiment: "+(M_pd!=""?M_pd:"?")+(M_bias!=""?("  bias "+M_bias):"");
@@ -269,10 +272,18 @@ void DrawAll()
          HLine(nm,hi,lc,ls,2);
          Label(nm+"_T",LeftTime(),hi,tag+"  "+DoubleToString(hi,_Digits),lc,9);
       } else {
-         color bright = bull?clrLime:clrRed;                    // bright, high-contrast
-         color tint   = bull?C'0,45,0':C'50,0,0';               // subtle fill highlight
-         Band(nm,hi,lo,bright,tint);
-         Label(nm+"_T",LeftTime(),(hi+lo)/2.0,full,bright,9);
+         color bright = bull?clrLime:clrRed;                    // green=bull red=bear
+         string code;
+         if(typ=="FVG"){
+            // Fair Value Gap = price imbalance/gap -> THIN DASHED box, lighter fill.
+            Band(nm,hi,lo,bright,bull?C'0,28,0':C'32,0,0',STYLE_DASH,1);
+            code="FVG (gap)";
+         } else {
+            // Order Block = last institutional candle -> BOLD SOLID box, stronger fill.
+            Band(nm,hi,lo,bright,bull?C'0,52,0':C'60,0,0',STYLE_SOLID,2);
+            code="OB (block)";
+         }
+         Label(nm+"_T",LeftTime(),(hi+lo)/2.0,code+" "+(bull?"▲":"▼")+" "+tf,bright,9);
       }
    }
    FileClose(fh);
