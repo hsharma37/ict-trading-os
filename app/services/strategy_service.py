@@ -221,10 +221,46 @@ def run_strategy_backtest(symbol: str, strategy: str, timeframe: str = "1h",
     return summary
 
 
+_CONFLUENCE_TIER = {2: "≥2 (all setups)", 3: "≥3 (moderate+)", 4: "≥4 (STRONG only)"}
+
+
+def _ict_signals(candles, symbol, timeframe, min_confluence: int, atr_stop: bool):
+    """ICT confluence signals for the comparison. `min_confluence` gates
+    selectivity (4 = STRONG-tier only, matching the calibration buckets).
+    `atr_stop` replaces the tight structural stop with the SAME 1.5×ATR(14)
+    stop the six strategies use, so stop width — and therefore the R-cost of
+    the spread — is apples-to-apples instead of penalising ICT's tight stops."""
+    sigs = bt._scan_signals(candles, symbol, timeframe, 100, min_confluence)
+    if not (atr_stop and sigs):
+        return sigs
+    h = np.array([c["high"] for c in candles]); l = np.array([c["low"] for c in candles])
+    c_ = np.array([c["close"] for c in candles])
+    atr = _atr(h, l, c_, 14)
+    out = []
+    for s in sigs:
+        i = s["i"]
+        if i >= len(atr) or np.isnan(atr[i]) or atr[i] <= 0:
+            continue
+        risk = 1.5 * float(atr[i])
+        entry = s["entry"]
+        s2 = dict(s)
+        s2["sl"] = entry - risk if s["long"] else entry + risk
+        s2["risk"] = risk
+        out.append(s2)
+    return out
+
+
 def compare_strategies(symbol: str, timeframe: str = "1h", target_r: float = 2.0,
-                       history_range: str = "1y") -> Dict:
+                       history_range: str = "1y", ict_min_confluence: int = 2,
+                       ict_atr_stop: bool = False) -> Dict:
     """Run every strategy (plus the ICT confluence baseline) on the same candles
-    and rank by expectancy — one table, one referee."""
+    and rank by expectancy — one table, one referee.
+
+    ict_min_confluence / ict_atr_stop make the ICT row a FAIR competitor:
+    filter it to selective (STRONG-tier) setups and/or give it the same 1.5×ATR
+    stop the mechanical strategies use, so its ranking reflects signal quality
+    rather than an over-trading firehose or a tight-stop cost penalty."""
+    ict_min_confluence = int(max(0, min(ict_min_confluence, 6)))
     candles = market_service.get_history(symbol, timeframe, 5000, history_range=history_range)
     if not candles or len(candles) < 60:
         return {"error": "Not enough historical data — is the MT5 bridge connected?"}
@@ -238,22 +274,30 @@ def compare_strategies(symbol: str, timeframe: str = "1h", target_r: float = 2.0
                          "trades": r.get("trades", 0), "win_rate": r.get("win_rate"),
                          "expectancy_r": r.get("expectancy_r"), "total_r": r.get("total_r"),
                          "max_drawdown_r": r.get("max_drawdown_r")})
-    # ICT confluence baseline on the same candles, same costs.
+    # ICT confluence baseline on the same candles, same costs — with the fairness knobs.
     try:
-        sigs = bt._scan_signals(candles, symbol, timeframe, 100, 2)
+        sigs = _ict_signals(candles, symbol, timeframe, ict_min_confluence, ict_atr_stop)
         trades = bt._evaluate(candles, sigs, target_r, 8, 48, False, False,
                               bt._round_trip_cost_price(symbol))
         closed = [t for t in trades if not t.get("open")]
         s = bt._summarize_backtest(symbol, timeframe, target_r, history_range, len(candles), closed)
-        rows.append({"strategy": "ict_confluence", "label": "ICT confluence (baseline)",
+        stop_tag = "1.5×ATR" if ict_atr_stop else "structural"
+        rows.append({"strategy": "ict_confluence",
+                     "label": f"ICT confluence ({_CONFLUENCE_TIER.get(ict_min_confluence, '≥' + str(ict_min_confluence))}, {stop_tag} stop)",
                      "style": "ict", "trades": s.get("trades", 0), "win_rate": s.get("win_rate"),
                      "expectancy_r": s.get("expectancy_r"), "total_r": s.get("total_r"),
                      "max_drawdown_r": s.get("max_drawdown_r")})
     except Exception:
         pass
     rows.sort(key=lambda r: (r["expectancy_r"] is None, -(r["expectancy_r"] or 0)))
+    ict_stop = "1.5×ATR (normalised)" if ict_atr_stop else "structural (OB/FVG boundary)"
     return {"symbol": symbol.upper(), "timeframe": timeframe, "target_r": target_r,
             "history_range": history_range, "candles": len(candles), "strategies": rows,
-            "note": ("All strategies measured on the same broker candles, net of estimated "
-                     "spread+commission, 1.5×ATR stop, one-trade-at-a-time. Expectancy > 0 "
-                     "after costs is the bar — most public strategies fail it on FX intraday.")}
+            "ict_min_confluence": ict_min_confluence, "ict_atr_stop": ict_atr_stop,
+            "note": ("Same broker candles, net of estimated spread+commission, one trade at a "
+                     "time. The six strategies use a 1.5×ATR(14) stop; the ICT row uses a "
+                     + ict_stop + " stop at confluence " + _CONFLUENCE_TIER.get(ict_min_confluence, "≥" + str(ict_min_confluence))
+                     + ". Because cost-in-R = spread/stop-distance, tight structural stops pay "
+                     "a bigger cost penalty — normalise the stop and raise the confluence to "
+                     "judge ICT's signal quality apples-to-apples. Expectancy > 0 after costs "
+                     "is the bar.")}

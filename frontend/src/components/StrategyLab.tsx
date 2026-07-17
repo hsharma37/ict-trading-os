@@ -18,6 +18,8 @@ export default function StrategyLab({ defaultSymbol }: { defaultSymbol?: string 
   const [sym, setSym] = useState(defaultSymbol || 'EURUSD')
   const [tf, setTf] = useState('1h')
   const [targetR, setTargetR] = useState(2)
+  const [ictConf, setIctConf] = useState(2)
+  const [ictAtr, setIctAtr] = useState(false)
   const [compare, setCompare] = useState<{ strategies: CompareRow[]; note?: string; candles?: number } | null>(null)
   const [comparing, setComparing] = useState(false)
   const [ml, setMl] = useState<any>(null)
@@ -31,12 +33,12 @@ export default function StrategyLab({ defaultSymbol }: { defaultSymbol?: string 
   const runCompare = useCallback(async () => {
     setComparing(true); setError(null); setCompare(null)
     try {
-      const res = await researchApi.strategyCompare(sym, { timeframe: tf, target_r: targetR, history_range: '1y' })
+      const res = await researchApi.strategyCompare(sym, { timeframe: tf, target_r: targetR, history_range: '1y', ict_min_confluence: ictConf, ict_atr_stop: ictAtr })
       setCompare(res.data)
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Strategy comparison failed')
     } finally { setComparing(false) }
-  }, [sym, tf, targetR])
+  }, [sym, tf, targetR, ictConf, ictAtr])
 
   const runMl = useCallback(async () => {
     setMlLoading(true); setError(null); setMl(null)
@@ -80,6 +82,17 @@ export default function StrategyLab({ defaultSymbol }: { defaultSymbol?: string 
             <select value={targetR} onChange={(e) => setTargetR(Number(e.target.value))} className="px-2 py-1.5 border rounded-md bg-background text-sm">
               {[1.5, 2, 3].map((r) => <option key={r} value={r}>{r}R</option>)}
             </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-sm" title="Only count ICT setups with at least this many confluences (4 = STRONG tier)">
+            <span className="text-muted-foreground">ICT tier</span>
+            <select value={ictConf} onChange={(e) => setIctConf(Number(e.target.value))} className="px-2 py-1.5 border rounded-md bg-background text-sm">
+              <option value={2}>≥2 all</option>
+              <option value={3}>≥3 mod+</option>
+              <option value={4}>≥4 STRONG</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer" title="Give ICT the same 1.5×ATR stop as the other strategies so stop width (and its cost drag) is apples-to-apples">
+            <input type="checkbox" checked={ictAtr} onChange={(e) => setIctAtr(e.target.checked)} /> Normalise ICT stop
           </label>
           <Button size="sm" onClick={runCompare} disabled={comparing}>
             {comparing ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Trophy className="w-4 h-4 mr-1" />}

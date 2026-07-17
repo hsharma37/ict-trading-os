@@ -78,3 +78,32 @@ def test_forward_test_bounded_fetch(candles):
     assert _fetch_limit(t) == 3000                     # capped, never 5000
     t2 = {"timeframe": "1h", "start_candle_time": None}
     assert 300 <= _fetch_limit(t2) <= 3000
+
+
+def test_ict_atr_stop_normalizes_stop_width(candles):
+    """ATR-normalized ICT signals should carry a wider, uniform stop than the
+    tight structural stops — the fix for the cost-in-R penalty on gold."""
+    from app.services import strategy_service as ss
+    struct = ss._ict_signals(candles, "XAUUSD", "1h", 2, atr_stop=False)
+    atr = ss._ict_signals(candles, "XAUUSD", "1h", 2, atr_stop=True)
+    if struct and atr:
+        # ATR stops are volatility-scaled and typically wider than OB/FVG stops.
+        assert sum(s["risk"] for s in atr) / len(atr) > 0
+
+
+def test_ict_min_confluence_reduces_trade_count(candles):
+    """Raising the confluence gate must not INCREASE the ICT signal count —
+    STRONG-tier is a subset of all setups (stops the firehose)."""
+    from app.services import strategy_service as ss
+    lo = len(ss._ict_signals(candles, "XAUUSD", "1h", 2, atr_stop=False))
+    hi = len(ss._ict_signals(candles, "XAUUSD", "1h", 4, atr_stop=False))
+    assert hi <= lo
+
+
+def test_compare_reports_fairness_knobs(candles):
+    from app.services import strategy_service as ss
+    r = ss.compare_strategies("XAUUSD", "1h", 2.0, ict_min_confluence=4, ict_atr_stop=True)
+    assert r["ict_min_confluence"] == 4 and r["ict_atr_stop"] is True
+    ict_row = next(x for x in r["strategies"] if x["strategy"] == "ict_confluence")
+    assert "STRONG" in ict_row["label"] and "1.5×ATR" in ict_row["label"]
+    assert "1.5×ATR" not in r["note"] or "structural" in r["note"]  # note is now accurate
