@@ -17,6 +17,7 @@ class ForwardTestCreate(BaseModel):
     min_confluence: int = 2
     label: Optional[str] = ""
     name: Optional[str] = ""   # alias for label — "give the strategy a name"
+    strategy: str = "ict_confluence"   # ict_confluence or any Strategy Lab key
 
 
 @router.get("")
@@ -31,10 +32,16 @@ def list_forward_tests(refresh: bool = False):
 @router.post("")
 def create_forward_test(body: ForwardTestCreate):
     """Start tracking a locked config against candles printed from now on."""
+    from app.services.strategy_service import STRATEGIES
+    if body.strategy != "ict_confluence" and body.strategy not in STRATEGIES:
+        raise HTTPException(status_code=422,
+                            detail=f"Unknown strategy '{body.strategy}'. Use ict_confluence or one of: "
+                                   + ", ".join(sorted(STRATEGIES)))
     res = forward_test_service.create(
         body.symbol, timeframe=body.timeframe, target_r=body.target_r,
         session_filter=body.session_filter, trend_filter=body.trend_filter,
         min_confluence=body.min_confluence, label=(body.name or body.label or ""),
+        strategy=body.strategy,
     )
     if res.get("error"):
         raise HTTPException(status_code=422, detail=res["error"])

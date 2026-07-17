@@ -71,7 +71,7 @@ def _atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, n: int = 14) -> n
 # ── strategy signal generators ──────────────────────────────────────
 # Each returns a list of (bar_index, long?) entry events.
 
-def _sig_sma_cross(o, h, l, c):
+def _sig_sma_cross(o, h, l, c, t):
     fast, slow = _sma(c, 20), _sma(c, 50)
     for i in range(51, len(c)):
         if np.isnan(fast[i]) or np.isnan(slow[i]):
@@ -82,7 +82,7 @@ def _sig_sma_cross(o, h, l, c):
             yield i, False
 
 
-def _sig_ema_cross(o, h, l, c):
+def _sig_ema_cross(o, h, l, c, t):
     fast, slow = _ema(c, 12), _ema(c, 26)
     for i in range(27, len(c)):
         if np.isnan(fast[i]) or np.isnan(slow[i]) or np.isnan(fast[i - 1]) or np.isnan(slow[i - 1]):
@@ -93,7 +93,7 @@ def _sig_ema_cross(o, h, l, c):
             yield i, False
 
 
-def _sig_rsi2(o, h, l, c):
+def _sig_rsi2(o, h, l, c, t):
     # Connors: RSI(2) extreme, traded WITH the long-term trend (SMA200 filter).
     r2, trend = _rsi(c, 2), _sma(c, 200)
     for i in range(201, len(c)):
@@ -105,7 +105,7 @@ def _sig_rsi2(o, h, l, c):
             yield i, False
 
 
-def _sig_bollinger(o, h, l, c):
+def _sig_bollinger(o, h, l, c, t):
     mid = _sma(c, 20)
     for i in range(21, len(c)):
         if np.isnan(mid[i]):
@@ -119,7 +119,7 @@ def _sig_bollinger(o, h, l, c):
             yield i, False    # revert down
 
 
-def _sig_donchian(o, h, l, c):
+def _sig_donchian(o, h, l, c, t):
     # Turtle-style 20-bar channel breakout.
     for i in range(21, len(c)):
         hh = h[i - 20:i].max()
@@ -130,7 +130,7 @@ def _sig_donchian(o, h, l, c):
             yield i, False
 
 
-def _sig_momentum(o, h, l, c):
+def _sig_momentum(o, h, l, c, t):
     # 10-bar rate-of-change with SMA50 regime filter.
     trend = _sma(c, 50)
     for i in range(51, len(c)):
@@ -140,6 +140,98 @@ def _sig_momentum(o, h, l, c):
         if roc > 0.002 and c[i] > trend[i]:
             yield i, True
         elif roc < -0.002 and c[i] < trend[i]:
+            yield i, False
+
+
+def _adx(h, l, c, n=14):
+    """Wilder's ADX with directional indices. Returns (adx, di_plus, di_minus)
+    arrays aligned to the candle series."""
+    m = len(c)
+    adx = np.full(m, np.nan); dip = np.full(m, np.nan); dim = np.full(m, np.nan)
+    if m <= n * 2:
+        return adx, dip, dim
+    up = h[1:] - h[:-1]
+    dn = l[:-1] - l[1:]
+    pdm = np.where((up > dn) & (up > 0), up, 0.0)
+    mdm = np.where((dn > up) & (dn > 0), dn, 0.0)
+    tr = np.maximum(h[1:] - l[1:], np.maximum(abs(h[1:] - c[:-1]), abs(l[1:] - c[:-1])))
+    str_, spd, smd = tr[:n].sum(), pdm[:n].sum(), mdm[:n].sum()
+    dx_hist = []
+    for i in range(n, len(tr)):
+        str_ = str_ - str_ / n + tr[i]
+        spd = spd - spd / n + pdm[i]
+        smd = smd - smd / n + mdm[i]
+        di_p = 100.0 * spd / str_ if str_ > 0 else 0.0
+        di_m = 100.0 * smd / str_ if str_ > 0 else 0.0
+        dip[i + 1], dim[i + 1] = di_p, di_m
+        dx = 100.0 * abs(di_p - di_m) / (di_p + di_m) if (di_p + di_m) > 0 else 0.0
+        dx_hist.append(dx)
+        if len(dx_hist) == n:
+            adx[i + 1] = float(np.mean(dx_hist))
+        elif len(dx_hist) > n:
+            adx[i + 1] = (adx[i] * (n - 1) + dx) / n
+    return adx, dip, dim
+
+
+def _sig_williams_vbo(o, h, l, c, t):
+    # Larry Williams: today breaks open + 0.6× yesterday's range → go with it.
+    for i in range(2, len(c)):
+        stretch = 0.6 * (h[i - 1] - l[i - 1])
+        if stretch <= 0:
+            continue
+        if c[i] > o[i] + stretch:
+            yield i, True
+        elif c[i] < o[i] - stretch:
+            yield i, False
+
+
+def _sig_holy_grail(o, h, l, c, t):
+    # Raschke: strong trend (ADX>30), pullback touches EMA20, closes back with trend.
+    adx, dip, dim = _adx(h, l, c, 14)
+    ema20 = _ema(c, 20)
+    for i in range(30, len(c)):
+        if np.isnan(adx[i]) or np.isnan(ema20[i]) or adx[i] <= 30:
+            continue
+        if dip[i] > dim[i] and l[i] <= ema20[i] and c[i] > ema20[i]:
+            yield i, True
+        elif dim[i] > dip[i] and h[i] >= ema20[i] and c[i] < ema20[i]:
+            yield i, False
+
+
+def _sig_london_orb(o, h, l, c, t):
+    # Crabel-style opening-range breakout on the London open: range = 07:00 UTC
+    # hour's bars; first close beyond it before 12:00 trades the break. Intraday
+    # timeframes only (needs bars inside the 07:00 hour).
+    cur_day, orh, orl, fired = None, None, None, False
+    for i in range(len(c)):
+        ts = t[i]
+        try:
+            dt = datetime.utcfromtimestamp(int(ts))
+        except (TypeError, ValueError, OSError):
+            continue
+        if dt.date() != cur_day:
+            cur_day, orh, orl, fired = dt.date(), None, None, False
+        if dt.hour == 7:
+            orh = h[i] if orh is None else max(orh, h[i])
+            orl = l[i] if orl is None else min(orl, l[i])
+        elif 8 <= dt.hour < 12 and orh is not None and not fired:
+            if c[i] > orh:
+                fired = True
+                yield i, True
+            elif c[i] < orl:
+                fired = True
+                yield i, False
+
+
+def _sig_turtle55(o, h, l, c, t):
+    # Turtle System 2: 55-bar channel breakout (the actual Dennis/Eckhardt rules'
+    # longer-term entry, complementing the 20-bar System 1).
+    for i in range(56, len(c)):
+        hh = h[i - 55:i].max()
+        ll = l[i - 55:i].min()
+        if c[i] > hh:
+            yield i, True
+        elif c[i] < ll:
             yield i, False
 
 
@@ -162,6 +254,21 @@ STRATEGIES: Dict[str, Dict] = {
     "momentum": {"label": "10-bar momentum", "style": "trend",
                  "source": "Time-series momentum (Moskowitz/Ooi/Pedersen family)",
                  "fn": _sig_momentum},
+    "williams_vbo": {"label": "Williams volatility breakout", "style": "breakout",
+                     "source": "Larry Williams (verified World Cup Trading champion) — "
+                               "close beyond open ± 0.6× prior bar's range",
+                     "fn": _sig_williams_vbo},
+    "holy_grail": {"label": "Raschke Holy Grail", "style": "trend-pullback",
+                   "source": "Linda Raschke (Market Wizard), Street Smarts — ADX(14)>30 "
+                             "pullback to EMA20, resume with trend",
+                   "fn": _sig_holy_grail},
+    "london_orb": {"label": "London open-range breakout", "style": "breakout",
+                   "source": "Toby Crabel's ORB applied to the 07:00 UTC London open "
+                             "(intraday timeframes only)",
+                   "fn": _sig_london_orb},
+    "turtle55": {"label": "Turtle 55-bar breakout (S2)", "style": "breakout",
+                 "source": "Dennis/Eckhardt Turtle System 2 — 55-bar channel breakout",
+                 "fn": _sig_turtle55},
 }
 
 
@@ -190,6 +297,19 @@ def _to_bt_signals(candles: List[Dict], events, atr: np.ndarray) -> List[Dict]:
     return sigs
 
 
+def signals_for(candles: List[Dict], strategy: str) -> List[Dict]:
+    """Backtester-shaped signals (1.5×ATR stop) for one strategy on given candles.
+    Shared by the Strategy Lab backtests AND strategy forward tests."""
+    meta = STRATEGIES.get(strategy)
+    if not meta or not candles:
+        return []
+    o = np.array([c["open"] for c in candles]); h = np.array([c["high"] for c in candles])
+    l = np.array([c["low"] for c in candles]); c_ = np.array([c["close"] for c in candles])
+    t = [c.get("time") for c in candles]
+    atr = _atr(h, l, c_, 14)
+    return _to_bt_signals(candles, meta["fn"](o, h, l, c_, t), atr)
+
+
 def run_strategy_backtest(symbol: str, strategy: str, timeframe: str = "1h",
                           target_r: float = 2.0, history_range: str = "1y",
                           _candles: Optional[List[Dict]] = None) -> Dict:
@@ -205,10 +325,7 @@ def run_strategy_backtest(symbol: str, strategy: str, timeframe: str = "1h",
     if history_is_synthetic(candles):
         return {"error": "Market data feed unavailable (would be simulated) — cannot backtest."}
 
-    o = np.array([c["open"] for c in candles]); h = np.array([c["high"] for c in candles])
-    l = np.array([c["low"] for c in candles]); c_ = np.array([c["close"] for c in candles])
-    atr = _atr(h, l, c_, 14)
-    sigs = _to_bt_signals(candles, meta["fn"](o, h, l, c_), atr)
+    sigs = signals_for(candles, strategy)
     cost = bt._round_trip_cost_price(symbol)
     trades = bt._evaluate(candles, sigs, target_r, 8, 48, False, False, cost)
     closed = [t for t in trades if not t.get("open")]

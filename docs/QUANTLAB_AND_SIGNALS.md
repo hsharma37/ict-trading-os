@@ -23,9 +23,9 @@ different broker's prices.
 | **Parameter sweep** | Grid-search target-R × killzone × trend with an out-of-sample column to expose curve-fitting. |
 | **Honest walk-forward test** | Picks the best config on the first 60% of history, locks it, reports ONLY the untouched last 40%. |
 | **Monte Carlo** | Resamples the backtest's R-series (which inherits its timeframe) → percentile outcomes, drawdown distribution, risk of ruin at your risk-per-trade. |
-| **Strategy Lab** *(new)* | Six classic open-source strategies — SMA 20/50 cross, EMA 12/26 cross, Connors RSI(2), Bollinger 20/2σ revert, Donchian 20 breakout (Turtle), 10-bar momentum — plus the ICT confluence baseline, all on the same candles/costs/stop model (1.5×ATR), ranked by after-cost expectancy. |
+| **Strategy Lab** *(new)* | Ten strategies — SMA 20/50 cross, EMA 12/26 cross, Connors RSI(2), Bollinger 20/2σ revert, Donchian 20 breakout, 10-bar momentum, **Williams volatility breakout** (Larry Williams, verified World Cup champion), **Raschke Holy Grail** (Market Wizard: ADX>30 + EMA20 pullback), **London open-range breakout** (Crabel ORB on the 07:00 UTC open, intraday TFs), **Turtle 55-bar S2** (Dennis/Eckhardt) — plus the ICT confluence baseline (with fairness knobs: confluence tier + normalised stop), all on the same candles/costs/stop model (1.5×ATR), ranked by after-cost expectancy. |
 | **ML baseline** *(new)* | Pure-numpy walk-forward logistic regression on 6 price features predicting next-bar direction. Scored only out-of-sample vs the majority-class baseline. A research yardstick — near-baseline accuracy is the honest, expected result. |
-| **Live paper-forward test** | Lock a config **with a name**, then count only signals on candles printed after you started — un-fittable out-of-sample. No orders placed. |
+| **Live paper-forward test** | Lock **any strategy** (ICT or any Strategy Lab entry) **with a name**, then count only signals on candles printed after you started — un-fittable out-of-sample. No orders placed; the open-trade row shows entry/SL/target to mirror manually on Execute if it earns trust. |
 
 ## What was fixed/improved in this pass
 
@@ -53,3 +53,14 @@ different broker's prices.
 - Strength tiers and strategy results with <30 trades are flagged as small-sample.
 - The ML baseline predicting near the majority baseline is *expected* — it exists to
   keep the rest of the app honest, not to trade.
+
+## Applying a strategy to real trading — the honest pipeline
+
+Famous author ≠ working edge on *your* broker's spread. The pipeline every
+strategy (ICT included) must pass:
+
+1. **Backtest** it in the Strategy Lab (after-cost expectancy > 0).
+2. **Compare** it against the other nine + ICT on the same candles.
+3. **Forward test it by name** — live paper on candles printed from now on.
+4. Only if it survives forward: mirror its open-trade entry/SL/target
+   **manually on the Execute page**. Nothing auto-trades, ever.

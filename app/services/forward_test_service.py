@@ -48,7 +48,8 @@ def _fetch_limit(test) -> int:
 class ForwardTestService:
     def create(self, symbol: str, timeframe: str = "1h", target_r: float = 3.0,
                session_filter: bool = False, trend_filter: bool = False,
-               min_confluence: int = 2, label: str = "") -> Dict[str, Any]:
+               min_confluence: int = 2, label: str = "",
+               strategy: str = "ict_confluence") -> Dict[str, Any]:
         symbol = symbol.upper()
         candles = market_service.get_history(symbol, timeframe, 200, history_range=_range_for(timeframe))
         if not candles or history_is_synthetic(candles):
@@ -56,8 +57,9 @@ class ForwardTestService:
         start_time = candles[-1].get("time")
         test = {
             "id": uuid.uuid4().hex[:12],
-            "label": label or f"{symbol} {target_r}R"
+            "label": label or f"{symbol} {strategy if strategy != 'ict_confluence' else 'ICT'} {target_r}R"
                      + (" KZ" if session_filter else "") + (" trend" if trend_filter else ""),
+            "strategy": strategy,
             "symbol": symbol, "timeframe": timeframe, "target_r": target_r,
             "session_filter": session_filter, "trend_filter": trend_filter, "min_confluence": min_confluence,
             "start_candle_time": start_time, "started_at": _now(), "status": "running",
@@ -75,7 +77,14 @@ class ForwardTestService:
         candles = market_service.get_history(symbol, tf, _fetch_limit(test), history_range=_range_for(tf))
         if not candles or history_is_synthetic(candles):
             return test  # keep last-known; don't wipe on a feed blip
-        signals = bt._scan_signals(candles, symbol, tf, 100, test.get("min_confluence", 2))
+        strat = test.get("strategy") or "ict_confluence"
+        if strat == "ict_confluence":
+            signals = bt._scan_signals(candles, symbol, tf, 100, test.get("min_confluence", 2))
+        else:
+            # Strategy Lab forward test — same signal generator + 1.5×ATR stop
+            # as the backtest, so forward results are comparable to it.
+            from app.services.strategy_service import signals_for
+            signals = signals_for(candles, strat)
         cost_price = bt._round_trip_cost_price(symbol)  # net-of-cost, like the backtest
         all_trades = bt._evaluate(candles, signals, test["target_r"], 8, 48,
                                   test.get("session_filter", False), test.get("trend_filter", False), cost_price)
