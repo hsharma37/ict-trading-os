@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { forwardTestApi } from '@/api/client'
+import { forwardTestApi, researchApi } from '@/api/client'
 import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { Radio, Play, Square, Trash2, Loader2, RefreshCw } from 'lucide-react'
 
 interface FwdTest {
   id: string; label: string; symbol: string; timeframe: string; target_r: number
+  strategy?: string
   session_filter: boolean; trend_filter: boolean; started_at: string; status: string
   start_candle_time?: number
   summary?: { trades?: number; win_rate?: number; expectancy_r?: number; total_r?: number }
@@ -21,6 +22,8 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sym, setSym] = useState(defaultSymbol || 'GBPUSD')
+  const [strategy, setStrategy] = useState('ict_confluence')
+  const [strategies, setStrategies] = useState<{ key: string; label: string }[]>([])
   const [name, setName] = useState('')
   const [tf, setTf] = useState('1h')
   const [targetR, setTargetR] = useState(3)
@@ -38,11 +41,14 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
   }, [])
 
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    researchApi.strategies().then((r) => setStrategies(r.data?.strategies || [])).catch(() => {})
+  }, [])
 
   const create = async () => {
     setCreating(true); setError(null)
     try {
-      await forwardTestApi.create({ symbol: sym, timeframe: tf, target_r: targetR, session_filter: killzone, trend_filter: trend, name: name.trim() })
+      await forwardTestApi.create({ symbol: sym, timeframe: tf, target_r: targetR, session_filter: killzone, trend_filter: trend, name: name.trim(), strategy })
       setName('')
       await load()
     } catch (e: any) {
@@ -77,6 +83,13 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
             <span className="text-muted-foreground">Symbol</span>
             <select value={sym} onChange={(e) => setSym(e.target.value)} className="px-2 py-1.5 border rounded-md bg-background text-sm font-semibold">
               {SUPPORTED_SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-sm">
+            <span className="text-muted-foreground">Strategy</span>
+            <select value={strategy} onChange={(e) => setStrategy(e.target.value)} className="px-2 py-1.5 border rounded-md bg-background text-sm">
+              <option value="ict_confluence">ICT confluence</option>
+              {strategies.map((st) => <option key={st.key} value={st.key}>{st.label}</option>)}
             </select>
           </label>
           <label className="flex items-center gap-1.5 text-sm">
@@ -125,7 +138,7 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold">{t.label || t.symbol}</span>
                       <span className="text-xs text-muted-foreground">{t.symbol}</span>
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted font-mono">{t.timeframe} · {t.target_r}R{t.session_filter ? ' · KZ' : ''}{t.trend_filter ? ' · trend' : ''}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted font-mono">{t.strategy && t.strategy !== 'ict_confluence' ? `${t.strategy} · ` : 'ICT · '}{t.timeframe} · {t.target_r}R{t.session_filter ? ' · KZ' : ''}{t.trend_filter ? ' · trend' : ''}</span>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${t.status === 'running' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground'}`}>{t.status}</span>
                       <span className="text-xs text-muted-foreground">since {fmtDate(t.started_at)}</span>
                     </div>

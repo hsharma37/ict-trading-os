@@ -107,3 +107,65 @@ def test_compare_reports_fairness_knobs(candles):
     ict_row = next(x for x in r["strategies"] if x["strategy"] == "ict_confluence")
     assert "STRONG" in ict_row["label"] and "1.5×ATR" in ict_row["label"]
     assert "1.5×ATR" not in r["note"] or "structural" in r["note"]  # note is now accurate
+
+
+# ── top-trader strategies (Williams, Raschke, Crabel, Turtle S2) ──────
+
+def _strong_trend_with_pullbacks(n=400, base=1.10):
+    """Steady uptrend with periodic dips to the EMA — Holy Grail / VBO fodder.
+    Bars are hourly starting at midnight so the London ORB finds 07:00 bars."""
+    out = []
+    p = base
+    for i in range(n):
+        drift = 0.0012
+        dip = -0.004 if i % 25 in (20, 21) else 0.0   # periodic pullback
+        o = p
+        c = p + drift + dip
+        h = max(o, c) + 0.0008
+        l = min(o, c) - (0.0035 if dip else 0.0008)   # pullback wick
+        out.append({"time": 1_700_000_000 - (1_700_000_000 % 86400) + i * 3600,
+                    "open": round(o, 5), "high": round(h, 5),
+                    "low": round(l, 5), "close": round(c, 5), "volume": 100})
+        p = c
+    return out
+
+
+def test_new_strategies_in_catalogue():
+    keys = {s["key"] for s in strategy_service.list_strategies()}
+    assert {"williams_vbo", "holy_grail", "london_orb", "turtle55"} <= keys
+
+
+def test_top_trader_strategies_emit_signals():
+    data = _strong_trend_with_pullbacks()
+    for key in ("williams_vbo", "turtle55", "london_orb", "holy_grail"):
+        sigs = strategy_service.signals_for(data, key)
+        assert isinstance(sigs, list)
+        if key in ("williams_vbo", "turtle55", "london_orb"):
+            assert len(sigs) > 0, f"{key} should fire on a strong trend with hourly bars"
+        for s in sigs:
+            assert s["risk"] > 0 and "i" in s and isinstance(s["long"], bool)
+
+
+def test_london_orb_needs_intraday_bars():
+    """Daily bars have no 07:00 hour — ORB must yield nothing, not crash."""
+    data = _strong_trend_with_pullbacks()
+    daily = [dict(c, time=1_700_000_000 - (1_700_000_000 % 86400) + i * 86400) for i, c in enumerate(data)]
+    assert strategy_service.signals_for(daily, "london_orb") == []
+
+
+def test_forward_test_accepts_strategy(monkeypatch):
+    data = _strong_trend_with_pullbacks()
+    monkeypatch.setattr(md.market_service, "get_history",
+                        lambda s, tf="1h", limit=200, history_range=None: data[-limit:])
+    from app.services.forward_test_service import forward_test_service
+    t = forward_test_service.create("EURUSD", timeframe="1h", target_r=2.0,
+                                    label="VBO paper", strategy="williams_vbo")
+    assert not t.get("error")
+    assert t["strategy"] == "williams_vbo" and t["label"] == "VBO paper"
+    forward_test_service.delete(t["id"])
+
+
+def test_forward_test_rejects_unknown_strategy(client):
+    resp = client.post("/forward-tests", json={"symbol": "EURUSD", "strategy": "moon_phase"})
+    assert resp.status_code == 422
+    assert "Unknown strategy" in resp.json()["detail"]
