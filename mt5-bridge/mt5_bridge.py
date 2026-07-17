@@ -8,10 +8,19 @@ MT5_BRIDGE_URL + MT5_BRIDGE_API_KEY on the main app to reach it. See
 .env.example and README.md for full setup.
 """
 import logging
+import os
+import sys
 import threading
 import time
 from datetime import datetime
 from functools import wraps
+
+# Make the bridge runnable no matter the working directory, and immune to a
+# same-named PyPI package shadowing our local config.py: put THIS file's own
+# directory first on the import path before importing the sibling modules.
+# (Fixes "ModuleNotFoundError: No module named 'config'" and
+#  "ImportError: cannot import name 'config' from 'config'".)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import requests
 from flask import Flask, request, jsonify
