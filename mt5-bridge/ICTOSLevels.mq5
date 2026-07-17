@@ -15,6 +15,7 @@ input bool MatchChartTimeframe = true;  // show only zones for THIS chart's TF
 input int  MaxZones            = 6;      // cap zones drawn (nearest first)
 input bool ShowFibonacci       = true;   // dealing-range fib grid + OTE + EQ
 input bool ShowLabels          = true;
+input bool ShowChecklist       = true;   // top-right how-to-read-it panel
 input int  ZoneBarsBack        = 120;
 input int  ZoneBarsForward     = 30;
 
@@ -120,6 +121,34 @@ void Legend()
    }
 }
 
+void ChkRow(int i,string text,color col,int size)
+{
+   string nm=PFX+"CHK"+IntegerToString(i);
+   ObjectCreate(0,nm,OBJ_LABEL,0,0,0);
+   ObjectSetInteger(0,nm,OBJPROP_CORNER,CORNER_RIGHT_UPPER);
+   ObjectSetInteger(0,nm,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER);
+   ObjectSetInteger(0,nm,OBJPROP_XDISTANCE,8);
+   ObjectSetInteger(0,nm,OBJPROP_YDISTANCE,18+i*16);
+   ObjectSetString(0,nm,OBJPROP_TEXT,text);
+   ObjectSetInteger(0,nm,OBJPROP_FONTSIZE,size);
+   ObjectSetInteger(0,nm,OBJPROP_COLOR,col);
+}
+
+void Checklist()
+{
+   // Top-right "how to read it" panel — the trade decision flow in order.
+   if(!ShowChecklist) return;
+   ChkRow(0,"— HOW TO READ —",clrGold,10);
+   ChkRow(1,"1. Bias: structure (aqua) + higher TF",clrGainsboro,8);
+   ChkRow(2,"2. Right half only:",clrGainsboro,8);
+   ChkRow(3,"      SELL in green PREMIUM",clrLime,8);
+   ChkRow(4,"      BUY in red DISCOUNT",clrRed,8);
+   ChkRow(5,"3. Wait for price in bright OTE band",clrGainsboro,8);
+   ChkRow(6,"4. OB/FVG box inside OTE = entry",clrGainsboro,8);
+   ChkRow(7,"5. Target opposite liquidity (orange)",clrOrange,8);
+   ChkRow(8,"Never BUY green / SELL red",clrYellow,9);
+}
+
 void FibLevel(double pct,string tag,color col)
 {
    double price=M_rangeLow+(M_rangeHigh-M_rangeLow)*pct;
@@ -214,6 +243,7 @@ void DrawAll()
 
    DrawFibonacci();
    Legend();
+   Checklist();
    ChartRedraw();
 }
 //+------------------------------------------------------------------+
