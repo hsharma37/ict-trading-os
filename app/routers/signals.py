@@ -24,8 +24,11 @@ def _annotate(signal: dict, held: dict) -> dict:
 
 
 @router.get("/analyze/{symbol}")
-def analyze_signal(symbol: str):
-    signal = signal_engine.analyze(symbol)
+def analyze_signal(symbol: str, target_r: float = 2.0):
+    """Direction from the fused Signal Intelligence read, scored by the ICT
+    confluence checklist. `target_r` sets the reward:risk of the proposed targets."""
+    target_r = max(0.5, min(float(target_r), 10.0))
+    signal = signal_engine.analyze(symbol, target_r=target_r)
     if not signal:
         return {"symbol": symbol, "signal": None, "message": "No valid signal. Setup below confluence threshold."}
     return {"symbol": symbol, "signal": _annotate(signal, _held_map())}

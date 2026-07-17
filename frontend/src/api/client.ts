@@ -146,7 +146,8 @@ export const forwardTestApi = {
 
 // Signals API
 export const signalsApi = {
-  analyze: (symbol: string) => apiClient.get(`/signals/analyze/${symbol}`),
+  analyze: (symbol: string, params?: { target_r?: number }) =>
+    apiClient.get(`/signals/analyze/${symbol}`, { params }),
   active: (symbol?: string) => apiClient.get('/signals/active', { params: { symbol } }),
   stats: (symbol: string) => apiClient.get(`/signals/stats/${symbol}`),
   scan: () => apiClient.post('/signals/scan'),
