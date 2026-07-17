@@ -30,7 +30,7 @@ def set_manual_price(symbol: str, price: float, bid: float = None, ask: float = 
 
 @router.delete("/manual-price/{symbol}")
 def clear_manual_price(symbol: str):
-    """Clear manual price override and return to Yahoo Finance."""
+    """Clear manual price override and return to the MT5 bridge feed."""
     market_service.clear_manual_price(symbol)
     return {"symbol": symbol, "status": "cleared"}
 
@@ -48,44 +48,24 @@ def get_history(symbol: str, timeframe: str = "1h", limit: int = 200):
 
 @router.get("/price-debug/{symbol}")
 def price_debug(symbol: str):
-    """Debug endpoint showing price chain and data source."""
-    from app.services.price_service import price_service
-    from app.services.market_data import market_service
+    """Debug endpoint: the MT5 bridge is the single price/candle source."""
+    from app.services.bridge_config import get_bridge_url
+    from app.services.mt5_price_service import mt5_price_service
 
     symbol = symbol.upper()
     config = get_instrument(symbol)
-    yahoo_ticker = config.get("yahoo", config.get("ticker", symbol)) if config else symbol
-
-    # Check manual override
-    manual = market_service.get_manual_price(symbol)
-
-    # Check persistent cache
-    persistent = price_service._get_from_persistent(symbol)
-
-    # Check in-memory cache
-    mem_cached = price_service.cache.get(symbol)
-
     return {
         "symbol": symbol,
-        "yahoo_ticker": yahoo_ticker,
+        "provider": "mt5-bridge (single source — no Yahoo/OANDA fallback)",
+        "bridge_configured": bool(get_bridge_url()),
+        "mt5_symbol": mt5_price_service._mt5_symbol(symbol),
         "instrument_config": {
             "label": config.get("label") if config else None,
             "digits": config.get("digits") if config else None,
             "kind": config.get("kind") if config else None,
             "leverage": config.get("leverage") if config else None,
         },
-        "manual_override": manual,
-        "persistent_cache": {
-            "price": persistent.price if persistent else None,
-            "timestamp": persistent.timestamp if persistent else None,
-            "label": persistent.label if persistent else None,
-        },
-        "memory_cache": {
-            "price": mem_cached.price if mem_cached else None,
-            "timestamp": mem_cached.timestamp if mem_cached else None,
-            "label": mem_cached.label if mem_cached else None,
-        },
-        "synthetic_base": price_service.SYNTHETIC_BASE.get(symbol),
+        "manual_override": market_service.get_manual_price(symbol),
         "current_live": market_service.get_price(symbol),
     }
 

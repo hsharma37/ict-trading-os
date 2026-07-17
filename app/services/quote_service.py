@@ -5,9 +5,10 @@ quant, trade reference prices, ...) resolves through get_quote() here, so a
 given symbol shows the *same* value everywhere at a given moment and the data
 provider is switched in exactly one place.
 
-Provider order (per settings.MARKET_DATA_PROVIDER):
-  manual override -> MT5 (when provider=mt5) -> OANDA (when configured)
-  -> Yahoo/scrape/synthetic (price_service). Each step falls through on failure.
+Provider order: manual override (itself pinned from the MT5 feed) -> MT5
+bridge -> unavailable. There is deliberately NO OANDA/Yahoo/synthetic
+fallback: the app prices instruments exclusively from the broker feed it
+executes on, and reports "unavailable" when the bridge isn't connected.
 
 A short in-process TTL cache makes concurrent reads across pages consistent
 and shields the (single, Windows-hosted) MT5 bridge from redundant hits.
@@ -17,11 +18,8 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, Optional
 
-from app.core.config import settings
 from app.services.instrument_config import get_instrument
 from app.services.mt5_price_service import mt5_price_service
-from app.services.oanda_service import oanda_service
-from app.services.price_service import price_service
 
 # symbol -> (quote, monotonic_expiry)
 _CACHE: Dict[str, tuple] = {}
@@ -104,27 +102,12 @@ def _resolve(symbol: str) -> Dict[str, Any]:
     if manual and manual.get("price"):
         return _canonical(symbol, {**manual, "timestamp": manual.get("timestamp")}, source="manual")
 
-    # 2. MT5 broker feed (only when explicitly selected; see mt5_price_service).
+    # 2. MT5 broker feed — the app's one real price source. No further fallback:
+    # a price that doesn't come from the broker feed is worse than no price.
     if mt5_price_service.is_configured():
         q = mt5_price_service.get_price_detailed(symbol)
         if q and q.get("price"):
             return _canonical(symbol, q, source="mt5")
-
-    # 3. OANDA (when configured and not forced to yahoo).
-    if oanda_service.is_configured():
-        oq = oanda_service.get_price(symbol)
-        if oq and oq.get("price"):
-            return _canonical(symbol, oq, source="oanda")
-
-    # 4. Yahoo -> scrape -> synthetic (price_service handles that chain itself).
-    pdata = price_service.fetch_price(symbol)
-    if pdata and getattr(pdata, "price", 0):
-        return _canonical(symbol, {
-            "label": pdata.label, "kind": pdata.kind, "digits": pdata.digits,
-            "price": pdata.price, "change": pdata.change, "change_percent": pdata.change_percent,
-            "high": pdata.high, "low": pdata.low, "open": pdata.open,
-            "prev_close": pdata.prev_close, "volume": pdata.volume, "timestamp": pdata.timestamp,
-        }, source=_derive_source_from_label(pdata.label))
 
     return _canonical(symbol, {"price": 0, "timestamp": None}, source="unavailable")
 

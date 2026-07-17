@@ -16,17 +16,42 @@ class _Resp:
         return self._payload
 
 
-def test_unconfigured_when_provider_not_mt5(monkeypatch):
-    monkeypatch.setattr(settings, "MARKET_DATA_PROVIDER", "auto")
-    monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "http://bridge")
+def test_unconfigured_without_bridge_url(monkeypatch):
+    monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "")
     assert mt5_price_service.is_configured() is False
     assert mt5_price_service.get_price("EURUSD") is None
+    assert mt5_price_service.get_history("EURUSD", "1h", 100) == []
 
 
-def test_configured_when_provider_mt5_and_url_set(monkeypatch):
-    monkeypatch.setattr(settings, "MARKET_DATA_PROVIDER", "mt5")
+def test_configured_by_bridge_url_alone(monkeypatch):
+    # MT5 is the single provider — a bridge URL is all it takes (the old
+    # MARKET_DATA_PROVIDER opt-in flag is no longer consulted).
+    monkeypatch.setattr(settings, "MARKET_DATA_PROVIDER", "auto")
     monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "http://bridge")
     assert mt5_price_service.is_configured() is True
+
+
+def test_get_history_parses_bridge_candles(monkeypatch):
+    monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "http://bridge")
+    candles = [{"time": 1_700_000_000 + i * 3600, "open": 1.1, "high": 1.2,
+                "low": 1.0, "close": 1.15, "volume": 10} for i in range(5)]
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _Resp(200, {"candles": candles}))
+    out = mt5_price_service.get_history("EURUSD", "1h", 5)
+    assert len(out) == 5
+    assert out[0]["open"] == 1.1 and out[-1]["close"] == 1.15
+    # market_data.get_history is a thin pass-through to the same feed
+    assert market_data.market_service.get_history("EURUSD", "1h", 5) == out
+
+
+def test_get_history_empty_on_bridge_error(monkeypatch):
+    monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "http://bridge")
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _Resp(503, {"error": "x"}))
+    assert mt5_price_service.get_history("EURUSD", "1h", 100) == []
+
+
+def test_get_history_rejects_unknown_timeframe(monkeypatch):
+    monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "http://bridge")
+    assert mt5_price_service.get_history("EURUSD", "2h", 100) == []
 
 
 def test_get_price_parses_tick(monkeypatch):
@@ -59,10 +84,12 @@ def test_market_data_prefers_mt5_when_selected(monkeypatch):
     assert result["price"] == 1.2345
 
 
-def test_market_data_falls_through_when_mt5_off(monkeypatch):
-    monkeypatch.setattr(settings, "MARKET_DATA_PROVIDER", "yahoo")
+def test_market_data_unavailable_without_bridge(monkeypatch):
+    # No bridge -> no price. The app must NOT silently fall back to another feed.
+    monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "")
     result = market_data.market_service.get_price("EURUSD")
     assert isinstance(result, dict)
+    assert result.get("source") in ("unavailable", "manual")
     assert result.get("source") != "mt5"
 
 

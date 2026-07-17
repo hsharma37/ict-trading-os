@@ -41,5 +41,5 @@ def test_price_endpoint_includes_source(client):
     resp = client.get("/market/price/EURUSD")
     assert resp.status_code == 200
     body = resp.json()
-    assert "source" in body and body["source"] in {"yahoo", "scraped", "synthetic", "mt5", "oanda"}
+    assert "source" in body and body["source"] in {"mt5", "manual", "unavailable"}
     assert "stale" in body and isinstance(body["stale"], bool)

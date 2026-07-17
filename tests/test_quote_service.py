@@ -58,10 +58,13 @@ def test_provider_switch_mt5(monkeypatch):
     assert q["price"] == 4096.7
 
 
-def test_provider_switch_yahoo(monkeypatch):
-    monkeypatch.setattr(settings, "MARKET_DATA_PROVIDER", "yahoo")
+def test_no_bridge_means_unavailable_not_fallback(monkeypatch):
+    # MT5 is the single source: without a bridge the quote is honestly
+    # "unavailable" -- never a silent Yahoo/OANDA/synthetic substitute.
+    monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "")
     q = get_quote("EURUSD")
-    assert q["source"] in {"yahoo", "scraped", "synthetic"}
+    assert q["source"] == "unavailable"
+    assert q["price"] == 0
 
 
 def test_cache_makes_concurrent_reads_consistent(monkeypatch):

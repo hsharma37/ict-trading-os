@@ -28,12 +28,11 @@ class Settings:
     MT5_ALLOWED_SYMBOLS: str = os.getenv("MT5_ALLOWED_SYMBOLS", "")
     MT5_MAX_LOT: float = float(os.getenv("MT5_MAX_LOT", "10") or "10")
     MT5_REQUIRE_SL: bool = os.getenv("MT5_REQUIRE_SL", "false").lower() == "true"
-    # Market data provider selection: "auto" uses OANDA when configured, else
-    # Yahoo. Force with "oanda", "yahoo", or "mt5" (the broker's own feed via
-    # the MT5 bridge -- matches execution fills, requires MT5_BRIDGE_URL).
-    MARKET_DATA_PROVIDER: str = os.getenv("MARKET_DATA_PROVIDER", "auto").lower()
-    # OANDA v20 REST (real-time FX/metals/index-CFD feed). Token from an OANDA
-    # fxTrade practice or live account. Env selects the API host.
+    # LEGACY (no longer consulted for prices/candles): the MT5 bridge is the
+    # app's single market-data source — configure MT5_BRIDGE_URL and that's it.
+    MARKET_DATA_PROVIDER: str = os.getenv("MARKET_DATA_PROVIDER", "mt5").lower()
+    # LEGACY OANDA v20 config — kept only so old envs still parse; the OANDA
+    # provider was removed from the price/candle resolution path.
     OANDA_API_TOKEN: str = os.getenv("OANDA_API_TOKEN", "").strip()
     OANDA_ACCOUNT_ID: str = os.getenv("OANDA_ACCOUNT_ID", "").strip()
     OANDA_ENV: str = os.getenv("OANDA_ENV", "practice").strip().lower()  # practice | live

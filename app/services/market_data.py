@@ -1,12 +1,9 @@
-"""Live market data via Yahoo Finance."""
-import httpx
+"""Market data from the MT5 bridge — the broker's own feed, the app's single
+source for both live prices and historical candles."""
 from typing import List, Dict, Optional
 from datetime import datetime
-import random
 
 from app.services.instrument_config import get_instrument
-from app.services.price_service import price_service
-from app.services.oanda_service import oanda_service
 from app.services.mt5_price_service import mt5_price_service
 
 # Deprecated hardcoded map — now using instrument_config for all ticker lookups
@@ -78,13 +75,6 @@ class MarketDataService:
                 return v
         return default
 
-    def _get_yahoo_ticker(self, symbol: str) -> str:
-        """Resolve symbol to Yahoo Finance ticker using instrument_config."""
-        config = get_instrument(symbol)
-        if config:
-            return config.get("yahoo", config.get("ticker", symbol))
-        return SYMBOL_MAP.get(symbol, symbol)
-
     def get_price(self, symbol: str) -> Dict:
         """Single entry point for a live price. Delegates to quote_service, the
         one place that resolves the provider (manual -> MT5 -> OANDA -> Yahoo)
@@ -94,110 +84,14 @@ class MarketDataService:
 
     def get_history(self, symbol: str, timeframe: str = "1h", limit: int = 200,
                     history_range: Optional[str] = None) -> List[Dict]:
-        # Prefer OANDA candles when configured (native 4H, tighter data).
-        oanda_candles = oanda_service.get_history(symbol, timeframe, limit)
-        if oanda_candles:
-            return oanda_candles
-
-        yahoo_sym = self._get_yahoo_ticker(symbol)
-        tf_map = {
-            "1m": ("1d", "1m"), "5m": ("5d", "5m"), "15m": ("5d", "15m"),
-            "30m": ("1mo", "30m"),  # native Yahoo 30m interval (allowed up to ~60d)
-            "1h": ("1mo", "1h"), "4h": ("3mo", "1h"),  # 4h uses 1h data (Yahoo limitation)
-            "1d": ("6mo", "1d")
-        }
-        period, interval = tf_map.get(timeframe, ("1mo", "1h"))
-        # A caller (e.g. the backtester) can request a longer window than the
-        # default for this interval — Yahoo caps 1h at ~730d, 1d at years.
-        if history_range:
-            period = history_range
-
-        try:
-            # Yahoo's chart API takes `range=` (e.g. 1mo), NOT `period=`. Passing
-            # `period=` was silently ignored, so Yahoo returned only the interval's
-            # tiny default window (~14 1h candles instead of ~530). That starved
-            # every downstream calc: ICT's analyze early-returned NEUTRAL on <20
-            # candles (HTF bias always neutral → entry/2R never viable), and
-            # SMA20/50 came back null. Using `range=` fixes all of them.
-            url = f'https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_sym}?range={period}&interval={interval}&events=div%2Csplit'
-            headers = {'User-Agent': 'Mozilla/5.0'}
-            with httpx.Client(timeout=20.0, headers=headers) as client:
-                resp = client.get(url)
-                resp.raise_for_status()
-                payload = resp.json()
-            result = payload.get('chart', {}).get('result')
-            if result and len(result) > 0:
-                quotes = result[0].get('indicators', {}).get('quote', [])
-                if quotes and len(quotes) > 0:
-                    quote = quotes[0]
-                    close = quote.get('close', [])
-                    open_ = quote.get('open', [])
-                    high = quote.get('high', [])
-                    low = quote.get('low', [])
-                    volume = quote.get('volume', [])
-                    candles = []
-                    for idx, ts in enumerate(result[0].get('timestamp', [])):
-                        if idx >= len(close):
-                            break
-                        c = close[idx]
-                        o = open_[idx] if idx < len(open_) else None
-                        h = high[idx] if idx < len(high) else None
-                        l = low[idx] if idx < len(low) else None
-                        v = volume[idx] if idx < len(volume) else 0
-                        if c is None or o is None or h is None or l is None:
-                            continue
-                        candles.append({
-                            'time': int(ts),
-                            'open': round(o, 5),
-                            'high': round(h, 5),
-                            'low': round(l, 5),
-                            'close': round(c, 5),
-                            'volume': int(v or 0)
-                        })
-                    # Yahoo has no native 4h; aggregate the 1h candles into real
-                    # 4h OHLC so the 4h chart/analysis isn't just 1h mislabelled.
-                    if timeframe == "4h":
-                        candles = self._resample(candles, 4)
-                    return candles[-limit:] if len(candles) > limit else candles
-        except Exception:
-            pass
-        return self._synthetic_history(symbol, limit)
-
-    @staticmethod
-    def _resample(candles: List[Dict], factor: int) -> List[Dict]:
-        """Aggregate N base candles into one (open=first, high=max, low=min,
-        close=last, volume=sum). Used to build 4h from 1h."""
-        out = []
-        for i in range(0, len(candles) - factor + 1, factor):
-            grp = candles[i:i + factor]
-            out.append({
-                "time": grp[0]["time"], "open": grp[0]["open"],
-                "high": max(g["high"] for g in grp), "low": min(g["low"] for g in grp),
-                "close": grp[-1]["close"], "volume": sum(g.get("volume", 0) for g in grp),
-            })
-        return out
-
-    def _synthetic_history(self, symbol: str, limit: int) -> List[Dict]:
-        # Use price_service for a realistic base price
-        try:
-            pdata = price_service.get_price(symbol)
-            base = pdata.price if pdata else 100.0
-        except Exception:
-            base = 100.0
-        candles = []
-        price = base
-        for i in range(limit):
-            o = price
-            c = price + (random.random() - 0.48) * base * 0.002
-            h = max(o, c) + random.random() * base * 0.001
-            l = min(o, c) - random.random() * base * 0.001
-            candles.append({"time": int(datetime.utcnow().timestamp()) - (limit-i)*3600,
-                           "open": round(o, 5), "high": round(h, 5), "low": round(l, 5), "close": round(c, 5),
-                           # Mark every fabricated bar so downstream analysis can refuse or
-                           # clearly label it — these are RANDOM, not market data.
-                           "synthetic": True})
-            price = c
-        return candles
+        """Historical candles from the MT5 bridge — the broker feed the app
+        trades on, so every level/signal/backtest lines up with the user's
+        MT5 chart. There is deliberately NO Yahoo/OANDA/synthetic fallback:
+        without a connected bridge there is no data, and analysis surfaces
+        say so rather than analysing a different broker's prices.
+        (history_range is accepted for backward compat; MT5 serves by count,
+        capped at 5000 bars per request.)"""
+        return mt5_price_service.get_history(symbol, timeframe, limit)
 
 
 def history_is_synthetic(candles: List[Dict]) -> bool:
