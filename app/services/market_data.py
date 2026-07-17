@@ -102,6 +102,7 @@ class MarketDataService:
         yahoo_sym = self._get_yahoo_ticker(symbol)
         tf_map = {
             "1m": ("1d", "1m"), "5m": ("5d", "5m"), "15m": ("5d", "15m"),
+            "30m": ("1mo", "30m"),  # native Yahoo 30m interval (allowed up to ~60d)
             "1h": ("1mo", "1h"), "4h": ("3mo", "1h"),  # 4h uses 1h data (Yahoo limitation)
             "1d": ("6mo", "1d")
         }
