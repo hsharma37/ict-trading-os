@@ -46,6 +46,8 @@ interface BridgeConfig {
 interface BridgeTestResult {
   reachable: boolean
   mt5_connected: boolean | null
+  mt5_status?: string | null
+  mt5_server?: string | null
   error: string | null
 }
 
@@ -102,6 +104,8 @@ export default function SettingsPage() {
       setBridgeResult({
         reachable: !!data.reachable,
         mt5_connected: data.mt5_connected ?? null,
+        mt5_status: data.mt5_status ?? null,
+        mt5_server: data.mt5_server ?? null,
         error: data.error ?? null,
       })
     } catch (e: any) {
@@ -410,26 +414,37 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {bridgeResult && (
-              <div
-                className={`p-3 rounded-lg border text-sm flex items-center gap-2 ${
-                  bridgeResult.reachable
-                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                    : 'bg-red-500/10 border-red-500/20 text-red-400'
-                }`}
-              >
-                {bridgeResult.reachable ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-                {bridgeResult.reachable ? (
-                  <span>
-                    Bridge reachable
-                    {bridgeResult.mt5_connected === true && ' · MT5 terminal connected'}
-                    {bridgeResult.mt5_connected === false && ' · but MT5 terminal NOT connected'}
-                  </span>
-                ) : (
-                  <span>Not reachable{bridgeResult.error ? ` — ${bridgeResult.error}` : ''}</span>
-                )}
-              </div>
-            )}
+            {bridgeResult && (() => {
+              // Three states: not reachable (red), reachable-but-MT5-down (amber
+              // + the specific reason), fully connected (green).
+              const ok = bridgeResult.reachable && bridgeResult.mt5_connected === true
+              const partial = bridgeResult.reachable && bridgeResult.mt5_connected !== true
+              const tone = ok
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                : partial
+                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                  : 'bg-red-500/10 border-red-500/20 text-red-400'
+              return (
+                <div className={`p-3 rounded-lg border text-sm flex items-start gap-2 ${tone}`}>
+                  {ok ? <Wifi className="w-4 h-4 mt-0.5" /> : <WifiOff className="w-4 h-4 mt-0.5" />}
+                  {!bridgeResult.reachable ? (
+                    <span>Bridge not reachable{bridgeResult.error ? ` — ${bridgeResult.error}` : ''}</span>
+                  ) : ok ? (
+                    <span>
+                      Bridge reachable · MT5 terminal connected
+                      {bridgeResult.mt5_server ? ` (${bridgeResult.mt5_server})` : ''}
+                    </span>
+                  ) : (
+                    <div className="space-y-0.5">
+                      <div className="font-medium">Bridge reachable, but MT5 terminal NOT connected</div>
+                      {bridgeResult.mt5_status && (
+                        <div className="text-amber-300/90">{bridgeResult.mt5_status}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
           </CardContent>
         </Card>
 
