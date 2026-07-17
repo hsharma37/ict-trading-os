@@ -60,6 +60,60 @@ def list_instruments():
     return {"instruments": get_all_instruments()}
 
 
+_LAB_TIMEFRAMES = {"5m", "15m", "30m", "1h", "4h", "1d"}
+
+
+@router.get("/strategies")
+def list_strategies():
+    """The Strategy Lab catalogue — classic open-source quant strategies, every
+    one measured by the same cost-aware harness as the ICT backtest."""
+    from app.services.strategy_service import list_strategies as _ls
+    return {"strategies": _ls()}
+
+
+@router.get("/strategy-backtest/{symbol}")
+def strategy_backtest(symbol: str, strategy: str, timeframe: str = "1h",
+                      target_r: float = 2.0, history_range: str = "1y"):
+    """Backtest one classic strategy (SMA/EMA cross, RSI-2, Bollinger, Donchian,
+    momentum) on broker candles, net of costs."""
+    from app.services.strategy_service import run_strategy_backtest
+    if timeframe not in _LAB_TIMEFRAMES:
+        raise HTTPException(status_code=400, detail=f"timeframe must be one of {sorted(_LAB_TIMEFRAMES)}")
+    target_r = max(0.5, min(float(target_r), 10.0))
+    result = run_strategy_backtest(symbol, strategy, timeframe, target_r, history_range)
+    if result.get("error"):
+        raise HTTPException(status_code=422, detail=result["error"])
+    return result
+
+
+@router.get("/strategy-compare/{symbol}")
+def strategy_compare(symbol: str, timeframe: str = "1h", target_r: float = 2.0,
+                     history_range: str = "1y"):
+    """Every Strategy Lab strategy + the ICT confluence baseline on the SAME
+    candles, ranked by after-cost expectancy."""
+    from app.services.strategy_service import compare_strategies
+    if timeframe not in _LAB_TIMEFRAMES:
+        raise HTTPException(status_code=400, detail=f"timeframe must be one of {sorted(_LAB_TIMEFRAMES)}")
+    target_r = max(0.5, min(float(target_r), 10.0))
+    result = compare_strategies(symbol, timeframe, target_r, history_range)
+    if result.get("error"):
+        raise HTTPException(status_code=422, detail=result["error"])
+    return result
+
+
+@router.get("/ml-baseline/{symbol}")
+def ml_baseline(symbol: str, timeframe: str = "1h", history_range: str = "1y"):
+    """Walk-forward logistic-regression baseline: can price features predict the
+    next bar out of sample? Honest yardstick, not a signal."""
+    from app.services.ml_service import ml_baseline as _ml
+    if timeframe not in _LAB_TIMEFRAMES:
+        raise HTTPException(status_code=400, detail=f"timeframe must be one of {sorted(_LAB_TIMEFRAMES)}")
+    result = _ml(symbol, timeframe, history_range)
+    if result.get("error"):
+        raise HTTPException(status_code=422, detail=result["error"])
+    return result
+
+
 @router.get("/backtest/{symbol}")
 def backtest(symbol: str, timeframe: str = "1h", target_r: float = 2.0, history_range: str = "1y"):
     """Walk-forward backtest of the ICT signal logic over historical candles.

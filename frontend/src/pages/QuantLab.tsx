@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { researchApi, quantApi } from '@/api/client'
 import BacktestPanel from '@/components/BacktestPanel'
 import ForwardTests from '@/components/ForwardTests'
+import StrategyLab from '@/components/StrategyLab'
 import {
   Activity, DollarSign, AlertTriangle, Shield, Globe, BarChart3, Layers,
   TrendingUp, TrendingDown, Zap, Clock, Target, HelpCircle,
@@ -391,6 +392,9 @@ export default function QuantLab() {
 
       {/* Backtest + Monte Carlo — measure the signal's real edge */}
       <BacktestPanel symbol={selected?.symbol} />
+
+      {/* Classic quant strategies + ML baseline on the same honest harness */}
+      <StrategyLab defaultSymbol={selected?.symbol} />
 
       {/* Live paper-forward test — validate a config on future candles */}
       <ForwardTests defaultSymbol={selected?.symbol} />

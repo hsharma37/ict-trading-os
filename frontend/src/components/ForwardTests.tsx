@@ -21,6 +21,8 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sym, setSym] = useState(defaultSymbol || 'GBPUSD')
+  const [name, setName] = useState('')
+  const [tf, setTf] = useState('1h')
   const [targetR, setTargetR] = useState(3)
   const [killzone, setKillzone] = useState(false)
   const [trend, setTrend] = useState(true)
@@ -40,7 +42,8 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
   const create = async () => {
     setCreating(true); setError(null)
     try {
-      await forwardTestApi.create({ symbol: sym, timeframe: '1h', target_r: targetR, session_filter: killzone, trend_filter: trend })
+      await forwardTestApi.create({ symbol: sym, timeframe: tf, target_r: targetR, session_filter: killzone, trend_filter: trend, name: name.trim() })
+      setName('')
       await load()
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Could not start forward test')
@@ -63,8 +66,9 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
-          Lock a config and track it against candles printed <strong>from now on</strong> — true forward, un-fittable
-          out-of-sample. No orders placed; trades accrue as new bars close (updates each hour on the 1h chart).
+          Lock a config, give it a name, and track it against candles printed <strong>from now on</strong> — true forward,
+          un-fittable out-of-sample. No orders placed. The list loads stored stats instantly; hit a test's refresh
+          button to recompute it from the latest candles.
         </p>
 
         {/* Start a new forward test */}
@@ -73,6 +77,18 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
             <span className="text-muted-foreground">Symbol</span>
             <select value={sym} onChange={(e) => setSym(e.target.value)} className="px-2 py-1.5 border rounded-md bg-background text-sm font-semibold">
               {SUPPORTED_SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5 text-sm">
+            <span className="text-muted-foreground">Name</span>
+            <input type="text" value={name} placeholder="e.g. GU trend 3R"
+              onChange={(e) => setName(e.target.value)} maxLength={40}
+              className="w-36 px-2 py-1.5 border rounded-md bg-background text-sm" />
+          </label>
+          <label className="flex items-center gap-1.5 text-sm">
+            <span className="text-muted-foreground">TF</span>
+            <select value={tf} onChange={(e) => setTf(e.target.value)} className="px-2 py-1.5 border rounded-md bg-background text-sm">
+              {['5m', '15m', '30m', '1h', '4h', '1d'].map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
           <label className="flex items-center gap-1.5 text-sm">
@@ -107,12 +123,17 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
                 <div key={t.id} className="p-3 rounded-lg border border-border bg-card">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold">{t.symbol}</span>
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted font-mono">{t.target_r}R{t.session_filter ? ' · KZ' : ''}{t.trend_filter ? ' · trend' : ''}</span>
+                      <span className="font-bold">{t.label || t.symbol}</span>
+                      <span className="text-xs text-muted-foreground">{t.symbol}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-muted font-mono">{t.timeframe} · {t.target_r}R{t.session_filter ? ' · KZ' : ''}{t.trend_filter ? ' · trend' : ''}</span>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${t.status === 'running' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-muted text-muted-foreground'}`}>{t.status}</span>
                       <span className="text-xs text-muted-foreground">since {fmtDate(t.started_at)}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
+                      {t.status === 'running' && (
+                        <button onClick={() => act(() => forwardTestApi.refresh(t.id))} title="Refresh stats from current candles"
+                          className="px-1.5 py-0.5 rounded border border-border text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="w-3 h-3" /></button>
+                      )}
                       {t.status === 'running' && (
                         <button onClick={() => act(() => forwardTestApi.stop(t.id))} title="Stop"
                           className="px-1.5 py-0.5 rounded border border-border text-xs text-muted-foreground hover:text-amber-400"><Square className="w-3 h-3" /></button>

@@ -158,8 +158,7 @@ export default function BacktestPanel({ symbol: initialSymbol }: { symbol?: stri
           <label className="flex items-center gap-1.5 text-sm">
             <span className="text-muted-foreground">TF</span>
             <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)} className="px-2 py-1.5 border rounded-md bg-background text-sm">
-              <option value="1h">1h</option>
-              <option value="1d">1d</option>
+              {['5m', '15m', '30m', '1h', '4h', '1d'].map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
           <label className="flex items-center gap-1.5 text-sm">

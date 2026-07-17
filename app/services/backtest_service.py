@@ -417,7 +417,7 @@ def _summarize_backtest(symbol, timeframe, target_r, history_range, n_candles, t
         "equity_curve_r": curve,
         "r_values": rs,
         "sample_caveat": "Small sample — treat as indicative, not predictive." if n < 30 else None,
-        "assumptions": "Single timeframe, limit fills, no spread/commission/slippage, 1 trade at a time.",
+        "assumptions": "Single timeframe, limit fills, net of estimated spread+commission (no slippage model), 1 trade at a time.",
     }
 
 

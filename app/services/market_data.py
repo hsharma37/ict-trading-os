@@ -6,14 +6,6 @@ from datetime import datetime
 from app.services.instrument_config import get_instrument
 from app.services.mt5_price_service import mt5_price_service
 
-# Deprecated hardcoded map — now using instrument_config for all ticker lookups
-# Kept for backward compatibility only
-SYMBOL_MAP = {
-    "NQ1!": "NQ=F", "ES1!": "ES=F", "EURUSD": "EURUSD=X",
-    "GBPUSD": "GBPUSD=X", "XAUUSD": "GC=F", "USDJPY": "USDJPY=X",
-    "BTCUSD": "BTC-USD", "CL1!": "CL=F",
-}
-
 MARKET_SPECS = {
     "NQ1!": {"point_value": 0.5, "unit": "contract", "min_qty": 0.25, "qty_step": 0.25},
     "ES1!": {"point_value": 0.25, "unit": "contract", "min_qty": 0.25, "qty_step": 0.25},
@@ -27,7 +19,6 @@ MARKET_SPECS = {
 
 class MarketDataService:
     def __init__(self):
-        self.price_history = {s: [] for s in SYMBOL_MAP.keys()}
         self.manual_prices: Dict[str, Dict] = {}  # symbol -> {price, bid, ask, timestamp}
 
     def set_manual_price(self, symbol: str, price: float, bid: float = None, ask: float = None) -> Dict:
@@ -49,7 +40,7 @@ class MarketDataService:
         return self.manual_prices[symbol.upper()]
 
     def clear_manual_price(self, symbol: str) -> None:
-        """Clear manual price override and return to Yahoo Finance."""
+        """Clear the manual price override (quotes return to the MT5 bridge)."""
         self.manual_prices.pop(symbol.upper(), None)
 
     def get_manual_price(self, symbol: str) -> Optional[Dict]:
@@ -66,14 +57,6 @@ class MarketDataService:
         except Exception:
             pass
         return data
-
-    def _last_valid_value(self, values, default=None):
-        if not values:
-            return default
-        for v in reversed(values):
-            if v is not None:
-                return v
-        return default
 
     def get_price(self, symbol: str) -> Dict:
         """Single entry point for a live price. Delegates to quote_service, the
