@@ -44,13 +44,14 @@ def signal_stats(symbol: str):
     return signal_engine.get_stats(symbol)
 
 @router.post("/scan")
-def scan_all():
+def scan_all(target_r: float = 2.0):
     from app.services.instrument_config import get_all_instruments
+    target_r = max(0.5, min(float(target_r), 10.0))
     symbols = list(get_all_instruments().keys())
     held = _held_map()
     results = []
     for sym in symbols:
-        sig = signal_engine.analyze(sym)
+        sig = signal_engine.analyze(sym, target_r=target_r)
         if sig: results.append(_annotate(sig, held))
     return {"scanned": len(symbols), "signals_found": len(results), "signals": results}
 

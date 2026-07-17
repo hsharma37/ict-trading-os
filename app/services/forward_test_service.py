@@ -30,12 +30,27 @@ def _range_for(timeframe: str) -> str:
     return {"1d": "2y"}.get(timeframe, "6mo")
 
 
+_TF_SECONDS = {"5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "4h": 14400, "1d": 86400}
+
+
+def _fetch_limit(test) -> int:
+    """Bars needed to recompute THIS test: bars elapsed since its start plus the
+    scan window — not a blanket 5000. Each 5000-bar pull through the tunnel takes
+    seconds; recomputing several tests per page load timed out the serverless
+    function (the 'forward test error'). Bounded fetches fix it."""
+    tf_sec = _TF_SECONDS.get(test.get("timeframe", "1h"), 3600)
+    start = test.get("start_candle_time") or 0
+    elapsed = datetime.now(timezone.utc).timestamp() - start if start else 0
+    elapsed_bars = int(max(0.0, elapsed) / tf_sec)
+    return min(3000, max(300, elapsed_bars + 150))
+
+
 class ForwardTestService:
     def create(self, symbol: str, timeframe: str = "1h", target_r: float = 3.0,
                session_filter: bool = False, trend_filter: bool = False,
                min_confluence: int = 2, label: str = "") -> Dict[str, Any]:
         symbol = symbol.upper()
-        candles = market_service.get_history(symbol, timeframe, 5000, history_range=_range_for(timeframe))
+        candles = market_service.get_history(symbol, timeframe, 200, history_range=_range_for(timeframe))
         if not candles or history_is_synthetic(candles):
             return {"error": "Market data unavailable right now — try again when the feed is live."}
         start_time = candles[-1].get("time")
@@ -57,7 +72,7 @@ class ForwardTestService:
         if test.get("status") != "running":
             return test
         symbol, tf = test["symbol"], test.get("timeframe", "1h")
-        candles = market_service.get_history(symbol, tf, 5000, history_range=_range_for(tf))
+        candles = market_service.get_history(symbol, tf, _fetch_limit(test), history_range=_range_for(tf))
         if not candles or history_is_synthetic(candles):
             return test  # keep last-known; don't wipe on a feed blip
         signals = bt._scan_signals(candles, symbol, tf, 100, test.get("min_confluence", 2))
@@ -90,10 +105,10 @@ class ForwardTestService:
                 continue
             try:
                 symbol, tf = test["symbol"], test.get("timeframe", "1h")
-                candles = market_service.get_history(symbol, tf, 5000, history_range=_range_for(tf))
-                if not candles:
+                probe = market_service.get_history(symbol, tf, 2, history_range=_range_for(tf))
+                if not probe:
                     continue
-                if candles[-1].get("time") == test.get("latest_candle_time"):
+                if probe[-1].get("time") == test.get("latest_candle_time"):
                     continue  # no new bar → nothing to do
                 self._recompute(test)
                 updated += 1

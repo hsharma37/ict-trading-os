@@ -134,12 +134,20 @@ export const researchApi = {
   honestTest: (symbol: string, params?: { timeframe?: string; history_range?: string }) =>
     apiClient.get(`/research/honest-test/${symbol}`, { params }),
   monteCarlo: (body: any) => apiClient.post('/research/monte-carlo', body),
+  strategies: () => apiClient.get('/research/strategies'),
+  strategyBacktest: (symbol: string, params: { strategy: string; timeframe?: string; target_r?: number; history_range?: string }) =>
+    apiClient.get(`/research/strategy-backtest/${symbol}`, { params }),
+  strategyCompare: (symbol: string, params?: { timeframe?: string; target_r?: number; history_range?: string }) =>
+    apiClient.get(`/research/strategy-compare/${symbol}`, { params }),
+  mlBaseline: (symbol: string, params?: { timeframe?: string; history_range?: string }) =>
+    apiClient.get(`/research/ml-baseline/${symbol}`, { params }),
 }
 
 // Live paper-forward test API
 export const forwardTestApi = {
   list: () => apiClient.get('/forward-tests'),
   create: (body: any) => apiClient.post('/forward-tests', body),
+  refresh: (id: string) => apiClient.post(`/forward-tests/${id}/refresh`),
   stop: (id: string) => apiClient.post(`/forward-tests/${id}/stop`),
   remove: (id: string) => apiClient.delete(`/forward-tests/${id}`),
 }

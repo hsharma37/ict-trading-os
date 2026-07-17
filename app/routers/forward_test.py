@@ -16,12 +16,15 @@ class ForwardTestCreate(BaseModel):
     trend_filter: bool = False
     min_confluence: int = 2
     label: Optional[str] = ""
+    name: Optional[str] = ""   # alias for label — "give the strategy a name"
 
 
 @router.get("")
-def list_forward_tests():
-    """All forward tests, each recomputed from current candles (live stats)."""
-    tests = forward_test_service.list(recompute=True)
+def list_forward_tests(refresh: bool = False):
+    """All forward tests. Fast by default (stored stats); pass ?refresh=true to
+    recompute from current candles. The old always-recompute behaviour re-fetched
+    thousands of bars per test per page load and timed out the serverless fn."""
+    tests = forward_test_service.list(recompute=refresh)
     return {"forward_tests": tests, "count": len(tests)}
 
 
@@ -31,11 +34,20 @@ def create_forward_test(body: ForwardTestCreate):
     res = forward_test_service.create(
         body.symbol, timeframe=body.timeframe, target_r=body.target_r,
         session_filter=body.session_filter, trend_filter=body.trend_filter,
-        min_confluence=body.min_confluence, label=body.label or "",
+        min_confluence=body.min_confluence, label=(body.name or body.label or ""),
     )
     if res.get("error"):
         raise HTTPException(status_code=422, detail=res["error"])
     return res
+
+
+@router.post("/{test_id}/refresh")
+def refresh_forward_test(test_id: str):
+    """Recompute ONE forward test from current candles (bounded fetch)."""
+    t = forward_test_service.get(test_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Not found")
+    return t
 
 
 @router.post("/{test_id}/stop")
