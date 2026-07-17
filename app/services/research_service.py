@@ -98,7 +98,7 @@ class ResearchService:
         if not candles or not config:
             return {
                 "symbol": symbol,
-                "error": "No data available",
+                "error": "No data - analysis runs exclusively on the MT5 broker feed; connect the MT5 bridge.",
                 "current_price": live.get("price"),
             }
 

@@ -100,28 +100,13 @@ def test_telegram_discard_and_restore():
     db.delete("telegram_signals", "disc1")
 
 
-# ── Yahoo candle window regression (range= not period=) ───────────────
+# ── History comes from the MT5 bridge only (no silent fallback) ───────
 
-def test_get_history_uses_range_param(monkeypatch):
-    """Guards the one-word bug that starved every timeframe of candles
-    (period= was ignored → ~14 candles → HTF bias/SMA/2R all broke)."""
+def test_get_history_never_falls_back_to_other_feeds(monkeypatch):
+    """MT5 is the single market-data source. Without a configured bridge,
+    get_history must return [] — not Yahoo/OANDA/synthetic candles."""
     import app.services.market_data as md
-    captured = {}
-
-    class _Resp:
-        def raise_for_status(self): pass
-        def json(self):
-            return {"chart": {"result": [{"timestamp": [1, 2],
-                    "indicators": {"quote": [{"open": [1, 1], "high": [1, 1],
-                    "low": [1, 1], "close": [1, 1], "volume": [0, 0]}]}}]}}
-
-    class _Client:
-        def __init__(self, *a, **k): pass
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-        def get(self, url): captured["url"] = url; return _Resp()
-
-    monkeypatch.setattr(md.oanda_service, "get_history", lambda *a, **k: None)
-    monkeypatch.setattr(md.httpx, "Client", _Client)
-    md.market_service.get_history("EURUSD", "1h", 100)
-    assert "range=" in captured["url"] and "period=" not in captured["url"]
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "MT5_BRIDGE_URL", "")
+    out = md.market_service.get_history("EURUSD", "1h", 100)
+    assert out == []

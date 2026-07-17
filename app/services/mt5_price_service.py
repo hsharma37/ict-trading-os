@@ -1,10 +1,10 @@
-"""Live prices from the MT5 bridge (the broker's own feed).
+"""Live prices AND historical candles from the MT5 bridge (the broker's feed).
 
-When MARKET_DATA_PROVIDER=mt5, the app prices instruments from the same feed
-it executes on, so displayed prices match fills exactly (no Yahoo/OANDA gap).
-This calls the bridge's /tick endpoint over HTTP; the bridge itself talks to
-the MetaTrader5 terminal. Falls through (returns None) whenever the bridge
-isn't configured/reachable or the symbol isn't available.
+The bridge is the app's single market-data source: every price and every
+candle the analysis runs on comes from the same feed trades execute on, so
+levels/signals/research always line up with the user's MT5 chart. There is
+no Yahoo/OANDA fallback — when the bridge isn't configured or reachable the
+app reports that instead of analysing a different broker's prices.
 """
 from __future__ import annotations
 
@@ -13,16 +13,18 @@ from typing import Dict, Optional
 
 import httpx
 
-from app.core.config import settings
 from app.services.bridge_config import get_bridge_url, get_bridge_api_key
 from app.services.instrument_config import get_instrument
 
 
+# Timeframes the bridge's /candles endpoint understands (mt5_client._TIMEFRAME_NAMES).
+_HISTORY_TIMEFRAMES = {"1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"}
+
+
 class Mt5PriceService:
     def is_configured(self) -> bool:
-        # Explicit opt-in: only price from MT5 when asked to, since every quote
-        # then depends on the (single, Windows-hosted) bridge being reachable.
-        return settings.MARKET_DATA_PROVIDER == "mt5" and bool(get_bridge_url())
+        # MT5 is THE market-data source: a configured bridge URL is all it takes.
+        return bool(get_bridge_url())
 
     def _headers(self) -> dict:
         h = {"ngrok-skip-browser-warning": "true"}
@@ -72,6 +74,30 @@ class Mt5PriceService:
             return {"today": candles[-1], "prev": candles[-2] if len(candles) > 1 else candles[-1]} if candles else None
         except Exception:
             return None
+
+    def get_history(self, symbol: str, timeframe: str = "1h", limit: int = 200) -> list:
+        """Historical OHLC candles from the broker's own feed (bridge /candles).
+        Returns [] when the bridge is unconfigured/unreachable — callers treat
+        that as 'no data', never as a cue to fall back to another provider."""
+        if not self.is_configured() or timeframe not in _HISTORY_TIMEFRAMES:
+            return []
+        name = self._mt5_symbol(symbol)
+        # One retry — free tunnels drop the occasional connection.
+        for _ in range(2):
+            try:
+                resp = httpx.get(
+                    f"{get_bridge_url()}/candles/{name}",
+                    params={"timeframe": timeframe, "count": min(int(limit), 5000)},
+                    headers=self._headers(),
+                    timeout=20,
+                )
+                if resp.status_code != 200:
+                    return []
+                # Bridge candles already use the app's shape: time/open/high/low/close/volume.
+                return (resp.json() or {}).get("candles") or []
+            except Exception:
+                continue
+        return []
 
     def get_price(self, symbol: str) -> Optional[Dict]:
         """Compact price dict for MarketDataService.get_price (/market/price)."""

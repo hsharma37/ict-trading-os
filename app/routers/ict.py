@@ -74,6 +74,14 @@ def levels(symbol: str, timeframes: str = "4h,1h,30m,15m,5m"):
     deduped.sort(key=lambda z: z.get("distance_pips", 9e9))
     total = len(deduped)
     nearest = deduped[:18]  # keep it actionable — nearest zones on each side
+    if price is None and not zones:
+        # Candles come exclusively from the MT5 bridge — no data means no bridge.
+        return {
+            "symbol": symbol, "current_price": None, "synthetic": False,
+            "dealing_range": None, "premium_discount": "unknown",
+            "zones": [], "count": 0, "total_detected": 0,
+            "error": "MT5 bridge not connected — levels are computed from the broker feed only.",
+        }
     return {
         "symbol": symbol, "current_price": price, "synthetic": synthetic,
         "dealing_range": dealing_range,

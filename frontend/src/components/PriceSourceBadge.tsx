@@ -8,8 +8,8 @@ type Props = {
 
 /**
  * Honest indicator of where a displayed price came from and whether it's fresh.
- * Real live feeds (oanda/yahoo/manual) read green; scraped/stale read amber;
- * synthetic demo data reads red so it's never mistaken for a live quote.
+ * MT5 (the broker feed) reads green; stale reads amber; "unavailable" reads
+ * red with a clear prompt to connect the bridge — the app has no other feed.
  */
 export default function PriceSourceBadge({ source, stale, className = '' }: Props) {
   if (!source) {
@@ -22,6 +22,21 @@ export default function PriceSourceBadge({ source, stale, className = '' }: Prop
   }
 
   const s = source.toLowerCase()
+
+  // MT5 is the app's single price source — no bridge means no price at all.
+  if (s === 'unavailable') {
+    return (
+      <span
+        className={`flex items-center gap-1.5 text-xs font-medium text-red-500 ${className}`}
+        title="MT5 bridge not connected — prices come exclusively from the broker feed"
+      >
+        <WifiOff className="w-3.5 h-3.5" />
+        <span>Offline</span>
+        <span className="text-muted-foreground font-normal">· connect MT5 bridge</span>
+      </span>
+    )
+  }
+
   const isDemo = s === 'synthetic'
   const isSecondary = s === 'scraped'
 
