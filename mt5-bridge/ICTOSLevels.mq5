@@ -39,6 +39,7 @@ string ChartTF()
    switch(_Period){
       case PERIOD_M5:  return "5m";
       case PERIOD_M15: return "15m";
+      case PERIOD_M30: return "30m";
       case PERIOD_H1:  return "1h";
       case PERIOD_H4:  return "4h";
    }

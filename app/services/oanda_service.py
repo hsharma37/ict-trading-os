@@ -36,7 +36,7 @@ _OANDA_NAMES = {
 
 # app timeframe -> OANDA candle granularity
 _GRANULARITY = {
-    "1m": "M1", "5m": "M5", "15m": "M15",
+    "1m": "M1", "5m": "M5", "15m": "M15", "30m": "M30",
     "1h": "H1", "4h": "H4", "1d": "D",
 }
 

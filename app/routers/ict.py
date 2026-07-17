@@ -8,7 +8,7 @@ router = APIRouter(prefix="/ict", tags=["ICT Analysis"])
 
 
 @router.get("/levels/{symbol}")
-def levels(symbol: str, timeframes: str = "4h,1h,15m,5m"):
+def levels(symbol: str, timeframes: str = "4h,1h,30m,15m,5m"):
     """Live ICT price zones for the symbol — every detected order block, FVG,
     liquidity pool and structure level projected against the current price, with
     distance and whether price is above / below / inside each zone. This is the
