@@ -165,6 +165,9 @@ class Mt5Client:
         self._terminal_path = terminal_path or None
         self._lock = threading.Lock()
         self._connected = False
+        # Human-readable reason the last connect() attempt failed, surfaced in
+        # the /status endpoint so the app can say WHY MT5 isn't connected.
+        self._last_error = "not attempted yet"
 
     def available(self) -> bool:
         """Whether the MetaTrader5 package is installed (Windows only)."""
@@ -173,30 +176,69 @@ class Mt5Client:
     def is_connected(self) -> bool:
         return self._connected
 
+    def connection_status(self) -> Dict[str, Any]:
+        """Attempt a connection (safe/idempotent) and report the outcome —
+        including the specific failure reason — for the status endpoint."""
+        ok = self.connect()
+        return {
+            "connected": ok,
+            "package_available": _MT5_AVAILABLE,
+            "login": self._login or None,
+            "server": self._server or None,
+            "reason": "connected" if ok else self._last_error,
+        }
+
     def connect(self) -> bool:
         """Initialize the terminal and log in. Safe to call repeatedly —
         returns immediately if already connected."""
         if not _MT5_AVAILABLE:
-            logger.warning(
-                "MetaTrader5 package not installed (it's Windows-only) — "
-                "running without a terminal connection."
-            )
+            self._last_error = ("MetaTrader5 Python package not installed in the bridge's "
+                                "interpreter — it's Windows-only and needs Python 3.12 or "
+                                "older (no 3.13 wheel yet). Run `pip install MetaTrader5`.")
+            logger.warning(self._last_error)
             return False
         with self._lock:
             if self._connected:
                 return True
             if not self._login or not self._password or not self._server:
-                logger.error("MT5_LOGIN/MT5_PASSWORD/MT5_SERVER are not fully configured.")
+                missing = [n for n, v in (("MT5_LOGIN", self._login),
+                                          ("MT5_PASSWORD", self._password),
+                                          ("MT5_SERVER", self._server)) if not v]
+                self._last_error = ("Missing bridge .env config: " + ", ".join(missing)
+                                    + ". Set these in mt5-bridge/.env.")
+                logger.error(self._last_error)
                 return False
             kwargs = {"login": self._login, "password": self._password, "server": self._server}
             if self._terminal_path:
                 kwargs["path"] = self._terminal_path
             if not mt5.initialize(**kwargs):
-                logger.error("MT5 initialize() failed: %s", mt5.last_error())
+                err = mt5.last_error()
+                self._last_error = self._explain_init_error(err)
+                logger.error("MT5 initialize() failed: %s — %s", err, self._last_error)
                 return False
             self._connected = True
+            self._last_error = ""
             logger.info("MT5 terminal connected: login=%s server=%s", self._login, self._server)
             return True
+
+    @staticmethod
+    def _explain_init_error(err) -> str:
+        """Turn MT5's (code, text) last_error into an actionable message."""
+        code = err[0] if isinstance(err, (tuple, list)) and err else None
+        base = f"MT5 initialize() failed {err}."
+        hints = {
+            -6: " Authorization failed — check MT5_LOGIN / MT5_PASSWORD and that "
+                "MT5_SERVER matches the broker server string EXACTLY (as shown in "
+                "the terminal's login dialog).",
+            -10005: " IPC timeout — the MetaTrader 5 desktop terminal isn't running "
+                    "or isn't logged in. Open it, log into this account, and enable "
+                    "Algo Trading.",
+            10004: " Requote/terminal busy — retry once the terminal is idle.",
+        }
+        extra = hints.get(code, " Make sure the MT5 desktop terminal is running, "
+                                 "logged into this account, with Algo Trading enabled; "
+                                 "set MT5_TERMINAL_PATH if it's in a non-default folder.")
+        return base + extra
 
     def disconnect(self) -> None:
         if _MT5_AVAILABLE and self._connected:

@@ -102,7 +102,8 @@ async def set_bridge_url_config(payload: BridgeUrlUpdate):
     An empty ``url`` clears the override and falls back to the env value.
     """
     effective = set_bridge_url(payload.url)
-    result = {**_bridge_config(), "reachable": False, "mt5_connected": None, "error": None}
+    result = {**_bridge_config(), "reachable": False, "mt5_connected": None,
+              "mt5_status": None, "mt5_server": None, "error": None}
     if not effective:
         result["error"] = "No bridge URL set (cleared to empty and no env fallback)."
         return result
@@ -120,6 +121,8 @@ async def set_bridge_url_config(payload: BridgeUrlUpdate):
             if resp.status_code == 200:
                 body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
                 result["mt5_connected"] = body.get("mt5_connected")
+                result["mt5_status"] = body.get("mt5_status")     # why MT5 is (not) connected
+                result["mt5_server"] = body.get("mt5_server")
                 result["bridge_response"] = body
             return result
         except Exception as e:  # noqa: BLE001

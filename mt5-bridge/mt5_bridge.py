@@ -81,13 +81,19 @@ def require_bridge_key(fn):
 def index():
     """Bridge status endpoint — deliberately unauthenticated so MT5_BRIDGE_URL
     connectivity can be checked without a key."""
+    # Actively probe the terminal so the reason is fresh (connect() is a no-op
+    # when already connected). This is what lets the app show WHY MT5 is down.
+    conn = mt5_client.connection_status()
     return jsonify({
         "status": "ok",
         "service": "ict-os-mt5-bridge",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "timestamp": datetime.utcnow().isoformat(),
-        "mt5_package_available": mt5_client.available(),
-        "mt5_connected": mt5_client.is_connected(),
+        "mt5_package_available": conn["package_available"],
+        "mt5_connected": conn["connected"],
+        "mt5_status": conn["reason"],      # human-readable why-not (or "connected")
+        "mt5_login": conn["login"],
+        "mt5_server": conn["server"],
         "telegram_configured": telegram.is_configured(),
     })
 

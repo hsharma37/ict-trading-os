@@ -96,10 +96,15 @@ async def get_bridge_status():
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.get(f"{base}/", headers=_bridge_headers(), timeout=12)
+            body = resp.json() if resp.status_code == 200 else None
             return {
                 "bridge_url": base,
                 "reachable": resp.status_code == 200,
-                "bridge_response": resp.json() if resp.status_code == 200 else None,
+                # Hoisted so the UI can show WHY MT5 is down without the bridge up.
+                "mt5_connected": (body or {}).get("mt5_connected", False),
+                "mt5_status": (body or {}).get("mt5_status"),
+                "mt5_server": (body or {}).get("mt5_server"),
+                "bridge_response": body,
             }
         except Exception as e:
             last = e
