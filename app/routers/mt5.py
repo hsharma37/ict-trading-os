@@ -288,6 +288,7 @@ async def draw_levels_on_chart(symbol: str):
         raise HTTPException(status_code=422, detail="No ICT zones detected to draw right now.")
     payload = {"symbol": data["symbol"], "current_price": data["current_price"],
                "dealing_range": data.get("dealing_range"), "premium_discount": data.get("premium_discount"),
+               "ranges": data.get("ranges"), "htf_bias": data.get("htf_bias"),
                "zones": data["zones"]}
     return await _bridge_post(f"/draw-levels", payload)
 

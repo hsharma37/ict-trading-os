@@ -122,7 +122,9 @@ def draw_levels():
             data.get("zones", []),
             {"current_price": data.get("current_price"),
              "dealing_range": data.get("dealing_range"),
-             "premium_discount": data.get("premium_discount")},
+             "premium_discount": data.get("premium_discount"),
+             "ranges": data.get("ranges"),
+             "htf_bias": data.get("htf_bias")},
         )
     except Mt5ConnectionError as e:
         return jsonify({"status": "error", "error": str(e)}), 503

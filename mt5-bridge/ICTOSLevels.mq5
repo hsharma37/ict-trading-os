@@ -22,7 +22,9 @@ input int  ZoneBarsForward     = 30;
 string PFX = "ICTOS_";
 int    g_id = 0;
 
-string M_symbol=""; double M_price=0,M_rangeHigh=0,M_rangeLow=0,M_eq=0; string M_pd="";
+string M_symbol=""; double M_price=0,M_rangeHigh=0,M_rangeLow=0,M_eq=0; string M_pd=""; string M_bias="";
+// Per-timeframe dealing ranges (#RANGE lines) — each chart draws its OWN fib.
+string R_tf[10]; double R_hi[10],R_lo[10],R_eq[10]; int R_n=0;
 
 int OnInit(){ EventSetTimer(5); DrawAll(); return(INIT_SUCCEEDED); }
 void OnDeinit(const int r){ EventKillTimer(); ObjectsDeleteAll(0,PFX); ChartRedraw(); }
@@ -51,7 +53,10 @@ string TypeName(string t)
    if(t=="OB")        return "Order Block";
    if(t=="FVG")       return "Fair Value Gap";
    if(t=="LIQUIDITY") return "Liquidity";
-   if(t=="MSS")       return "Structure Shift";
+   if(t=="BSL")       return "Buy-side Liquidity $$";
+   if(t=="SSL")       return "Sell-side Liquidity $$";
+   if(t=="MSS")       return "MSS";
+   if(t=="BOS")       return "BoS";
    return t;
 }
 
@@ -105,12 +110,13 @@ void Wash(string name,double hi,double lo,color tint)
 void Legend()
 {
    string tf = ChartTF();
-   string rows[4];
+   string rows[5];
    rows[0]= M_symbol+"  ICT OS — "+(MatchChartTimeframe && tf!="" ? tf+" zones" : "all zones");
-   rows[1]="OB/FVG boxes: green=bullish  red=bearish";
-   rows[2]="orange=liquidity  aqua=structure  blue=fib  yellow=EQ";
-   rows[3]="PREMIUM half=green(sell)  DISCOUNT half=red(buy)"+(M_pd!=""?("   now: "+M_pd):"");
-   for(int i=0;i<4;i++){
+   rows[1]="OB/FVG: green=bull red=bear   fib = THIS chart's range";
+   rows[2]="MSS=aqua  BoS=violet  BSL=magenta  SSL=orange  EQ=yellow";
+   rows[3]="PREMIUM half=green(sell)  DISCOUNT half=red(buy)";
+   rows[4]="HTF sentiment: "+(M_pd!=""?M_pd:"?")+(M_bias!=""?("  bias "+M_bias):"");
+   for(int i=0;i<5;i++){
       string nm=PFX+"LEG"+IntegerToString(i);
       ObjectCreate(0,nm,OBJ_LABEL,0,0,0);
       ObjectSetInteger(0,nm,OBJPROP_CORNER,CORNER_LEFT_UPPER);
@@ -150,9 +156,9 @@ void Checklist()
    ChkRow(8,"Never BUY green / SELL red",clrYellow,9);
 }
 
-void FibLevel(double pct,string tag,color col)
+void FibLevel(double pct,string tag,color col,double rhi,double rlo)
 {
-   double price=M_rangeLow+(M_rangeHigh-M_rangeLow)*pct;
+   double price=rlo+(rhi-rlo)*pct;
    string nm=PFX+"FIB"+DoubleToString(pct,3);
    HLine(nm,price,col,STYLE_DASH,1);
    Label(nm+"_T",RightTime(),price,tag+"  "+DoubleToString(price,_Digits),col,8);
@@ -160,35 +166,51 @@ void FibLevel(double pct,string tag,color col)
 
 void DrawFibonacci()
 {
-   if(!ShowFibonacci || M_rangeHigh<=M_rangeLow) return;
-   double rng=M_rangeHigh-M_rangeLow;
-   double eq=(M_eq>0)?M_eq:(M_rangeLow+rng*0.5);
+   if(!ShowFibonacci) return;
 
-   // ---- Premium / Discount zones (the halves of the dealing range) ----------
+   // Each chart draws the Fibonacci of ITS OWN timeframe's dealing range
+   // (multiple fibs: LTF ranges plan the short-term trade). Falls back to the
+   // HTF #META range when this TF has no #RANGE line.
+   string tf=ChartTF();
+   double hi=M_rangeHigh, lo=M_rangeLow, eq=M_eq; string src="HTF";
+   for(int i=0;i<R_n;i++)
+      if(R_tf[i]==tf && R_hi[i]>R_lo[i]){ hi=R_hi[i]; lo=R_lo[i]; eq=R_eq[i]; src=tf; break; }
+   if(hi<=lo) return;
+   double rng=hi-lo;
+   if(eq<=0) eq=lo+rng*0.5;
+
+   // ---- Premium / Discount zones (the halves of THIS TF's dealing range) ----
    // Premium = everything ABOVE equilibrium -> the SELL area (green highlight).
-   Wash(PFX+"PREMIUM",M_rangeHigh,eq,C'0,32,0');
-   Label(PFX+"PREMIUM_T",LeftTime(),(M_rangeHigh+eq)/2.0,"PREMIUM  ▲ sell area (above EQ)",clrLime,10);
+   Wash(PFX+"PREMIUM",hi,eq,C'0,32,0');
+   Label(PFX+"PREMIUM_T",LeftTime(),(hi+eq)/2.0,"PREMIUM ("+src+")  ▲ sell area",clrLime,10);
    // Discount = everything BELOW equilibrium -> the BUY area (red highlight).
-   Wash(PFX+"DISCOUNT",eq,M_rangeLow,C'40,0,0');
-   Label(PFX+"DISCOUNT_T",LeftTime(),(eq+M_rangeLow)/2.0,"DISCOUNT  ▼ buy area (below EQ)",clrRed,10);
+   Wash(PFX+"DISCOUNT",eq,lo,C'40,0,0');
+   Label(PFX+"DISCOUNT_T",LeftTime(),(eq+lo)/2.0,"DISCOUNT ("+src+")  ▼ buy area",clrRed,10);
 
    // ---- OTE (optimal trade entry) sub-zones, brighter, inside each half -----
    // Premium OTE = 61.8-78.6% retracement -> best SELL entries.
-   Band(PFX+"OTE_SELL",M_rangeLow+rng*0.786,M_rangeLow+rng*0.618,clrLime,C'0,70,0');
-   Label(PFX+"OTE_SELL_T",RightTime(),M_rangeLow+rng*0.702,"Premium OTE 62-79% (sell)",clrLime,8);
+   Band(PFX+"OTE_SELL",lo+rng*0.786,lo+rng*0.618,clrLime,C'0,70,0');
+   Label(PFX+"OTE_SELL_T",RightTime(),lo+rng*0.702,"Premium OTE 62-79% (sell)",clrLime,8);
    // Discount OTE = 21.4-38.2% retracement -> best BUY entries.
-   Band(PFX+"OTE_BUY",M_rangeLow+rng*0.382,M_rangeLow+rng*0.214,clrRed,C'80,0,0');
-   Label(PFX+"OTE_BUY_T",RightTime(),M_rangeLow+rng*0.298,"Discount OTE 21-38% (buy)",clrRed,8);
+   Band(PFX+"OTE_BUY",lo+rng*0.382,lo+rng*0.214,clrRed,C'80,0,0');
+   Label(PFX+"OTE_BUY_T",RightTime(),lo+rng*0.298,"Discount OTE 21-38% (buy)",clrRed,8);
 
-   FibLevel(0.0,"0% (low)",clrDeepSkyBlue);
-   FibLevel(0.236,"23.6%",clrDeepSkyBlue);
-   FibLevel(0.382,"38.2%",clrDeepSkyBlue);
-   FibLevel(0.618,"61.8%",clrDeepSkyBlue);
-   FibLevel(0.786,"78.6%",clrDeepSkyBlue);
-   FibLevel(1.0,"100% (high)",clrDeepSkyBlue);
+   FibLevel(0.0,"0% (low)",clrDeepSkyBlue,hi,lo);
+   FibLevel(0.236,"23.6%",clrDeepSkyBlue,hi,lo);
+   FibLevel(0.382,"38.2%",clrDeepSkyBlue,hi,lo);
+   FibLevel(0.618,"61.8%",clrDeepSkyBlue,hi,lo);
+   FibLevel(0.786,"78.6%",clrDeepSkyBlue,hi,lo);
+   FibLevel(1.0,"100% (high)",clrDeepSkyBlue,hi,lo);
 
    HLine(PFX+"EQ",eq,clrYellow,STYLE_SOLID,2);
-   Label(PFX+"EQ_T",RightTime(),eq,"EQUILIBRIUM 50%  "+DoubleToString(eq,_Digits),clrYellow,9);
+   Label(PFX+"EQ_T",RightTime(),eq,"EQUILIBRIUM 50% ("+src+")  "+DoubleToString(eq,_Digits),clrYellow,9);
+
+   // HTF context on lower-TF charts: the 4h equilibrium — which side of it we
+   // trade tells the long-term sentiment even while planning on the LTF fib.
+   if(src!="HTF" && tf!="4h" && M_eq>0 && MathAbs(M_eq-eq)>rng*0.02){
+      HLine(PFX+"HTF_EQ",M_eq,clrKhaki,STYLE_DOT,1);
+      Label(PFX+"HTF_EQ_T",RightTime(),M_eq,"HTF EQ (sentiment)  "+DoubleToString(M_eq,_Digits),clrKhaki,8);
+   }
 }
 
 //--- main ----------------------------------------------------------
@@ -196,6 +218,7 @@ void DrawAll()
 {
    ObjectsDeleteAll(0,PFX);
    g_id=0;
+   R_n=0;
    string want = ChartTF();
 
    string fname="ictos_levels_"+_Symbol+".csv";
@@ -213,6 +236,12 @@ void DrawAll()
       if(p[0]=="#META"){
          if(n>=7){ M_symbol=p[1]; M_price=StringToDouble(p[2]); M_rangeHigh=StringToDouble(p[3]);
                    M_rangeLow=StringToDouble(p[4]); M_eq=StringToDouble(p[5]); M_pd=p[6]; }
+         if(n>=8) M_bias=p[7];
+         continue;
+      }
+      if(p[0]=="#RANGE"){
+         if(n>=5 && R_n<10){ R_tf[R_n]=p[1]; R_hi[R_n]=StringToDouble(p[2]);
+                             R_lo[R_n]=StringToDouble(p[3]); R_eq[R_n]=StringToDouble(p[4]); R_n++; }
          continue;
       }
       if(n<6) continue;
@@ -230,9 +259,15 @@ void DrawAll()
       string nm=PFX+"Z"+IntegerToString(g_id++);
 
       if(kind=="line"){
-         color lc = (typ=="LIQUIDITY") ? clrOrange : clrAqua;   // structure vs liquidity
-         HLine(nm,hi,lc,(typ=="LIQUIDITY")?STYLE_DOT:STYLE_DASH,2);
-         Label(nm+"_T",LeftTime(),hi,full+"  "+DoubleToString(hi,_Digits),lc,9);
+         // MSS=aqua (reversal shift), BoS=violet (continuation break),
+         // BSL=magenta dots (buy stops above), SSL=orange dots (sell stops below).
+         color lc=clrAqua; ENUM_LINE_STYLE ls=STYLE_DASH; string tag=full;
+         if(typ=="BSL"){ lc=clrMagenta; ls=STYLE_DOT; tag=TypeName(typ)+" "+tf; }
+         else if(typ=="SSL"){ lc=clrOrange; ls=STYLE_DOT; tag=TypeName(typ)+" "+tf; }
+         else if(typ=="LIQUIDITY"){ lc=clrOrange; ls=STYLE_DOT; }
+         else if(typ=="BOS"){ lc=clrViolet; ls=STYLE_DASH; }
+         HLine(nm,hi,lc,ls,2);
+         Label(nm+"_T",LeftTime(),hi,tag+"  "+DoubleToString(hi,_Digits),lc,9);
       } else {
          color bright = bull?clrLime:clrRed;                    // bright, high-contrast
          color tint   = bull?C'0,45,0':C'50,0,0';               // subtle fill highlight
