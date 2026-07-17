@@ -17,6 +17,7 @@ class ICTPatternEngine:
         patterns = []
         swings = self._detect_swings(highs, lows, times)
         patterns.extend(self._detect_mss(closes, highs, lows, swings, times))
+        patterns.extend(self._detect_bos(closes, swings))
         patterns.extend(self._detect_fvg(opens, highs, lows, closes, times))
         patterns.extend(self._detect_ob(opens, highs, lows, closes, times))
         patterns.extend(self._detect_liquidity(highs, lows, swings, times))
@@ -94,15 +95,60 @@ class ICTPatternEngine:
                             break
         return patterns
 
+    def _detect_bos(self, closes, swings):
+        """Break of Structure — price CLOSES beyond a prior swing in the direction
+        the structure was already moving (continuation break), vs MSS which is the
+        reversal break. Level = the swing price that was broken: a higher high
+        confirmed by a close above the previous swing high (bullish BOS), or a
+        lower low confirmed by a close below the previous swing low (bearish)."""
+        patterns = []
+        if len(swings) < 4:
+            return patterns
+        hs = [s for s in swings if s["type"] == "high"][-6:]
+        ls = [s for s in swings if s["type"] == "low"][-6:]
+        for a, b in zip(hs, hs[1:]):
+            if (b["price"] > a["price"]
+                    and float(np.max(closes[a["index"]:b["index"] + 1])) > a["price"]):
+                patterns.append({"type": "BOS", "direction": "bullish",
+                                 "price_level": a["price"], "confidence": 0.8})
+        for a, b in zip(ls, ls[1:]):
+            if (b["price"] < a["price"]
+                    and float(np.min(closes[a["index"]:b["index"] + 1])) < a["price"]):
+                patterns.append({"type": "BOS", "direction": "bearish",
+                                 "price_level": a["price"], "confidence": 0.8})
+        return patterns
+
     def _detect_liquidity(self, highs, lows, swings, times):
+        """Resting liquidity pools on BOTH sides: equal highs = buy-side liquidity
+        (buy stops above old highs, BSL), equal lows = sell-side liquidity (sell
+        stops below old lows, SSL). metadata.side carries which; metadata.swept
+        says whether recent price already ran the level (bias/confluence only
+        count swept pools, preserving the old 'Liquidity_Swept' meaning)."""
         patterns = []
         if len(swings) < 4: return patterns
         high_swings = [s for s in swings if s["type"] == "high"]
+        low_swings = [s for s in swings if s["type"] == "low"]
+        seen = set()
         for i in range(len(high_swings)):
             for j in range(i+1, len(high_swings)):
                 if abs(high_swings[i]["price"] - high_swings[j]["price"]) / high_swings[i]["price"] < 0.001:
-                    if max(highs[-5:]) > high_swings[i]["price"]:
-                        patterns.append({"type": "LIQUIDITY", "direction": "bearish", "price_level": high_swings[i]["price"], "confidence": 0.75})
+                    level = round(high_swings[i]["price"], 6)
+                    if ("BSL", level) in seen: continue
+                    seen.add(("BSL", level))
+                    patterns.append({"type": "LIQUIDITY", "direction": "bearish",
+                                     "price_level": high_swings[i]["price"], "confidence": 0.75,
+                                     "metadata": {"side": "BSL",
+                                                  "swept": bool(max(highs[-5:]) > high_swings[i]["price"])}})
+        for i in range(len(low_swings)):
+            for j in range(i+1, len(low_swings)):
+                if abs(low_swings[i]["price"] - low_swings[j]["price"]) / low_swings[i]["price"] < 0.001:
+                    level = round(low_swings[i]["price"], 6)
+                    if ("SSL", level) in seen: continue
+                    seen.add(("SSL", level))
+                    patterns.append({"type": "LIQUIDITY", "direction": "bullish",
+                                     "price_level": low_swings[i]["price"], "confidence": 0.75,
+                                     "metadata": {"side": "SSL",
+                                                  "swept": bool(min(lows[-5:]) < low_swings[i]["price"])}})
         return patterns
 
     def _determine_bias(self, patterns, current_price):
@@ -115,9 +161,17 @@ class ICTPatternEngine:
         if bull_s != bear_s:
             return "BULLISH" if bull_s > bear_s else "BEARISH"
         # No decisive structure shift → net of all directional arrays (OB/FVG/
-        # liquidity), requiring a clear margin so noise doesn't create a bias.
-        bull = sum(1 for p in patterns if p["direction"] == "bullish")
-        bear = sum(1 for p in patterns if p["direction"] == "bearish")
+        # swept liquidity), requiring a clear margin so noise doesn't create a
+        # bias. BOS and unswept (resting) pools are chart-marking patterns and
+        # are excluded here so scoring behaviour matches the pre-BOS engine.
+        def _counts(p):
+            if p["type"] == "BOS":
+                return False
+            if p["type"] == "LIQUIDITY":
+                return bool(p.get("metadata", {}).get("swept"))
+            return True
+        bull = sum(1 for p in patterns if _counts(p) and p["direction"] == "bullish")
+        bear = sum(1 for p in patterns if _counts(p) and p["direction"] == "bearish")
         if bull > bear + 1: return "BULLISH"
         if bear > bull + 1: return "BEARISH"
         return "NEUTRAL"
@@ -128,7 +182,8 @@ class ICTPatternEngine:
         if any(p["type"] == "MSS" for p in patterns): score += 1; checks.append("MSS_Confirmed")
         if any(p["type"] == "FVG" for p in patterns): score += 1; checks.append("FVG_Present")
         if any(p["type"] == "OB" for p in patterns): score += 1; checks.append("OB_Present")
-        if any(p["type"] == "LIQUIDITY" for p in patterns): score += 1; checks.append("Liquidity_Swept")
+        if any(p["type"] == "LIQUIDITY" and p.get("metadata", {}).get("swept")
+               for p in patterns): score += 1; checks.append("Liquidity_Swept")
         if bias != "NEUTRAL": score += 1; checks.append("Bias_Aligned")
         return {"score": score, "checks": checks, "max_score": 6}
 

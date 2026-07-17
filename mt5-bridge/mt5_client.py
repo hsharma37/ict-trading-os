@@ -554,10 +554,15 @@ class Mt5Client:
         os.makedirs(files_dir, exist_ok=True)
         path = os.path.join(files_dir, f"ictos_levels_{symbol.upper()}.csv")
         dr = meta.get("dealing_range") or {}
-        # META: symbol, price, range_high, range_low, equilibrium, premium/discount
+        # META: symbol, price, HTF range high/low/eq, premium/discount, HTF bias
         lines = [f"#META,{symbol.upper()},{meta.get('current_price', '')},"
                  f"{dr.get('high', '')},{dr.get('low', '')},{dr.get('equilibrium', '')},"
-                 f"{meta.get('premium_discount', '')}"]
+                 f"{meta.get('premium_discount', '')},{meta.get('htf_bias', '') or ''}"]
+        # One #RANGE line per timeframe so each chart draws its OWN Fibonacci
+        # (lower TFs plan the trade; the HTF #META range carries sentiment).
+        for tf, r in (meta.get("ranges") or {}).items():
+            if r:
+                lines.append(f"#RANGE,{tf},{r.get('high', '')},{r.get('low', '')},{r.get('equilibrium', '')}")
         for z in zones:
             lines.append(",".join(str(x) for x in [
                 z.get("kind", "zone"), z.get("type", ""), z.get("direction", ""),

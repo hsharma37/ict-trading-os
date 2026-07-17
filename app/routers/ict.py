@@ -20,6 +20,11 @@ def levels(symbol: str, timeframes: str = "4h,1h,30m,15m,5m"):
     synthetic = False
     zones = []
     dealing_range = None
+    htf_bias = None
+    # Per-timeframe dealing ranges: the HTF range (tfs[0]) carries sentiment;
+    # each lower TF gets its OWN range so its chart draws its own Fibonacci
+    # for short-term trade planning.
+    ranges = {}
     for tf in tfs:
         candles = market_service.get_history(symbol, tf, 150)
         if not candles:
@@ -28,8 +33,12 @@ def levels(symbol: str, timeframes: str = "4h,1h,30m,15m,5m"):
             synthetic = True
         a = ict_engine.analyze(candles, symbol, tf)
         price = a.get("current_price") or price
+        r = ict_engine.range_levels(candles)
+        if r:
+            ranges[tf] = r
         if tf == tfs[0]:
-            dealing_range = ict_engine.range_levels(candles)
+            dealing_range = r
+            htf_bias = a.get("current_bias")
         for p in a.get("patterns", []):
             meta = p.get("metadata", {})
             typ = p["type"]
@@ -39,9 +48,13 @@ def levels(symbol: str, timeframes: str = "4h,1h,30m,15m,5m"):
             elif typ == "OB":
                 hi, lo = meta.get("ob_high"), meta.get("ob_low")
                 kind = "zone"
-            else:  # MSS / LIQUIDITY are single price lines
+            else:  # MSS / BOS / LIQUIDITY are single price lines
                 hi = lo = p.get("price_level")
                 kind = "line"
+                if typ == "LIQUIDITY":
+                    # Split into buy-side (equal highs, stops above) vs
+                    # sell-side (equal lows, stops below) for the chart.
+                    typ = meta.get("side") or "LIQUIDITY"
             if hi is None or lo is None:
                 continue
             if hi < lo:
@@ -78,13 +91,16 @@ def levels(symbol: str, timeframes: str = "4h,1h,30m,15m,5m"):
         # Candles come exclusively from the MT5 bridge — no data means no bridge.
         return {
             "symbol": symbol, "current_price": None, "synthetic": False,
-            "dealing_range": None, "premium_discount": "unknown",
+            "dealing_range": None, "ranges": {}, "htf_bias": None,
+            "premium_discount": "unknown",
             "zones": [], "count": 0, "total_detected": 0,
             "error": "MT5 bridge not connected — levels are computed from the broker feed only.",
         }
     return {
         "symbol": symbol, "current_price": price, "synthetic": synthetic,
         "dealing_range": dealing_range,
+        "ranges": ranges,          # per-TF dealing ranges → per-chart Fibonacci
+        "htf_bias": htf_bias,      # sentiment from the highest timeframe
         "premium_discount": ("premium" if dealing_range and price and price > dealing_range["equilibrium"]
                              else "discount" if dealing_range and price else "unknown"),
         "zones": nearest, "count": len(nearest), "total_detected": total,
