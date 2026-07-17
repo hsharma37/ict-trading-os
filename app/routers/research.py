@@ -88,14 +88,19 @@ def strategy_backtest(symbol: str, strategy: str, timeframe: str = "1h",
 
 @router.get("/strategy-compare/{symbol}")
 def strategy_compare(symbol: str, timeframe: str = "1h", target_r: float = 2.0,
-                     history_range: str = "1y"):
+                     history_range: str = "1y", ict_min_confluence: int = 2,
+                     ict_atr_stop: bool = False):
     """Every Strategy Lab strategy + the ICT confluence baseline on the SAME
-    candles, ranked by after-cost expectancy."""
+    candles, ranked by after-cost expectancy. `ict_min_confluence` (2-4) and
+    `ict_atr_stop` make the ICT row a fair competitor (STRONG-tier selectivity +
+    normalised stop) instead of an over-trading, tight-stop firehose."""
     from app.services.strategy_service import compare_strategies
     if timeframe not in _LAB_TIMEFRAMES:
         raise HTTPException(status_code=400, detail=f"timeframe must be one of {sorted(_LAB_TIMEFRAMES)}")
     target_r = max(0.5, min(float(target_r), 10.0))
-    result = compare_strategies(symbol, timeframe, target_r, history_range)
+    ict_min_confluence = max(0, min(int(ict_min_confluence), 6))
+    result = compare_strategies(symbol, timeframe, target_r, history_range,
+                                ict_min_confluence=ict_min_confluence, ict_atr_stop=ict_atr_stop)
     if result.get("error"):
         raise HTTPException(status_code=422, detail=result["error"])
     return result

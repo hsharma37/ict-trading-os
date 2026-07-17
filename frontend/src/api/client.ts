@@ -137,7 +137,7 @@ export const researchApi = {
   strategies: () => apiClient.get('/research/strategies'),
   strategyBacktest: (symbol: string, params: { strategy: string; timeframe?: string; target_r?: number; history_range?: string }) =>
     apiClient.get(`/research/strategy-backtest/${symbol}`, { params }),
-  strategyCompare: (symbol: string, params?: { timeframe?: string; target_r?: number; history_range?: string }) =>
+  strategyCompare: (symbol: string, params?: { timeframe?: string; target_r?: number; history_range?: string; ict_min_confluence?: number; ict_atr_stop?: boolean }) =>
     apiClient.get(`/research/strategy-compare/${symbol}`, { params }),
   mlBaseline: (symbol: string, params?: { timeframe?: string; history_range?: string }) =>
     apiClient.get(`/research/ml-baseline/${symbol}`, { params }),
