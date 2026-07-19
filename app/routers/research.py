@@ -119,6 +119,20 @@ def ml_baseline(symbol: str, timeframe: str = "1h", history_range: str = "1y"):
     return result
 
 
+@router.get("/plan/{symbol}")
+def trading_plan(symbol: str, timeframe: str = "1h", target_r: float = 2.0):
+    """The Trading Strategist: regime detection + evidence-gated strategy pick +
+    a concrete plan (or an explicit STAND ASIDE). Never places orders."""
+    from app.services.strategist_service import build_plan
+    if timeframe not in _LAB_TIMEFRAMES:
+        raise HTTPException(status_code=400, detail=f"timeframe must be one of {sorted(_LAB_TIMEFRAMES)}")
+    target_r = max(0.5, min(float(target_r), 10.0))
+    result = build_plan(symbol, timeframe, target_r)
+    if result.get("error"):
+        raise HTTPException(status_code=422, detail=result["error"])
+    return result
+
+
 @router.get("/backtest/{symbol}")
 def backtest(symbol: str, timeframe: str = "1h", target_r: float = 2.0, history_range: str = "1y"):
     """Walk-forward backtest of the ICT signal logic over historical candles.

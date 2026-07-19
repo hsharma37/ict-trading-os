@@ -369,7 +369,8 @@ def _ict_signals(candles, symbol, timeframe, min_confluence: int, atr_stop: bool
 
 def compare_strategies(symbol: str, timeframe: str = "1h", target_r: float = 2.0,
                        history_range: str = "1y", ict_min_confluence: int = 2,
-                       ict_atr_stop: bool = False) -> Dict:
+                       ict_atr_stop: bool = False,
+                       _candles: Optional[List[Dict]] = None) -> Dict:
     """Run every strategy (plus the ICT confluence baseline) on the same candles
     and rank by expectancy — one table, one referee.
 
@@ -378,7 +379,8 @@ def compare_strategies(symbol: str, timeframe: str = "1h", target_r: float = 2.0
     stop the mechanical strategies use, so its ranking reflects signal quality
     rather than an over-trading firehose or a tight-stop cost penalty."""
     ict_min_confluence = int(max(0, min(ict_min_confluence, 6)))
-    candles = market_service.get_history(symbol, timeframe, 5000, history_range=history_range)
+    candles = _candles if _candles is not None else market_service.get_history(
+        symbol, timeframe, 5000, history_range=history_range)
     if not candles or len(candles) < 60:
         return {"error": "Not enough historical data — is the MT5 bridge connected?"}
     if history_is_synthetic(candles):
