@@ -140,6 +140,14 @@ Updates the table in `docs/PRODUCT_DIRECTION_AND_BATCHES.md` (was dated 2026-07-
 
 ## Improvement plan (prioritized)
 
+> **2026-07-19 hygiene pass:** P0 #8 verified ALREADY UNIFIED (both services delegate to
+> `quant_service.calculate_kelly`). P2 Gen-0 legacy DELETED (`server.js`, `lib/*.js`) along with
+> orphaned unrouted pages (`Journal.tsx`, `Plan.tsx` — their features live in TradeJournal/planner
+> components). P4 theme toggle FIXED (was saving a value nothing applied — now wired via
+> `lib/theme.ts` + tailwind `darkMode:'class'`; instant apply, persisted). P5 smoke check added
+> (`scripts/smoke.sh`). Still open: P0 #2 (close-path locking), #9 (timestamp formats), P4
+> journal/plan page persistence (partially superseded), P5 CI wiring.
+
 ### P0 — verify the remaining CRITICALs from the bug report are actually fixed
 The bug report (`CODE_REVIEW_BUG_REPORT.md`) predates recent work. Confirmed **fixed**: #3 (Decimal),
 #4 (SL side validation), #5 (JWT default), **#7 (MT5 proxy now enforces a symbol allow-list, lot

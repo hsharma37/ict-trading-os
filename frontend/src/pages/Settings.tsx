@@ -3,6 +3,7 @@ import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { apiClient } from '@/api/client'
+import { applyTheme } from '@/lib/theme'
 import {
   Settings, Save, RefreshCw, CheckCircle, AlertTriangle, Moon, Sun, Radio, Wifi, WifiOff
 } from 'lucide-react'
@@ -121,6 +122,7 @@ export default function SettingsPage() {
 
   const updateField = <K extends keyof AppSettings>(field: K, value: AppSettings[K]) => {
     setSettings((prev) => ({ ...prev, [field]: value }))
+    if (field === 'theme') applyTheme(String(value))   // instant, not just on save
     setSaved(false)
   }
 
