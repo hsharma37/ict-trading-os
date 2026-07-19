@@ -8,6 +8,38 @@
 > real-money-grade "how much can I trust this?" breakdown of every feature + a prioritized
 > improvement roadmap.
 
+## Shipped since (strategist & research cycle — 2026-07-19)
+
+- **Trading Strategist (the app plans for you):** `/api/research/plan/{symbol}` + a
+  "Plan my trading" card on Signals & QuantLab. Detects the current **regime** on broker
+  candles (Wilder ADX/DI + Kaufman Efficiency Ratio + ATR-percentile vol — thresholds stated
+  in the output), then recommends ONLY a strategy whose style fits the regime **and** whose
+  after-cost expectancy measured positive (≥20 trades) on those exact candles; otherwise an
+  explicit **STAND ASIDE** with the reason. Includes the live setup (entry/SL/TP) when fresh,
+  alternatives, and caveats. Execution stays manual.
+- **MT5 single data source:** Yahoo/OANDA removed entirely — every price, candle, level,
+  signal, backtest and forward test comes from the user's broker via the bridge (levels now
+  match the MT5 chart exactly). Honest "bridge offline" states instead of silent fallbacks.
+- **Strategy Lab:** ten classic strategies (six textbook + Williams VBO, Raschke Holy Grail,
+  London ORB, Turtle-55) + the ICT baseline with fairness knobs (confluence tier ≥2/3/4,
+  normalised 1.5×ATR stop) — one cost-aware referee, ranked by after-cost expectancy.
+  **Measured verdict on XAUUSD 15m:** trend/breakout strategies positive (SMA cross +0.28R,
+  London ORB +0.25R), mean-reversion negative, ICT negative in every configuration tested
+  (firehose −0.263R → STRONG+ATR −0.107R; win rate ~26-28% at 3R) — regime dominates.
+- **ML baseline:** pure-numpy walk-forward logistic regression scored out-of-sample vs the
+  majority class — the honest yardstick (pandas-ta rejected: its numba dep neither builds on
+  numpy 2.x nor fits serverless).
+- **Forward tests:** timeout root-caused & fixed (bounded fetches, fast list, per-test
+  refresh), nameable, any-strategy (not just ICT), per-timeframe.
+- **Signals:** direction adopted from fused Signal Intelligence (news+trend+momentum+ICT)
+  with the source labelled; adjustable target R end-to-end; strength calibration across
+  5m–1d at chosen R.
+- **MT5 chart:** per-TF Fibonacci/OTE/premium-discount, MSS + BoS, BSL/SSL liquidity,
+  OB-vs-FVG visual distinction, on-chart how-to-read checklist, 30m support.
+- **Hygiene (this file's P2/P3):** stale `yfinance` dep removed; route-level code splitting
+  shipped — main bundle **~910KB → ~268KB**; dead Yahoo-era code purged from `market_data`;
+  backtest "no costs" label corrected (costs were charged; the label lied).
+
 ## Shipped since (safety, trust & validation cycle — 2026-07-16)
 
 - **Execution safety:** scale-out is opt-in (killed a double/triple-order bug), XAUUSD lot
@@ -102,7 +134,7 @@ Updates the table in `docs/PRODUCT_DIRECTION_AND_BATCHES.md` (was dated 2026-07-
 | Trades analytics base | 40% | **~85%** | Dashboard + Analytics read the live MT5 terminal (broker P&L/history), ledger fallback |
 | Knowledge base | 55% | **~70%** | Ingest/search/pgvector; YouTube transcribe+titles via residential bridge; chat is account-aware |
 | Telegram | — | **~80%** | App feed + bridge notifications + public-channel hourly polling (@xxictxx) |
-| Trading planner | 45% | 45% | Plan APIs exist; UI not persisted |
+| Trading planner | 45% | **~75%** | Regime-aware Strategist plans per symbol/TF with evidence gates (2026-07-19); armed-plan flow exists; journal/plan page persistence still open |
 | ML/agent pipeline | 25% | 25% | Heuristic analysis + retrieval; no eval/hallucination gate |
 | Security/collab readiness | 35% | 35% | Env separation + API key; no real per-user auth |
 
@@ -135,8 +167,8 @@ Recommendation: (a) for now — keep the repo honest about what ships.
   relies on a **committed `frontend/dist`** (no `npm build` on Vercel) — remember to `npm --prefix
   frontend run build` before committing UI changes. Building on Vercel is still the more robust
   long-term option.
-- Frontend bundle is a single **~910 KB** chunk → code-split (route-level `lazy()`), which also
-  removes the Vite dynamic/static import warning for `client.ts`.
+- ~~Frontend bundle is a single **~910 KB** chunk~~ **Done 2026-07-19:** route-level `lazy()`
+  code splitting — main chunk ~268KB, pages load on demand.
 - `frontend/src/hooks/useMarketData.ts` (currently modified in the working tree) reads
   `(globalThis as any)?.import?.meta?.env` — that expression is always `undefined`, so `VITE_API_URL`
   is never honored (harmless in prod where `/api` is the default, but it's broken code). Use

@@ -3,6 +3,7 @@ import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
 import SignalIntelligence from '@/components/SignalIntelligence'
 import StrengthCalibration from '@/components/StrengthCalibration'
 import Mt5ChartLevels from '@/components/Mt5ChartLevels'
+import TradingPlan from '@/components/TradingPlan'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { signalsApi } from '@/api/client'
@@ -362,6 +363,9 @@ export default function Signals() {
           </div>
         </CardContent>
       </Card>
+
+      {/* The app plans the trade: regime -> evidence-gated strategy -> setup */}
+      <TradingPlan defaultSymbol={selectedSymbol} />
 
       {/* Selected symbol — the two engines side by side: ICT confluence
           checklist (structure) + news-driven intelligence (context). */}

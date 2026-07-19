@@ -141,6 +141,8 @@ export const researchApi = {
     apiClient.get(`/research/strategy-compare/${symbol}`, { params }),
   mlBaseline: (symbol: string, params?: { timeframe?: string; history_range?: string }) =>
     apiClient.get(`/research/ml-baseline/${symbol}`, { params }),
+  plan: (symbol: string, params?: { timeframe?: string; target_r?: number }) =>
+    apiClient.get(`/research/plan/${symbol}`, { params }),
 }
 
 // Live paper-forward test API
