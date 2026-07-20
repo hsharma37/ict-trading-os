@@ -1,24 +1,10 @@
 """Tests for price source/staleness classification (single price API: /market)."""
 from datetime import datetime, timedelta, timezone
 
-from app.services.quote_service import derive_source, is_stale
+from app.services.quote_service import is_stale
 
-
-def test_derive_source_synthetic():
-    assert derive_source("EUR/USD (synthetic)") == "synthetic"
-    assert derive_source("XAU/USD (SYNTHETIC)") == "synthetic"
-
-
-def test_derive_source_scraped():
-    assert derive_source("XAU/USD (kitco)") == "scraped"
-    assert derive_source("Gold (gold.org)") == "scraped"
-    assert derive_source("EUR/USD (investing.com)") == "scraped"
-
-
-def test_derive_source_yahoo_default():
-    assert derive_source("EUR/USD") == "yahoo"
-    assert derive_source("") == "yahoo"
-    assert derive_source(None) == "yahoo"  # type: ignore[arg-type]
+# derive_source (Yahoo-era label classifier) was removed with the OANDA/Yahoo
+# purge — quotes are mt5/manual/unavailable only, asserted by the endpoint test.
 
 
 def test_is_stale_fresh():

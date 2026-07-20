@@ -57,13 +57,11 @@ export default function PriceSourceBadge({ source, stale, className = '' }: Prop
     label = 'Live'
   }
 
+  // MT5 and manual are the only sources the backend can emit since the
+  // MT5-only cutover; anything else renders raw so a regression is VISIBLE.
   const providerLabel: Record<string, string> = {
     mt5: 'MT5',
-    oanda: 'OANDA',
-    yahoo: 'Yahoo',
     manual: 'Manual',
-    scraped: 'scraped',
-    synthetic: 'demo',
   }
   const provider = providerLabel[s] || s
 

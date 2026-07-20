@@ -40,18 +40,7 @@ def _stale(timestamp: str, max_age_s: int = 120) -> bool:
         return False
 
 
-def derive_source(label: str) -> str:
-    """Classify a price's provenance from its label suffix (yahoo/scraped/synthetic)."""
-    l = (label or "").lower()
-    if "(synthetic)" in l:
-        return "synthetic"
-    if any(s in l for s in ("(kitco)", "(gold.org)", "(investing.com)", "(scraped)")):
-        return "scraped"
-    return "yahoo"
 
-
-# Public aliases (single home for these helpers now that playground is gone).
-_derive_source_from_label = derive_source
 is_stale = _stale
 
 
