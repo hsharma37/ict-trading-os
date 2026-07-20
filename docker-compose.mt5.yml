@@ -1,0 +1,44 @@
+# Containerized MT5 bridge — no Windows machine required.
+#   docker compose -f docker-compose.mt5.yml up -d --build
+#   docker compose -f docker-compose.mt5.yml logs -f cloudflared   # tunnel URL
+# First run only: open http://localhost:6080 (or SSH-tunnelled from your Mac),
+# log the MT5 terminal into your broker, enable Algo Trading (Ctrl+E).
+#
+# Host this on an x86_64 Linux VPS. On Apple Silicon it would run under slow
+# x86 emulation — fine for a one-off experiment, wrong for live trading.
+
+services:
+  mt5bridge:
+    build: ./docker/mt5-bridge
+    container_name: mt5bridge
+    volumes:
+      - wineprefix:/root/.wine          # terminal install + login persist here
+      - installers:/root/installers
+      - ./mt5-bridge:/app/mt5-bridge    # live-mounted: git pull to update
+    env_file:
+      - ./mt5-bridge/.env               # MT5_LOGIN/PASSWORD/SERVER, bridge key…
+    ports:
+      - "127.0.0.1:6080:6080"           # noVNC — NEVER expose publicly;
+                                        # from a Mac: ssh -L 6080:localhost:6080 <vps>
+    restart: unless-stopped
+    # The bridge port 5000 is NOT published — only cloudflared reaches it,
+    # over the compose network, exactly like the tunnel-only posture on Windows.
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: mt5tunnel
+    depends_on:
+      - mt5bridge
+    # Quick tunnel (URL rotates on restart — read it from `logs cloudflared`,
+    # paste into Settings → MT5 Bridge Connection):
+    command: tunnel --no-autoupdate --url http://mt5bridge:5000
+    # Named tunnel instead (permanent URL): comment the line above, set
+    # TUNNEL_TOKEN in the environment, and use:
+    # command: tunnel --no-autoupdate run
+    # environment:
+    #   - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    restart: unless-stopped
+
+volumes:
+  wineprefix:
+  installers:
