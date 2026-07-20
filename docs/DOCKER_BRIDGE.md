@@ -19,8 +19,12 @@ no Windows box.
 ## Where to host
 
 An **x86_64 Linux VPS** (~$5–8/mo — cheaper than Windows VPS, no license).
-Do NOT host on the Mac itself: Apple Silicon would emulate x86 (slow, fragile),
-and your Mac would have to stay on — the dependency you're escaping.
+
+**Apple Silicon Macs are a verified dead end** (tested 2026-07-20): the image
+builds and the tunnel mints a URL, but Wine's preloader cannot start under
+either emulator — Rosetta punts it (static binary, fixed low-address
+mappings) and QEMU dies on `anon_mmap_fixed` page-mask assertions. On a real
+x86 host no emulation is involved and this pattern is well-proven.
 
 ## Setup (~20 min + first-boot installs)
 
