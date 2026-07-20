@@ -169,3 +169,42 @@ def test_forward_test_rejects_unknown_strategy(client):
     resp = client.post("/forward-tests", json={"symbol": "EURUSD", "strategy": "moon_phase"})
     assert resp.status_code == 422
     assert "Unknown strategy" in resp.json()["detail"]
+
+
+# ── New York ORB + forward-test trade details ─────────────────────────
+
+def test_ny_orb_in_catalogue_and_fires():
+    keys = {s["key"] for s in strategy_service.list_strategies()}
+    assert "ny_orb" in keys
+    data = _strong_trend_with_pullbacks()   # hourly bars from midnight → has 13:00 hours
+    sigs = strategy_service.signals_for(data, "ny_orb")
+    assert len(sigs) > 0, "NY ORB should fire on hourly trending data"
+    from datetime import datetime
+    for s in sigs:
+        hour = datetime.utcfromtimestamp(data[s["i"]]["time"]).hour
+        assert 13 < hour < 17, "NY breakout must land in the 14:00-16:59 UTC window"
+
+
+def test_ny_orb_and_london_orb_are_distinct():
+    data = _strong_trend_with_pullbacks()
+    ny = {s["i"] for s in strategy_service.signals_for(data, "ny_orb")}
+    lon = {s["i"] for s in strategy_service.signals_for(data, "london_orb")}
+    assert ny.isdisjoint(lon), "sessions must not share signal bars"
+
+
+def test_forward_test_trades_carry_details(monkeypatch):
+    data = _strong_trend_with_pullbacks()
+    monkeypatch.setattr(md.market_service, "get_history",
+                        lambda s, tf="1h", limit=200, history_range=None: data[-limit:])
+    from app.services.forward_test_service import forward_test_service
+    t = forward_test_service.create("EURUSD", timeframe="1h", target_r=2.0,
+                                    label="detail check", strategy="williams_vbo")
+    assert not t.get("error")
+    # Force trades into view: recompute against a start at the beginning of history.
+    import app.core.database as dbm
+    dbm.db.update("forward_tests", t["id"], {"start_candle_time": data[0]["time"]})
+    t2 = forward_test_service.get(t["id"])
+    for tr in t2.get("trades", []):
+        assert {"r", "dir", "entry", "sl", "target", "outcome"} <= set(tr.keys())
+        assert tr["outcome"] in ("target", "stop", "time")
+    forward_test_service.delete(t["id"])

@@ -3,21 +3,37 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { forwardTestApi, researchApi } from '@/api/client'
 import { SUPPORTED_SYMBOLS } from '@/lib/instruments'
-import { Radio, Play, Square, Trash2, Loader2, RefreshCw } from 'lucide-react'
+import { Radio, Play, Square, Trash2, Loader2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
 
+interface FwdTrade {
+  r: number; dir: string; entry: number; sl?: number; target?: number
+  outcome?: string; entry_time?: number; exit_time?: number
+}
 interface FwdTest {
   id: string; label: string; symbol: string; timeframe: string; target_r: number
-  strategy?: string
+  strategy?: string; min_confluence?: number; last_checked?: string
   session_filter: boolean; trend_filter: boolean; started_at: string; status: string
   start_candle_time?: number
+  trades?: FwdTrade[]
   summary?: { trades?: number; win_rate?: number; expectancy_r?: number; total_r?: number }
-  open_trade?: { dir: string; entry: number; unrealized_r: number } | null
+  open_trade?: { dir: string; entry: number; sl?: number; target?: number; unrealized_r: number; entry_time?: number } | null
 }
 
 const fmtDate = (s?: string) => (s ? new Date(s).toLocaleDateString() : '—')
+const fmtBar = (t?: number) => (t ? new Date(t * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')
+const ago = (s?: string) => {
+  if (!s) return '—'
+  const m = Math.max(0, Math.round((Date.now() - new Date(s).getTime()) / 60000))
+  return m < 1 ? 'just now' : m < 60 ? `${m}m ago` : `${Math.round(m / 60)}h ago`
+}
+const outcomeBadge = (o?: string) =>
+  o === 'target' ? 'bg-emerald-500/15 text-emerald-400'
+    : o === 'stop' ? 'bg-red-500/15 text-red-400'
+      : 'bg-muted text-muted-foreground'
 
 export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string }) {
   const [tests, setTests] = useState<FwdTest[]>([])
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -143,6 +159,10 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
                       <span className="text-xs text-muted-foreground">since {fmtDate(t.started_at)}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
+                      <button onClick={() => setExpanded((e) => ({ ...e, [t.id]: !e[t.id] }))} title="Show details"
+                        className="px-1.5 py-0.5 rounded border border-border text-xs text-muted-foreground hover:text-foreground">
+                        {expanded[t.id] ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      </button>
                       {t.status === 'running' && (
                         <button onClick={() => act(() => forwardTestApi.refresh(t.id))} title="Refresh stats from current candles"
                           className="px-1.5 py-0.5 rounded border border-border text-xs text-muted-foreground hover:text-foreground"><RefreshCw className="w-3 h-3" /></button>
@@ -168,6 +188,49 @@ export default function ForwardTests({ defaultSymbol }: { defaultSymbol?: string
                   )}
                   {n === 0 && !t.open_trade && (
                     <div className="mt-1.5 text-[11px] text-muted-foreground">No signals since it started — give it time; trades accrue as new candles print.</div>
+                  )}
+                  {expanded[t.id] && (
+                    <div className="mt-2 pt-2 border-t border-border/50 space-y-2 text-xs">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+                        <span>Started <span className="text-foreground">{fmtDate(t.started_at)}</span></span>
+                        <span>Stats updated <span className="text-foreground">{ago(t.last_checked)}</span></span>
+                        <span>Config: <span className="text-foreground font-mono">{t.strategy && t.strategy !== 'ict_confluence' ? t.strategy : `ICT ≥${t.min_confluence ?? 2}`} · {t.timeframe} · {t.target_r}R{t.session_filter ? ' · killzone' : ''}{t.trend_filter ? ' · trend' : ''}</span></span>
+                      </div>
+                      {t.open_trade && (
+                        <div className="p-2 rounded bg-emerald-500/5 border border-emerald-500/20 font-mono">
+                          OPEN {t.open_trade.dir} @ {t.open_trade.entry} · SL {t.open_trade.sl ?? '—'} · TP {t.open_trade.target ?? '—'} · since {fmtBar(t.open_trade.entry_time)} · {t.open_trade.unrealized_r >= 0 ? '+' : ''}{t.open_trade.unrealized_r}R unrealized
+                        </div>
+                      )}
+                      {(t.trades?.length ?? 0) > 0 ? (
+                        <table className="w-full">
+                          <thead>
+                            <tr className="text-muted-foreground border-b border-border/40">
+                              {['Entry time', 'Dir', 'Entry', 'SL', 'TP', 'Outcome', 'R'].map((h, i) => (
+                                <th key={h} className={`p-1 ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...(t.trades || [])].slice(-12).reverse().map((tr, i) => (
+                              <tr key={i} className="border-b border-border/20 font-mono">
+                                <td className="p-1 text-left">{fmtBar(tr.entry_time)}</td>
+                                <td className={`p-1 text-right ${tr.dir === 'long' || tr.dir === 'LONG' ? 'text-emerald-400' : 'text-red-400'}`}>{tr.dir}</td>
+                                <td className="p-1 text-right">{tr.entry}</td>
+                                <td className="p-1 text-right">{tr.sl ?? '—'}</td>
+                                <td className="p-1 text-right">{tr.target ?? '—'}</td>
+                                <td className="p-1 text-right"><span className={`px-1.5 py-0.5 rounded ${outcomeBadge(tr.outcome)}`}>{tr.outcome ?? '—'}</span></td>
+                                <td className={`p-1 text-right ${tr.r > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{tr.r >= 0 ? '+' : ''}{tr.r}R</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="text-muted-foreground">No closed trades yet.</div>
+                      )}
+                      {(t.trades?.length ?? 0) > 12 && (
+                        <div className="text-[11px] text-muted-foreground">Showing the last 12 of {t.trades!.length} trades.</div>
+                      )}
+                    </div>
                   )}
                 </div>
               )
