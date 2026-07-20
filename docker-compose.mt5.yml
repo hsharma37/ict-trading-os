@@ -10,6 +10,9 @@
 services:
   mt5bridge:
     build: ./docker/mt5-bridge
+    # Wine/MT5 are x86-only. On Apple Silicon this forces Rosetta/QEMU
+    # emulation — OK for a trial run; host on an x86 Linux VPS for real use.
+    platform: linux/amd64
     container_name: mt5bridge
     volumes:
       - wineprefix:/root/.wine          # terminal install + login persist here
