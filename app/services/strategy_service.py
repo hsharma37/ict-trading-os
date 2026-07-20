@@ -198,29 +198,39 @@ def _sig_holy_grail(o, h, l, c, t):
             yield i, False
 
 
-def _sig_london_orb(o, h, l, c, t):
-    # Crabel-style opening-range breakout on the London open: range = 07:00 UTC
-    # hour's bars; first close beyond it before 12:00 trades the break. Intraday
-    # timeframes only (needs bars inside the 07:00 hour).
-    cur_day, orh, orl, fired = None, None, None, False
-    for i in range(len(c)):
-        ts = t[i]
-        try:
-            dt = datetime.utcfromtimestamp(int(ts))
-        except (TypeError, ValueError, OSError):
-            continue
-        if dt.date() != cur_day:
-            cur_day, orh, orl, fired = dt.date(), None, None, False
-        if dt.hour == 7:
-            orh = h[i] if orh is None else max(orh, h[i])
-            orl = l[i] if orl is None else min(orl, l[i])
-        elif 8 <= dt.hour < 12 and orh is not None and not fired:
-            if c[i] > orh:
-                fired = True
-                yield i, True
-            elif c[i] < orl:
-                fired = True
-                yield i, False
+def _make_orb(open_hour: int, window_end: int):
+    """Crabel-style opening-range-breakout generator factory: the opening range
+    is `open_hour`'s (UTC) bars; the first close beyond it before `window_end`
+    trades the break. One signal per day per session; intraday TFs only (needs
+    bars inside the opening hour)."""
+    def _sig(o, h, l, c, t):
+        cur_day, orh, orl, fired = None, None, None, False
+        for i in range(len(c)):
+            ts = t[i]
+            try:
+                dt = datetime.utcfromtimestamp(int(ts))
+            except (TypeError, ValueError, OSError):
+                continue
+            if dt.date() != cur_day:
+                cur_day, orh, orl, fired = dt.date(), None, None, False
+            if dt.hour == open_hour:
+                orh = h[i] if orh is None else max(orh, h[i])
+                orl = l[i] if orl is None else min(orl, l[i])
+            elif open_hour < dt.hour < window_end and orh is not None and not fired:
+                if c[i] > orh:
+                    fired = True
+                    yield i, True
+                elif c[i] < orl:
+                    fired = True
+                    yield i, False
+    return _sig
+
+
+# London: 07:00 UTC opening range, break before 12:00.
+_sig_london_orb = _make_orb(7, 12)
+# New York: 13:00 UTC opening range (covers the 13:30 UTC equities open inside
+# this codebase's NY-AM killzone), break before 17:00.
+_sig_ny_orb = _make_orb(13, 17)
 
 
 def _sig_turtle55(o, h, l, c, t):
@@ -266,6 +276,10 @@ STRATEGIES: Dict[str, Dict] = {
                    "source": "Toby Crabel's ORB applied to the 07:00 UTC London open "
                              "(intraday timeframes only)",
                    "fn": _sig_london_orb},
+    "ny_orb": {"label": "New York open-range breakout", "style": "breakout",
+               "source": "Toby Crabel's ORB applied to the 13:00 UTC New York open "
+                         "(NY-AM killzone; intraday timeframes only)",
+               "fn": _sig_ny_orb},
     "turtle55": {"label": "Turtle 55-bar breakout (S2)", "style": "breakout",
                  "source": "Dennis/Eckhardt Turtle System 2 — 55-bar channel breakout",
                  "fn": _sig_turtle55},

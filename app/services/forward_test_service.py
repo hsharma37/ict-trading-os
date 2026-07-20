@@ -93,8 +93,20 @@ class ForwardTestService:
         closed = [t for t in fwd if not t.get("open")]
         open_t = next((t for t in fwd if t.get("open")), None)
         summary = bt._summarize_backtest(symbol, tf, test["target_r"], "forward", len(candles), closed)
+        def _outcome(t):
+            # gross_r is pre-cost: exactly target_r -> target hit; exactly -1 ->
+            # stopped; anything else closed on the max-hold time exit.
+            g = t.get("gross_r")
+            if g is not None and abs(g - test["target_r"]) < 1e-9:
+                return "target"
+            if g is not None and abs(g + 1.0) < 1e-9:
+                return "stop"
+            return "time"
+
         patch = {
             "trades": [{"r": t["r"], "dir": t["dir"], "entry": t["entry"],
+                        "sl": t.get("sl"), "target": t.get("target"),
+                        "outcome": _outcome(t),
                         "entry_time": t.get("entry_time"), "exit_time": t.get("exit_time")} for t in closed],
             "open_trade": ({"dir": open_t["dir"], "entry": open_t["entry"], "sl": open_t["sl"],
                             "target": open_t["target"], "entry_time": open_t.get("entry_time"),
