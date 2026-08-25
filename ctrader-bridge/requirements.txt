@@ -1,7 +1,11 @@
+# NOTE: ctrader-open-api pins protobuf==3.20.1 exactly (too strict). Install in
+# two steps, as CI/Docker do:
+#   pip install protobuf==3.20.3 twisted flask requests python-dotenv youtube-transcript-api
+#   pip install --no-deps ctrader-open-api==0.9.2
 flask>=3.0
 requests>=2.31
 python-dotenv>=1.0
-ctrader-open-api>=0.9.3
+protobuf==3.20.3
 twisted>=23.0
-protobuf>=4.25
 youtube-transcript-api>=1.2.0
+# ctrader-open-api==0.9.2   # install with --no-deps (its protobuf pin conflicts)
