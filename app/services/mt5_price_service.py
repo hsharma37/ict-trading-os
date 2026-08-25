@@ -13,7 +13,7 @@ from typing import Dict, Optional
 
 import httpx
 
-from app.services.bridge_config import get_bridge_url, get_bridge_api_key
+from app.services.bridge_config import get_bridge_url, get_bridge_api_key, get_bridge_provider
 from app.services.instrument_config import get_instrument
 
 
@@ -22,6 +22,9 @@ _HISTORY_TIMEFRAMES = {"1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"}
 
 
 class Mt5PriceService:
+    def _source(self) -> str:
+        """Provider label for price provenance badges ('ctrader' | 'mt5')."""
+        return get_bridge_provider()
     def is_configured(self) -> bool:
         # MT5 is THE market-data source: a configured bridge URL is all it takes.
         return bool(get_bridge_url())
@@ -117,7 +120,7 @@ class Mt5PriceService:
             "change_pct": 0.0,
             "volume": int(data.get("volume", 0) or 0),
             "timestamp": data.get("time") or datetime.now(timezone.utc).isoformat(),
-            "source": "mt5",
+            "source": self._source(),
         }
 
     def get_price_detailed(self, symbol: str) -> Optional[Dict]:
@@ -152,7 +155,7 @@ class Mt5PriceService:
             "prev_close": round(prev_close, digits),
             "volume": int(data.get("volume", 0) or 0),
             "timestamp": data.get("time") or datetime.now(timezone.utc).isoformat(),
-            "source": "mt5",
+            "source": self._source(),
         }
 
 

@@ -107,7 +107,8 @@ def _resolve(symbol: str) -> Dict[str, Any]:
     if mt5_price_service.is_configured():
         q = mt5_price_service.get_price_detailed(symbol)
         if q and q.get("price"):
-            return _canonical(symbol, q, source="mt5")
+            from app.services.bridge_config import get_bridge_provider
+            return _canonical(symbol, q, source=get_bridge_provider())
 
     return _canonical(symbol, {"price": 0, "timestamp": None}, source="unavailable")
 

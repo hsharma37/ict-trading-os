@@ -9,6 +9,8 @@ from app.services.bridge_config import (
     get_bridge_url,
     get_bridge_api_key,
     set_bridge_url,
+    get_bridge_provider,
+    set_bridge_provider,
     _normalize,
 )
 
@@ -33,8 +35,12 @@ class BridgeUrlUpdate(BaseModel):
     url: str = ""
 
 
+class BridgeProviderUpdate(BaseModel):
+    provider: str  # "ctrader" | "mt5"
+
+
 def _bridge_config() -> dict:
-    """Current effective bridge URL and where it came from."""
+    """Current effective bridge URL + provider, and where each came from."""
     override = _normalize((db.find_one("settings", "global") or {}).get("mt5_bridge_url") or "")
     env_url = _normalize(app_settings.MT5_BRIDGE_URL)
     effective = get_bridge_url(force_refresh=True)
@@ -43,6 +49,7 @@ def _bridge_config() -> dict:
         "mt5_bridge_url_override": override,
         "mt5_bridge_env_url": env_url,
         "mt5_bridge_url_source": "override" if override else "env",
+        "bridge_provider": get_bridge_provider(force_refresh=True),
     }
 
 
@@ -129,6 +136,26 @@ async def set_bridge_url_config(payload: BridgeUrlUpdate):
             last = e
     result["error"] = f"{type(last).__name__}: {last}" if last else "unreachable"
     return result
+
+
+@router.get("/bridge-provider", summary="Current bridge provider (ctrader | mt5)")
+def get_bridge_provider_config():
+    return {"bridge_provider": get_bridge_provider(force_refresh=True)}
+
+
+@router.post("/bridge-provider", summary="Set which bridge engine the app uses")
+def set_bridge_provider_config(payload: BridgeProviderUpdate):
+    """Switch between the cTrader bridge (default — server-side Open API) and
+    the MT5 bridge (Windows terminal). Both expose the identical HTTP contract,
+    so only the provider label + price `source` tag change; make sure the
+    bridge URL points at a bridge of the selected type."""
+    try:
+        effective = set_bridge_provider(payload.provider)
+    except ValueError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=422, detail=str(e))
+    return {**_bridge_config(), "bridge_provider": effective}
+
 
 @router.get("/export")
 def export_settings():
