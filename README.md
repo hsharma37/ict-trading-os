@@ -37,6 +37,7 @@ Three parts of the repo:
 | `app/` | **Active** FastAPI backend (deployed). Routers + services + Postgres. |
 | `frontend/` | React SPA (Vite). Pages, the shared `useMt5` hook, `marketApi` client. |
 | `mt5-bridge/` | Standalone Flask bridge (+ `watchdog.py` supervisor) that runs on Windows next to the MT5 terminal. |
+| `ctrader-bridge/` | **Default bridge.** Same HTTP contract as `mt5-bridge/`, but runs anywhere (cTrader's Open API is server-side — no terminal, no Windows). See [`ctrader-bridge/README.md`](ctrader-bridge/README.md). Select via `BRIDGE_PROVIDER` env or Settings → bridge provider (`ctrader` default, `mt5` legacy). |
 
 ---
 

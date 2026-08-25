@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from app.services.bridge_config import get_bridge_url, get_bridge_api_key
+from app.services.bridge_config import get_bridge_provider as _bridge_source
 
 # Short caches: Dashboard/Analytics poll frequently; the bridge shouldn't be hit
 # on every call. Connectivity is cached separately (and for longer) so a down
@@ -350,7 +351,7 @@ class Mt5TradesService:
             "r": r,
             "created_at": t.get("closed_at", ""),
             "closed_at": t.get("closed_at", ""),
-            "source": "mt5",
+            "source": _bridge_source(),
         }
 
     def _normalize_open(self, p: Dict) -> Dict:
@@ -378,7 +379,7 @@ class Mt5TradesService:
             "risk_money": risk,
             "r": r,
             "swap": p.get("swap", 0),
-            "source": "mt5",
+            "source": _bridge_source(),
         }
 
     # ── public: trades ───────────────────────────────────────────────
@@ -531,7 +532,7 @@ class Mt5TradesService:
             "by_symbol": by_symbol,
             "monthly": monthly,
             "sessions": sessions,
-            "source": "mt5",
+            "source": _bridge_source(),
             "account": {
                 "balance": account.get("balance"),
                 "equity": account.get("equity"),

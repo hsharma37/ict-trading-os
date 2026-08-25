@@ -151,7 +151,7 @@ class TradeJournalService:
         live = {str(t.get("ticket") or t.get("id") or "") for t in closed}
         removed = 0
         for r in db.get_collection(_COLL):
-            if (r.get("source") or "mt5") != "mt5":
+            if (r.get("source") or "mt5") not in ("mt5", "ctrader"):
                 continue  # never prune manual entries
             tid = str(r.get("id") or r.get("ticket") or "")
             if tid and tid not in live:

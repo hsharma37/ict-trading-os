@@ -116,7 +116,8 @@ class LotCalculator:
                     rate_source = "static (broker spec rejected)"  # implausible broker value
                 else:
                     risk_per_lot = broker_rpl
-                    rate_source = "mt5"
+                    from app.services.bridge_config import get_bridge_provider
+                    rate_source = get_bridge_provider()
         except Exception:
             pass
 

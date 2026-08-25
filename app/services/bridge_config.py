@@ -56,6 +56,40 @@ def get_bridge_api_key() -> str:
     return settings.MT5_BRIDGE_API_KEY
 
 
+_KNOWN_PROVIDERS = ("ctrader", "mt5")
+
+
+def get_bridge_provider(force_refresh: bool = False) -> str:
+    """Which bridge engine is behind the URL: ``ctrader`` (default) or ``mt5``.
+
+    Both bridges expose the identical HTTP contract, so this changes labels
+    and the ``source`` tag — not routing. DB override wins, then env, then the
+    "ctrader" default.
+    """
+    try:
+        from app.core.database import db
+        row = db.find_one("settings", "global") or {}
+        val = (row.get("bridge_provider") or "").strip().lower()
+        if val in _KNOWN_PROVIDERS:
+            return val
+    except Exception:
+        pass
+    env = (getattr(settings, "BRIDGE_PROVIDER", "") or "").strip().lower()
+    return env if env in _KNOWN_PROVIDERS else "ctrader"
+
+
+def set_bridge_provider(provider: str) -> str:
+    """Persist the bridge provider override ('ctrader' | 'mt5')."""
+    val = (provider or "").strip().lower()
+    if val not in _KNOWN_PROVIDERS:
+        raise ValueError(f"Unknown bridge provider '{provider}'. Use one of: {', '.join(_KNOWN_PROVIDERS)}")
+    from app.core.database import db
+    if not db.find_one("settings", "global"):
+        db.insert("settings", {"id": "global"})
+    db.update("settings", "global", {"bridge_provider": val})
+    return get_bridge_provider(force_refresh=True)
+
+
 def set_bridge_url(url: str) -> str:
     """Persist a bridge URL override to the settings row and refresh the cache.
 

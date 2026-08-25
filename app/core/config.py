@@ -20,6 +20,12 @@ class Settings:
     # When set, the cron poll endpoint requires it; when empty, the endpoint is open.
     CRON_SECRET: str = os.getenv("CRON_SECRET", "")
     MT5_BRIDGE_URL: str = os.getenv("MT5_BRIDGE_URL", "http://localhost:5001")
+    # Which bridge engine the MT5_BRIDGE_URL points at: "ctrader" (default —
+    # server-side Open API, no terminal needed) or "mt5" (Windows terminal).
+    # Drives UI labels and the `source` tag on prices; both bridges expose the
+    # identical HTTP contract, so routing is identical for either provider.
+    # Runtime-overridable via Settings (bridge_config.get_bridge_provider).
+    BRIDGE_PROVIDER: str = os.getenv("BRIDGE_PROVIDER", "ctrader").lower()
     # Shared secret sent as X-Bridge-Key on every proxied bridge call. Required
     # once the bridge is reachable over the internet (e.g. via a tunnel) -
     # must match MT5_BRIDGE_API_KEY set on the bridge process itself.

@@ -14,6 +14,10 @@ _cache_dir = tempfile.TemporaryDirectory(prefix="tradingos-test-cache-")
 os.environ["DATABASE_PATH"] = _db_file.name
 os.environ["PRICE_CACHE_DIR"] = _cache_dir.name
 os.environ.setdefault("AUTH_ENABLED", "false")
+# The existing suite exercises the MT5-bridge path end-to-end; pin the bridge
+# provider accordingly (the app default is "ctrader"). cTrader-specific
+# behavior is covered by ctrader-bridge/test_bridge.py.
+os.environ.setdefault("BRIDGE_PROVIDER", "mt5")
 
 from app.core.database import db  # noqa: E402
 from app.main import app  # noqa: E402
