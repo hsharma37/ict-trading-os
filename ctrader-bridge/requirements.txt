@@ -9,3 +9,4 @@ protobuf==3.20.3
 twisted>=23.0
 youtube-transcript-api>=1.2.0
 # ctrader-open-api==0.9.2   # install with --no-deps (its protobuf pin conflicts)
+simplefix>=1.0

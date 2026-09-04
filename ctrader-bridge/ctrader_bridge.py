@@ -27,7 +27,13 @@ from flask import Flask, request, jsonify
 
 from config import config
 from telegram_bot import TelegramNotifier
-from ctrader_client import CTraderClient, CTraderConnectionError
+
+# Transport selection: "fix" (default — FIX 4.4 sessions, account password
+# only) or "openapi" (protobuf, needs client id/secret/access token).
+if config.ct_transport == "fix":
+    from fix_client import CTraderFixClient as _Client, CTraderConnectionError
+else:
+    from ctrader_client import CTraderClient as _Client, CTraderConnectionError
 
 # YouTube transcripts: fetched here (residential IP) because YouTube blocks
 # caption requests from cloud/serverless IPs (i.e. from Vercel directly).
@@ -51,9 +57,15 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 telegram = TelegramNotifier()
-ct_client = CTraderClient(config.ct_client_id, config.ct_client_secret,
-                          config.ct_access_token, config.ct_account_id,
-                          config.ct_host_type)
+if config.ct_transport == "fix":
+    ct_client = _Client(config.ct_fix_host, config.ct_fix_ssl_port,
+                        config.ct_fix_plain_port, config.ct_fix_sender_comp_id,
+                        str(config.ct_account_id), config.ct_fix_password,
+                        use_ssl=config.ct_fix_use_ssl, host_type=config.ct_host_type)
+else:
+    ct_client = _Client(config.ct_client_id, config.ct_client_secret,
+                        config.ct_access_token, config.ct_account_id,
+                        config.ct_host_type)
 
 
 def require_bridge_key(fn):

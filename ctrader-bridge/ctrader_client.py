@@ -637,7 +637,7 @@ class CTraderClient:
             for label, px, want_above in (("stop_loss", stop_loss, direction == "short"),
                                           ("take_profit", take_profit, direction == "long")):
                 if px is not None:
-                    bad = (float(px) >= ref) if want_above else (float(px) <= ref)
+                    bad = (float(px) <= ref) if want_above else (float(px) >= ref)
                     # For a LONG: SL must be below price, TP above. For a SHORT: inverse.
                     if bad:
                         problems.append(f"{label} {px} is on the wrong side of price {ref}")
