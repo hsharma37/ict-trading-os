@@ -500,10 +500,22 @@ class CTraderFixClient:
         return spot
 
     def get_tick(self, symbol: str) -> Dict[str, Any]:
+        """Live tick in the exact shape the app expects (mirrors the MT5
+        bridge's normalize_tick: price=mid, bid, ask, spread, ISO time)."""
         symbol = symbol.upper()
         bid, ask, ts = self._subscribe(symbol)
-        return {"symbol": symbol, "bid": bid, "ask": ask,
-                "time": int(ts), "digits": self._digits(bid)}
+        mid = round((bid + ask) / 2, 8) if (bid and ask) else (bid or ask or 0)
+        return {
+            "symbol": symbol,
+            "price": mid,
+            "bid": bid,
+            "ask": ask,
+            "last": mid,
+            "spread": round(ask - bid, 8) if (bid and ask) else 0,
+            "volume": 0,
+            "time": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(ts)) if ts else None,
+            "source": "ctrader",
+        }
 
     def get_candles(self, symbol: str, timeframe: str = "1h",
                     count: int = 200) -> List[Dict[str, Any]]:
