@@ -65,6 +65,8 @@ export default function SettingsPage() {
   const [bridgeUrl, setBridgeUrl] = useState('')
   const [bridgeSaving, setBridgeSaving] = useState(false)
   const [bridgeResult, setBridgeResult] = useState<BridgeTestResult | null>(null)
+  const [provider, setProvider] = useState<'ctrader' | 'mt5'>('ctrader')
+  const [providerSaving, setProviderSaving] = useState(false)
 
   const loadSettings = useCallback(async () => {
     try {
@@ -81,6 +83,9 @@ export default function SettingsPage() {
             mt5_bridge_env_url: data.mt5_bridge_env_url || '',
           })
           setBridgeUrl(data.mt5_bridge_url || '')
+        }
+        if (data.bridge_provider === 'ctrader' || data.bridge_provider === 'mt5') {
+          setProvider(data.bridge_provider)
         }
       }
     } catch (e: any) {
@@ -113,6 +118,18 @@ export default function SettingsPage() {
       setBridgeResult({ reachable: false, mt5_connected: null, error: e?.message || 'Failed to save bridge URL' })
     } finally {
       setBridgeSaving(false)
+    }
+  }
+
+  const saveProvider = async (next: 'ctrader' | 'mt5') => {
+    try {
+      setProviderSaving(true)
+      setProvider(next)
+      await apiClient.post('/settings/bridge-provider', { provider: next })
+    } catch {
+      setProvider(next === 'ctrader' ? 'mt5' : 'ctrader')  // revert on failure
+    } finally {
+      setProviderSaving(false)
     }
   }
 
@@ -366,12 +383,15 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* MT5 Bridge — runtime-editable tunnel URL */}
+        {/* Bridge — runtime-editable tunnel URL + provider switch */}
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Radio className="w-4 h-4 text-primary" />
-              MT5 Bridge Connection
+              Bridge Connection
+              <span className="ml-2 px-2 py-0.5 rounded-full text-[11px] font-mono bg-primary/10 text-primary">
+                {provider === 'ctrader' ? 'cTrader' : 'MT5'}
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -381,6 +401,30 @@ export default function SettingsPage() {
               here — it takes effect immediately, no redeploy needed. Leave blank to fall back
               to the deployed <span className="font-mono">MT5_BRIDGE_URL</span> env var.
             </p>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Bridge engine</label>
+              <div className="flex gap-2">
+                {(['ctrader', 'mt5'] as const).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => saveProvider(p)}
+                    disabled={providerSaving}
+                    className={`px-3 py-1.5 rounded-md border text-sm font-medium transition-colors ${
+                      provider === p
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {p === 'ctrader' ? 'cTrader (FIX, no terminal)' : 'MT5 (Windows terminal)'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {provider === 'ctrader'
+                  ? 'cTrader bridge talks FIX 4.4 directly to the cServer — charts, ticks, positions and orders flow through it. No trading terminal required.'
+                  : 'MT5 bridge requires a running MT5 terminal with the Python integration package.'}
+              </p>
+            </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Bridge URL</label>
               <div className="flex flex-col sm:flex-row gap-2">
@@ -433,12 +477,12 @@ export default function SettingsPage() {
                     <span>Bridge not reachable{bridgeResult.error ? ` — ${bridgeResult.error}` : ''}</span>
                   ) : ok ? (
                     <span>
-                      Bridge reachable · MT5 terminal connected
+                      Bridge reachable · {provider === 'ctrader' ? 'cTrader' : 'MT5 terminal'} connected
                       {bridgeResult.mt5_server ? ` (${bridgeResult.mt5_server})` : ''}
                     </span>
                   ) : (
                     <div className="space-y-0.5">
-                      <div className="font-medium">Bridge reachable, but MT5 terminal NOT connected</div>
+                      <div className="font-medium">Bridge reachable, but {provider === 'ctrader' ? 'cTrader' : 'MT5 terminal'} NOT connected</div>
                       {bridgeResult.mt5_status && (
                         <div className="text-amber-300/90">{bridgeResult.mt5_status}</div>
                       )}
